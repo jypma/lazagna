@@ -1,0 +1,7 @@
+.bloop
+.metals
+.bsp
+target
+metals.sbt
+/draw-client/dist/
+/draw-client/node_modules/
