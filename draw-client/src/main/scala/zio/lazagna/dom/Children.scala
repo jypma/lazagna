@@ -6,43 +6,26 @@ import zio.Hub
 import zio.ZIO
 import zio.Ref
 import zio.lazagna.ZIOOps._
+import zio.lazagna.Consumeable
 import zio.Exit
 
 object Children {
   /*
-  def <--(content: Hub[Seq[MyElement]]) = new Modifier {
-    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      // TODO add sentinel
-      ZStream.fromHubScoped(content).flatMap { in =>
-        dom.console.log("Started stream")
-        in.zipWithPrevious.mapZIO { case (prev, next) =>
-          val ops = prev.map(FastDiff.diff(_, next)).getOrElse(next.zipWithIndex.map(FastDiff.Insert.apply _))
-          dom.console.log("Need to " + ops)
-          ZIO.collectAll(ops.map { _ match {
-            case FastDiff.Insert(element, index) =>
-              ZIO.unit
-            case FastDiff.Delete(index) =>
-              ZIO.unit
-          }})
-        }.runDrain.forkScoped
-       }.unit
-    }
-  }
    */
   sealed trait ChildOp
-  case class Append(elmt: Element) extends ChildOp
-  case class InsertOrMove(elmt: Element, after: Element) extends ChildOp
-  case class Delete(elmt: Element) extends ChildOp
+  case class Append(elmt: Element[_]) extends ChildOp
+  case class InsertOrMove(elmt: Element[_], after: Element[_]) extends ChildOp
+  case class Delete(elmt: Element[_]) extends ChildOp
 
   private[Children] case class State(
-    children: Map[dom.Node, (Element, Scope.Closeable)] = Map.empty) {
+    children: Map[dom.Node, (Element[_], Scope.Closeable)] = Map.empty) {
 
-    def append(elmt: Element, scope: Scope.Closeable): State = State(
+    def append(elmt: Element[_], scope: Scope.Closeable): State = State(
       children = children + (elmt.target -> (elmt, scope))
     )
 
     /** Also returns the Scope to close */
-    def delete(elmt: Element): (Scope.Closeable, State) = {
+    def delete(elmt: Element[_]): (Scope.Closeable, State) = {
       children.get(elmt.target) match {
         case None => (Scope.global, this)
         case Some((_, scope)) => (scope, State(
@@ -51,8 +34,8 @@ object Children {
       }
     }
 
-    // TODO: Optimize: Don't allocate a new scope if we're just moving (by adding State.hasElement(MyElement))
-    def insertOrMove(elmt: Element, after: Element, newScope: Scope.Closeable): (Scope.Closeable, State) = {
+    /** Returns the scope to use (will be an existing scope if the element was already present) */
+    def insertOrMove(elmt: Element[_], after: Element[_], newScope: Scope.Closeable): (Scope.Closeable, State) = {
       children.get(elmt.target) match {
         case None =>
           // doesn't exist, just add it to the lookup map
@@ -66,7 +49,8 @@ object Children {
       }
     }
   }
-  def <--(content: Hub[ChildOp]) = new Modifier {
+
+  def <~~[H](content: Consumeable[H,ChildOp]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       // TODO: add sentinel
       Ref.make(State()).flatMap { stateRef =>
@@ -100,6 +84,21 @@ object Children {
           }
         }
       }
+    }
+  }
+
+  def <--(content: Hub[Seq[Element[_]]]) = new Modifier {
+    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
+      consumeWith(content)(_.zipWithPrevious.map { case (prev, next) =>
+        val ops = prev.map(FastDiff.diff(_, next)).getOrElse(next.zipWithIndex.map(FastDiff.Insert.apply _))
+        dom.console.log("Need to " + ops)
+        ops.map { _ match {
+          case FastDiff.Insert(element, index) =>
+            ???
+          case FastDiff.Delete(index) =>
+            ???
+        }}
+      })
     }
   }
 }

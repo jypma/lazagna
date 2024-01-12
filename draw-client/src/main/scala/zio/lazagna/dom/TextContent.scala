@@ -25,6 +25,7 @@ object TextContent {
    )
    */
   // Or change the datatype to ZStream[Scope, Nothing, Unit] and provide an implicit conversion from Hub
+  // Introduce Consumeable[H,T] with (a Hub[H] and a H => ZIO[T] transform, providing map and flatMap)
   def <--(content: Hub[String]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       consume(content) { value =>

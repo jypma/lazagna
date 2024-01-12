@@ -14,8 +14,14 @@ import scala.collection.mutable.LinkedHashMap
 import scala.scalajs.js.annotation.JSImport
 import zio.lazagna.dom.FastDiff
 import zio.lazagna.ZIOOps._
+import zio.lazagna.dom.Element
 import zio.lazagna.dom.Element._
+import zio.lazagna.dom.Element.tags._
+import zio.lazagna.dom.Element.svgtags._
+import zio.lazagna.dom.Events._
 import zio.lazagna.dom.Attribute._
+import zio.lazagna.Consumeable.given
+import zio.lazagna.dom.SVGOps
 
 object StreamOps {
   def split[A, K, O](getKey: A => K)(makeOutput: (K, A, Hub[A]) => ZIO[Scope, Nothing, O]): ZPipeline[Scope, Nothing, Iterable[A], Seq[O]] = {
@@ -51,28 +57,6 @@ object StreamOps {
   }
 }
 
-/*
-object MyElement {
-  type Render = ZIO[Scope, Nothing, Unit]
-
-  def render(element: Modifier, parent: dom.Element): Render = {
-    dom.console.log("Starting render of " + element + " to " + parent)
-
-    element.mount(parent)
-  }
-
-  def render(element: Modifier, id: String): Render = {
-    render(element, dom.document.getElementById(id))
-  }
-
-  def div(children: Modifier*) = {
-    val res = dom.document.createElement("div")
-    MyElement(res, children.toSeq)
-  }
-}
- */
-
-
 object Draw extends ZIOAppDefault {
 
 // import javascriptLogo from "/javascript.svg"
@@ -85,45 +69,45 @@ object Draw extends ZIOAppDefault {
 
   override def run = {
     val root = dom.document.querySelector("#app")
-    dom.console.log(root)
-    
+
     (for {
-      _      <- Console.printLine("Starting progress bar demo.")  // Outputs on browser console log.
       hub    <- Hub.bounded[children.ChildOp](1)
-      /*
-      fiber2 <- ZStream.fromHubScoped(hub).flatMap { _.mapZIO { i =>
-        dom.console.log("Recv: " + i)
-        ZIO.unit
-      }.runDrain.forkScoped.unit }
-       */
+      clickHub <- Hub.bounded[dom.MouseEvent](1)
 
       elmt = div(
-        children <-- hub
+        svg(
+          width := 300,
+          height := 300,
+          rect(
+            width := "100%",
+            height := "100%",
+            fill := "green"
+          ),
+          circle(
+            cx := 150,
+            cy := 150,
+            r := 5,
+            fill := "black"
+          ),
+          SVGOps.coordinateHelper { helper =>
+            g(
+              children <~~ clickHub.map { event =>
+                val pos = helper.getClientPoint(event)
+                children.Append(
+                  circle(
+                    cx := pos.x,
+                    cy := pos.y,
+                    r := 5,
+                    fill := "black"
+                  ),
+                )
+              }
+            )
+          },
+          onClick --> clickHub
+        ),
       )
       _ <- elmt.mount(root)
-
-      _ <- ZStream.fromIterable(marker +: divs).mapZIO { elem =>
-        dom.console.log("Publishing " + elem)
-        hub.publish(children.Append(elem))
-      }.runDrain
-
-      fiber1 <- titles
-      .mapZIO { i =>
-        dom.console.log("Send: " + i)
-        hub.publish(children.InsertOrMove(marker, divs(i)))
-      }.runDrain.forkScoped
-
-
-      /*
-      target <- ZIO.succeed(dom.document.createElement("pre"))
-      _      <- ZIO.succeed {
-        dom.console.log("appending")
-        root.appendChild(target)
-      } // "node" is provided in this page by mdoc.
-      _      <- Console.printLine("Created " + target)
-       _      <- update(target).repeat(Schedule.spaced(1.seconds))
-       */
-
 
       _ = dom.console.log("Main is ready.")
       _ <- ZIO.never // We don't want to exit main, since we our daemon fibers do the real work.
@@ -133,90 +117,5 @@ object Draw extends ZIOAppDefault {
       dom.console.log(cause)
       ZIO.succeed(ExitCode.failure)
     }
-  }
-
-  def update(target: dom.Element) = {
-    for {
-      time   <- currentTime(TimeUnit.SECONDS)
-      output <- ZIO.succeed(progress((time % 11).toInt, 10))
-      _      <- ZIO.succeed(target.innerHTML = output)
-    } yield ()
-  }
-
-  def progress(tick: Int, size: Int) = {
-    val bar_length = tick
-    val empty_length = size - tick
-    val bar = "#" * bar_length + " " * empty_length
-    s"$bar $bar_length%"
-  }
-
-  def Draw(): Unit = {
-    dom.document.querySelector("#app").innerHTML = s"""
-    <div>
-      <a href="https://vitejs.dev" target="_blank">
-        <img src="/vite.svg" class="logo" alt="Vite logo" />
-      </a>
-      <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank">
-        <img src="$javascriptLogo" class="logo vanilla" alt="JavaScript logo" />
-      </a>
-      <h1>Hello Scala.js and vite!</h1>
-      <div class="card">
-        <button id="counter" type="button"></button>
-      </div>
-      <p class="read-the-docs">
-        Click on the Vite logo to learn more
-      </p>
-      <p>ZIO:</p>
-      <div id="zioHolder"></div>
-    </div>
-  """
-
-    setupCounter(dom.document.getElementById("counter"))
-
-    dom.console.log("Starting")
-    /*
-     val effect = for {
-     hub <- Hub.bounded[String](1)
-     fiber1 <- titles.mapZIO(i => hub.publish(i.toString)).runDrain.fork
-     elmt = MyElement.div(
-     textContent <-- hub
-     )
-     fiber2 <- MyElement.render(elmt, "zioHolder")
-     } yield ()
-     */
-
-    /*
-    val effect = for {
-      hub <- Hub.bounded[String](1)
-      fiber1 <- titles.mapZIO { i =>
-        dom.console.log("publish " + i)
-        hub.publish(i.toString)
-      }.runDrain.fork
-      elmt = MyElement.div(
-        textContent <-- hub
-      )
-      fiber2 <- MyElement.render(elmt, "zioHolder")
-      _ <- fiber2.join
-      _ <- fiber1.join
-    } yield {
-      dom.console.log("Done!")
-    }
-
-    Unsafe.unsafe { implicit unsafe =>
-      zio.Runtime.default.unsafe.fork(effect)
-     }
-     */
-  }
-
-  def setupCounter(element: dom.Element): Unit = {
-    var counter = 0
-
-    def setCounter(count: Int): Unit = {
-      counter = count
-      element.innerHTML = s"count is $counter"
-    }
-
-    element.addEventListener("click", e => setCounter(counter + 1))
-    setCounter(0)
   }
 }
