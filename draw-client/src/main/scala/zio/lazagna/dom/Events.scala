@@ -10,8 +10,10 @@ import zio.stream.ZStream
 import zio.Ref
 import zio.Chunk
 
-case class EventsEmitter[E <: dom.Event,T](private val eventType: String, private val toTarget: ZStream[Scope, Nothing, E] => ZStream[Scope, Nothing, T]) {
+case class EventsEmitter[E <: dom.Event,T](private val eventType: String, private val transform: ZStream[Scope, Nothing, E] => ZStream[Scope, Nothing, T]) {
   type JsEventHandler = js.Function1[dom.Event, Unit]
+
+  def apply[U](t: ZStream[Scope, Nothing, T] => ZStream[Scope, Nothing, U]) = copy(transform = transform.andThen(t))
 
   def -->(target: Hub[T]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
@@ -32,11 +34,9 @@ case class EventsEmitter[E <: dom.Event,T](private val eventType: String, privat
         }
       }
 
-      toTarget(stream).mapZIO(e => target.offer(e)).runDrain.forkScoped.unit
+      transform(stream).mapZIO(e => target.offer(e)).runDrain.forkScoped.unit
     }
   }
-
-  def filter(predicate: T => Boolean) = copy(toTarget = toTarget.andThen(_.filter(predicate)))
 }
 
 object Events {

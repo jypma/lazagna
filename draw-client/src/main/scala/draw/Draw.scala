@@ -13,7 +13,6 @@ import java.util.concurrent.TimeUnit
 import scala.collection.mutable.LinkedHashMap
 import scala.scalajs.js.annotation.JSImport
 import zio.lazagna.dom.FastDiff
-import zio.lazagna.ZIOOps._
 import zio.lazagna.dom.Element
 import zio.lazagna.dom.Element._
 import zio.lazagna.dom.Element.tags._
@@ -21,7 +20,7 @@ import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Events._
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.Consumeable.given
-import zio.lazagna.dom.SVGOps
+import zio.lazagna.dom.svg.SVGOps
 
 object StreamOps {
   def split[A, K, O](getKey: A => K)(makeOutput: (K, A, Hub[A]) => ZIO[Scope, Nothing, O]): ZPipeline[Scope, Nothing, Iterable[A], Seq[O]] = {
@@ -58,26 +57,18 @@ object StreamOps {
 }
 
 object Draw extends ZIOAppDefault {
-
-// import javascriptLogo from "/javascript.svg"
-  @js.native @JSImport("/javascript.svg", JSImport.Default)
-  val javascriptLogo: String = js.native
-
-  val titles = ZStream.range(0, 10).zipLeft(ZStream.tick(1.second))
-  val divs = (0 to 10).map(i => div(textContent := i.toString))
-  val marker = div(textContent := "HERE!")
-
   override def run = {
     val root = dom.document.querySelector("#app")
 
     (for {
       hub    <- Hub.bounded[children.ChildOp](1)
       clickHub <- Hub.bounded[dom.MouseEvent](1)
+      downHub <- Hub.bounded[dom.MouseEvent](1)
 
       elmt = div(
         svg(
-          width := 300,
-          height := 300,
+          width := 800,
+          height := 800,
           rect(
             width := "100%",
             height := "100%",
@@ -85,7 +76,7 @@ object Draw extends ZIOAppDefault {
           ),
           SVGOps.coordinateHelper { helper =>
             g(
-              children <~~ clickHub.map { event =>
+              children <~~ clickHub(_.map { event =>
                 val pos = helper.getClientPoint(event)
                 children.Append(
                   circle(
@@ -95,18 +86,26 @@ object Draw extends ZIOAppDefault {
                     fill := "black"
                   ),
                 )
-              }
+              }),
+              children <~~ downHub(_.mapZIO { event =>
+                ZIO.succeed {
+                  children.Append(
+                    path(
+
+                    )
+                  )
+                } // TODO somehow save the stream in a ref, so we can stop it on mouse up.
+              })
             )
           },
           onClick --> clickHub,
-          onMouseMove.filter{e =>
-            (e.buttons & 1) != 0} --> clickHub
+          onMouseMove(_.filter { e => (e.buttons & 1) != 0 }) --> clickHub
         ),
       )
       _ <- elmt.mount(root)
 
       _ = dom.console.log("Main is ready.")
-      _ <- ZIO.never // We don't want to exit main, since we our daemon fibers do the real work.
+      _ <- ZIO.never // We don't want to exit main, since our background fibers do the real work.
       _ = dom.console.log("EXITING")
     } yield ExitCode.success).catchAllCause { cause =>
       dom.console.log("Main failed")

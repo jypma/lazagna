@@ -28,4 +28,6 @@ object Attribute {
   val cx = Attribute("cx")
   val cy = Attribute("cy")
   val r = Attribute("r")
+  val d = Attribute("d")
+  val pathLength = Attribute("pathLength")
 }

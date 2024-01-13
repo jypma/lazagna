@@ -1,11 +1,10 @@
 package zio.lazagna.dom
 
-import zio.lazagna.ZIOOps._
 import org.scalajs.dom
 import zio.ZIO
 import zio.Scope
 import zio.Hub
-
+import zio.lazagna.Consumeable
 
 object TextContent {
   def :=(value: String) = new Modifier {
@@ -16,13 +15,11 @@ object TextContent {
     }
   }
 
-  def <--(content: Hub[String]) = new Modifier {
+  def <--[H](content: Consumeable[H,String]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      consume(content) { value =>
-        ZIO.succeed {
-          parent.textContent = value
-        }
-      }
+      content(_.map { value =>
+        parent.textContent = value
+      }).consume
     }
   }
 }

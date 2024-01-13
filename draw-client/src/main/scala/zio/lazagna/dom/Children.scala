@@ -5,7 +5,6 @@ import zio.Scope
 import zio.Hub
 import zio.ZIO
 import zio.Ref
-import zio.lazagna.ZIOOps._
 import zio.lazagna.Consumeable
 import zio.Exit
 
@@ -54,7 +53,7 @@ object Children {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       // TODO: add sentinel
       Ref.make(State()).flatMap { stateRef =>
-        consume(content) {
+        content(_.mapZIO {
           _ match {
             case Append(elmt) =>
               for {
@@ -82,14 +81,14 @@ object Children {
                 }
               } yield ()
           }
-        }
+        }).consume
       }
     }
   }
 
-  def <--(content: Hub[Seq[Element[_]]]) = new Modifier {
+  def <--[H](content: Consumeable[H,Seq[Element[_]]]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      consumeWith(content)(_.zipWithPrevious.map { case (prev, next) =>
+      content(_.zipWithPrevious.map { case (prev, next) =>
         val ops = prev.map(FastDiff.diff(_, next)).getOrElse(next.zipWithIndex.map(FastDiff.Insert.apply _))
         dom.console.log("Need to " + ops)
         ops.map { _ match {
@@ -98,7 +97,7 @@ object Children {
           case FastDiff.Delete(index) =>
             ???
         }}
-      })
+      }).consume
     }
   }
 }

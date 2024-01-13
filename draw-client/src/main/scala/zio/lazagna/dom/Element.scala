@@ -60,5 +60,6 @@ object Element {
     val rect = CreateFn[dom.svg.RectElement]("rect")
     val circle = CreateFn[dom.svg.Circle]("circle")
     val g = CreateFn[dom.svg.G]("g")
+    val path = CreateFn[dom.svg.Path]("path")
   }
 }
