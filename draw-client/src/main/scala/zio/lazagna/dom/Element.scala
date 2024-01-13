@@ -10,26 +10,20 @@ case class Element[E <: dom.Element](target: E, children: Seq[Modifier]) extends
   }
 
   private[lazagna] def mount(parent: dom.Element, after: Option[dom.Element]): ZIO[Scope, Nothing, Unit] = {
-    dom.console.log("Mounting")
-    val ch = ZIO.collectAll(children.map(_.mount(target)))
+    val mountChildren = ZIO.collectAll(children.map(_.mount(target)))
     ZIO.acquireRelease {
       ZIO.succeed {
-        dom.console.log("Appending to parent:")
-        dom.console.log(target)
-        dom.console.log(parent)
         after.map { a =>
           parent.insertBefore(target, a.nextSibling)
         }.getOrElse {
           parent.appendChild(target)
         }
-        dom.console.log("now has " + parent.childElementCount)
       }
     } { _ =>
       ZIO.succeed {
-        dom.console.log("Removing from parent")
         parent.removeChild(target)
       }
-    }.unit <* ch
+    }.unit <* mountChildren
   }
 
   private[lazagna] def moveAfter(parent: dom.Element, after: dom.Element): ZIO[Scope, Nothing, Unit] = {

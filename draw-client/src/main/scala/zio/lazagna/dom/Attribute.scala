@@ -12,7 +12,6 @@ case class Attribute(name: String) {
   def :=(value: String): Modifier = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       ZIO.succeed {
-        dom.console.log("set " + name + " to " + value)
         parent.setAttribute(name, value)
       }
     }

@@ -6,38 +6,42 @@ import zio.Hub
 import zio.ZIO
 import zio.Scope
 import zio.Unsafe
+import zio.stream.ZStream
+import zio.Ref
+import zio.Chunk
 
-case class EventsEmitter[E <: dom.Event](eventType: String) {
-  def -->(target: Hub[E]) = new Modifier {
+case class EventsEmitter[E <: dom.Event,T](private val eventType: String, private val toTarget: ZStream[Scope, Nothing, E] => ZStream[Scope, Nothing, T]) {
+  type JsEventHandler = js.Function1[dom.Event, Unit]
+
+  def -->(target: Hub[T]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      // Capture the actual JS function object, so we can properly remove it.
-      val listener: js.Function1[dom.Event, Unit] = { (event: dom.Event) =>
-        Unsafe.unsafe { implicit unsafe =>
-          zio.Runtime.default.unsafe.run(
-            ZIO.succeed {
-              dom.console.log("Event " + eventType + " for ")
-              dom.console.log(parent)
-            } *>
-              target.publish(event.asInstanceOf[E])
-          ).getOrThrowFiberFailure()
+
+      val  stream = ZStream.asyncZIO[Scope, Nothing, E] { cb =>
+        ZIO.acquireRelease {
+          ZIO.succeed {
+            val listener: JsEventHandler = { (event: dom.Event) =>
+              cb(ZIO.succeed(Chunk(event.asInstanceOf[E])))
+            }
+            parent.addEventListener(eventType, listener)
+            listener
+          }
+        } { listener =>
+          ZIO.succeed {
+            parent.removeEventListener(eventType, listener)
+          }
         }
       }
 
-      ZIO.acquireRelease {
-        ZIO.succeed {
-          dom.console.log("Adding " + eventType + " to")
-          dom.console.log(parent)
-          parent.addEventListener(eventType, listener)
-        }
-      } { _ =>
-        ZIO.succeed {
-          parent.removeEventListener(eventType, listener)
-        }
-      }
+      toTarget(stream).mapZIO(e => target.offer(e)).runDrain.forkScoped.unit
     }
   }
+
+  def filter(predicate: T => Boolean) = copy(toTarget = toTarget.andThen(_.filter(predicate)))
 }
 
 object Events {
-  val onClick = EventsEmitter[dom.MouseEvent]("click")
+  private def event[E <: dom.Event](eventType: String) = EventsEmitter[E,E](eventType, s => s)
+
+  val onClick = event[dom.MouseEvent]("click")
+  val onMouseMove = event[dom.MouseEvent]("mousemove")
 }

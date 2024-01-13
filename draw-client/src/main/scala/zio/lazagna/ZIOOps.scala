@@ -25,5 +25,4 @@ object ZIOOps {
   def consume[R,T](hub: Hub[T])(handle: T => ZIO[R,Nothing,Unit]): ZIO[R & Scope, Nothing, Unit] = {
     consumeWith(hub)(_.mapZIO(handle))
   }
-
 }

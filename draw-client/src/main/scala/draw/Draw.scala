@@ -81,13 +81,7 @@ object Draw extends ZIOAppDefault {
           rect(
             width := "100%",
             height := "100%",
-            fill := "green"
-          ),
-          circle(
-            cx := 150,
-            cy := 150,
-            r := 5,
-            fill := "black"
+            fill := "#80c080"
           ),
           SVGOps.coordinateHelper { helper =>
             g(
@@ -104,7 +98,9 @@ object Draw extends ZIOAppDefault {
               }
             )
           },
-          onClick --> clickHub
+          onClick --> clickHub,
+          onMouseMove.filter{e =>
+            (e.buttons & 1) != 0} --> clickHub
         ),
       )
       _ <- elmt.mount(root)
