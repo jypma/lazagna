@@ -65,6 +65,7 @@ object Draw extends ZIOAppDefault {
       startDragHub <- Hub.bounded[dom.MouseEvent](1)
       draggedHub <- Hub.bounded[dom.MouseEvent](1)
       dragInProgress <- Ref.make[Seq[Promise[Nothing, Unit]]](Seq.empty)
+      deleteHub <- Hub.bounded[dom.Element](1)
 
       elmt = div(
         svg(
@@ -84,26 +85,44 @@ object Draw extends ZIOAppDefault {
                 } yield {
                   val startPos = helper.getClientPoint(downEvent)
                   val start = PathData.MoveTo(startPos.x, startPos.y)
-                  dom.console.log("Appending from " + start)
+                  val points = d <-- draggedHub(_
+                    .mapZIO(event => promise.isDone.map((event, _)))
+                    .takeWhile { (event, isDone) => !isDone }
+                    // TODO: check out haltWhen
+                    .map { (event, _) =>
+                      val pos = helper.getClientPoint(event)
+                      PathData.LineTo(pos.x, pos.y)
+                    }
+                    .mapAccum(Seq[PathData](start)) { (seq, e) => (seq :+ e, seq :+ e) }
+                    .map(PathData.render)
+                  )
                   children.Append(
-                    path(
-                      d <-- draggedHub(_
-                        .mapZIO(event => promise.isDone.map((event, _)))
-                        .takeWhile { (event, isDone) => !isDone }
-                        .map { (event, _) =>
-                          val pos = helper.getClientPoint(event)
-                          PathData.LineTo(pos.x, pos.y)
-                        }
-                        .mapAccum(Seq[PathData](start)) { (seq, e) => (seq :+ e, seq :+ e) }
-                        .map(PathData.render)
-                      )
+                    g(
+                      path(
+                        cls := "canDelete",
+                        points
+                      ),
+                      path(
+                        cls := "canDelete clickTarget",
+                        points
+                      ),
                     )
                   )
                 }
-              })
+              }).merge(deleteHub(_.map { elem =>
+                children.DeleteDOM(elem)
+              }))
             )
           },
-          onMouseDown --> startDragHub,
+          onClick(_
+            .filter { ev => ev.getModifierState("Alt") }
+            .map(_.target)
+            .collect {
+              case elem:dom.Element if elem.classList.contains("canDelete") =>
+                elem.parentNode.asInstanceOf[dom.Element] // This is the "g" containing the path
+            }
+          ) --> deleteHub,
+          onMouseDown(_.filter(ev => !ev.getModifierState("Alt"))) --> startDragHub,
           onMouseMove(_.filter { e => (e.buttons & 1) != 0 }) --> draggedHub,
           onMouseUp(_.tap { _ =>
             for {

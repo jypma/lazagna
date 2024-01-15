@@ -15,7 +15,7 @@ object TextContent {
     }
   }
 
-  def <--[H](content: Consumeable[H,String]) = new Modifier {
+  def <--(content: Consumeable[String]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       content(_.map { value =>
         parent.textContent = value

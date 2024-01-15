@@ -7,19 +7,51 @@ import zio.Scope
 import zio.Promise
 import zio.Trace
 
-case class Consumeable[H,T](private val hub: Hub[H], private val transform: ZStream[Any, Nothing, H] => ZStream[Any, Nothing, T]) {
-  def apply[U](t: ZStream[Any, Nothing, T] => ZStream[Any, Nothing, U]) = copy(transform = transform.andThen(t))
+trait Consumeable[T] {
+  def apply[U](t: ZStream[Any, Nothing, T] => ZStream[Any, Nothing, U]): Consumeable[U]
+
+  private[lazagna] def stream(onStart: => ZIO[Any, Nothing, Any]): ZStream[Any, Nothing, T]
 
   def consume: ZIO[Scope, Nothing, Unit] = {
     for {
       subscribed <- Promise.make[Nothing, Unit]
-      in = ZStream.unwrapScoped(ZStream.fromHubScoped(hub).tap(_ => subscribed.succeed(())))
-      _ <- transform(in).runDrain.forkScoped
+      _ <- stream(subscribed.succeed(())).runDrain.forkScoped
       _ <- subscribed.await
     } yield ()
+  }
+
+  def merge(other: Consumeable[T]) = MergedConsumeable(this, other, s => s)
+}
+
+case class HubConsumeable[H,T](private val hub: Hub[H], private val transform: ZStream[Any, Nothing, H] => ZStream[Any, Nothing, T]) extends Consumeable[T] {
+  override def apply[U](t: ZStream[Any, Nothing, T] => ZStream[Any, Nothing, U]) = copy(transform = transform.andThen(t))
+
+  override def stream(onStart: => ZIO[Any, Nothing, Any]): ZStream[Any, Nothing, T] = {
+    val in = ZStream.unwrapScoped(ZStream.fromHubScoped(hub).tap(_ => onStart))
+    transform(in)
+  }
+
+}
+
+case class MergedConsumeable[H,T](a: Consumeable[H], b: Consumeable[H], transform: ZStream[Any, Nothing, H] => ZStream[Any, Nothing, T]) extends Consumeable[T] {
+  override def apply[U](t: ZStream[Any, Nothing, T] => ZStream[Any, Nothing, U]) = copy(transform = transform.andThen(t))
+
+  override def stream(onStart: => ZIO[Any, Nothing, Any]): ZStream[Any, Nothing, T] = {
+    ZStream.unwrapScoped(for {
+      subscribedA <- Promise.make[Nothing, Unit]
+      subscribedB <- Promise.make[Nothing, Unit]
+      checkStarted = subscribedA.poll.zip(subscribedB.poll).flatMap {
+        case (Some(_), Some(_)) => onStart
+        case _ => ZIO.unit
+      }
+      inA = a.stream(subscribedA.succeed(()) *> checkStarted)
+      inB = b.stream(subscribedB.succeed(()) *> checkStarted)
+    } yield {
+      transform(inA.merge(inB))
+    })
   }
 }
 
 object Consumeable {
-  given fromHub[H]: Conversion[Hub[H], Consumeable[H,H]] = hub => Consumeable(hub, s => s)
+  given fromHub[H]: Conversion[Hub[H], Consumeable[H]] = hub => HubConsumeable(hub, s => s)
 }

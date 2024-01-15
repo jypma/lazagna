@@ -1,22 +1,28 @@
 :root {
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+    color-scheme: light dark;
+    color: rgba(255, 255, 255, 0.87);
+    background-color: #242424;
 }
 
 body {
-  margin: 0;
-  display: flex;
-  place-items: center;
+    margin: 0;
+    display: flex;
+    place-items: center;
 }
 
 #app {
-  margin: 0 auto;
-  padding: 2rem;
+    margin: 0 auto;
+    padding: 2rem;
 }
 
 path {
-  fill: none;
-  stroke: #000;
-  stroke-width: 1.5px;
+    fill: none;
+    stroke: #000;
+    stroke-width: 2px;
+}
+
+path.clickTarget {
+    fill: none;
+    stroke-width: 5px;
+    opacity: 0;
 }

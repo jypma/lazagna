@@ -9,12 +9,16 @@ import zio.lazagna.Consumeable
 import zio.Exit
 
 object Children {
-  /*
-   */
+  /** An explicit diff operation that can be sent to a children-accepting modifier */
   sealed trait ChildOp
+  /** The given element will be appended as a child. It must not already exist. */
   case class Append(elmt: Element[_]) extends ChildOp
+  /** The given element is added, or moved, to the position after the given element. */
   case class InsertOrMove(elmt: Element[_], after: Element[_]) extends ChildOp
+  /** The given element is deleted. It must have been previously appended or inserted. */
   case class Delete(elmt: Element[_]) extends ChildOp
+  /** The given DOM element is deleted. It must be the target of a previously appended or inserted Element. */
+  case class DeleteDOM(elmt: dom.Element) extends ChildOp
 
   private[Children] case class State(
     children: Map[dom.Node, (Element[_], Scope.Closeable)] = Map.empty) {
@@ -24,11 +28,11 @@ object Children {
     )
 
     /** Also returns the Scope to close */
-    def delete(elmt: Element[_]): (Scope.Closeable, State) = {
-      children.get(elmt.target) match {
+    def delete(elmt: dom.Element): (Scope.Closeable, State) = {
+      children.get(elmt) match {
         case None => (Scope.global, this)
         case Some((_, scope)) => (scope, State(
-          children = children - elmt.target
+          children = children - elmt
         ))
       }
     }
@@ -49,7 +53,7 @@ object Children {
     }
   }
 
-  def <~~[H](content: Consumeable[H,ChildOp]) = new Modifier {
+  def <~~(content: Consumeable[ChildOp]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       // TODO: add sentinel
       Ref.make(State()).flatMap { stateRef =>
@@ -58,11 +62,17 @@ object Children {
             case Append(elmt) =>
               for {
                 scope <- Scope.make
-                _ <- stateRef.update(_.append(elmt, scope))
+                _ <- stateRef.update {_.append(elmt, scope) }
                 _ <- scope.extend(elmt.mount(parent))
               } yield ()
 
             case Delete(elmt) =>
+              for {
+                scope <- stateRef.modify(_.delete(elmt.target))
+                _ <- scope.close(Exit.unit)
+              } yield ()
+
+            case DeleteDOM(elmt) =>
               for {
                 scope <- stateRef.modify(_.delete(elmt))
                 _ <- scope.close(Exit.unit)
@@ -86,7 +96,7 @@ object Children {
     }
   }
 
-  def <--[H](content: Consumeable[H,Seq[Element[_]]]) = new Modifier {
+  def <--(content: Consumeable[Seq[Element[_]]]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       content(_.zipWithPrevious.map { case (prev, next) =>
         val ops = prev.map(FastDiff.diff(_, next)).getOrElse(next.zipWithIndex.map(FastDiff.Insert.apply _))
