@@ -23,6 +23,6 @@ path {
 
 path.clickTarget {
     fill: none;
-    stroke-width: 5px;
+    stroke-width: 10px;
     opacity: 0;
 }

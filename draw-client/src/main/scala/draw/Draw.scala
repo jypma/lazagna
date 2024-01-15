@@ -86,10 +86,8 @@ object Draw extends ZIOAppDefault {
                   val startPos = helper.getClientPoint(downEvent)
                   val start = PathData.MoveTo(startPos.x, startPos.y)
                   val points = d <-- draggedHub(_
-                    .mapZIO(event => promise.isDone.map((event, _)))
-                    .takeWhile { (event, isDone) => !isDone }
-                    // TODO: check out haltWhen
-                    .map { (event, _) =>
+                    .interruptWhen(promise)
+                    .map { event =>
                       val pos = helper.getClientPoint(event)
                       PathData.LineTo(pos.x, pos.y)
                     }
