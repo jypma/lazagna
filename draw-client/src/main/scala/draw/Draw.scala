@@ -21,6 +21,7 @@ import zio.lazagna.dom.Events._
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.svg.SVGOps
+import zio.lazagna.dom.svg.PathData
 
 object StreamOps {
   def split[A, K, O](getKey: A => K)(makeOutput: (K, A, Hub[A]) => ZIO[Scope, Nothing, O]): ZPipeline[Scope, Nothing, Iterable[A], Seq[O]] = {
@@ -61,9 +62,9 @@ object Draw extends ZIOAppDefault {
     val root = dom.document.querySelector("#app")
 
     (for {
-      hub    <- Hub.bounded[children.ChildOp](1)
-      clickHub <- Hub.bounded[dom.MouseEvent](1)
-      downHub <- Hub.bounded[dom.MouseEvent](1)
+      startDragHub <- Hub.bounded[dom.MouseEvent](1)
+      draggedHub <- Hub.bounded[dom.MouseEvent](1)
+      dragInProgress <- Ref.make[Seq[Promise[Nothing, Unit]]](Seq.empty)
 
       elmt = div(
         svg(
@@ -72,34 +73,44 @@ object Draw extends ZIOAppDefault {
           rect(
             width := "100%",
             height := "100%",
-            fill := "#80c080"
+            fill := "#80a080"
           ),
           SVGOps.coordinateHelper { helper =>
             g(
-              children <~~ clickHub(_.map { event =>
-                val pos = helper.getClientPoint(event)
-                children.Append(
-                  circle(
-                    cx := pos.x,
-                    cy := pos.y,
-                    r := 5,
-                    fill := "black"
-                  ),
-                )
-              }),
-              children <~~ downHub(_.mapZIO { event =>
-                ZIO.succeed {
+              children <~~ startDragHub(_.mapZIO { downEvent =>
+                for {
+                  promise <- Promise.make[Nothing, Unit]
+                  _ <- dragInProgress.update(_ :+ promise)
+                } yield {
+                  val startPos = helper.getClientPoint(downEvent)
+                  val start = PathData.MoveTo(startPos.x, startPos.y)
+                  dom.console.log("Appending from " + start)
                   children.Append(
                     path(
-
+                      d <-- draggedHub(_
+                        .mapZIO(event => promise.isDone.map((event, _)))
+                        .takeWhile { (event, isDone) => !isDone }
+                        .map { (event, _) =>
+                          val pos = helper.getClientPoint(event)
+                          PathData.LineTo(pos.x, pos.y)
+                        }
+                        .mapAccum(Seq[PathData](start)) { (seq, e) => (seq :+ e, seq :+ e) }
+                        .map(PathData.render)
+                      )
                     )
                   )
-                } // TODO somehow save the stream in a ref, so we can stop it on mouse up.
+                }
               })
             )
           },
-          onClick --> clickHub,
-          onMouseMove(_.filter { e => (e.buttons & 1) != 0 }) --> clickHub
+          onMouseDown --> startDragHub,
+          onMouseMove(_.filter { e => (e.buttons & 1) != 0 }) --> draggedHub,
+          onMouseUp(_.tap { _ =>
+            for {
+              promises <- dragInProgress.getAndSet(Seq.empty)
+              _ <- ZIO.collectAll(promises.map(_.complete(ZIO.unit)))
+            } yield ()
+          }).run
         ),
       )
       _ <- elmt.mount(root)

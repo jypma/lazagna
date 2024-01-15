@@ -3,6 +3,7 @@ package zio.lazagna.dom
 import org.scalajs.dom
 import zio.ZIO
 import zio.Scope
+import zio.lazagna.Consumeable
 
 case class Attribute(name: String) {
   def :=(value: Double): Modifier = :=(value.toString)
@@ -16,12 +17,26 @@ case class Attribute(name: String) {
       }
     }
   }
+
+  def <--[H](content: Consumeable[H,String]) = new Modifier {
+    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
+      content(_.map { value =>
+        parent.setAttribute(name, value)
+      }).consume
+    }
+  }
 }
 
 object Attribute {
   val title = Attribute("title")
   val width = Attribute("width")
   val height = Attribute("height")
+
+  // TODO: Allow combining of multiple Consumeable[_,String] to set className from several sources, using ZStream.zipLatestWith
+  // Syntax would be a function Attribute.combine(Consumeable[_,String]*)
+  val `class` = Attribute("class")
+  val className = `class`
+  val cls = `class`
 
   // SVG attributes, keeping in shared scope for now
   val fill = Attribute("fill")
