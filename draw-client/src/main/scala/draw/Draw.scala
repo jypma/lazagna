@@ -80,13 +80,13 @@ object Draw extends ZIOAppDefault {
             g(
               children <~~ startDragHub(_.mapZIO { downEvent =>
                 for {
-                  promise <- Promise.make[Nothing, Unit]
-                  _ <- dragInProgress.update(_ :+ promise)
+                  doneDrawing <- Promise.make[Nothing, Unit]
+                  _ <- dragInProgress.update(_ :+ doneDrawing)
                 } yield {
                   val startPos = helper.getClientPoint(downEvent)
                   val start = PathData.MoveTo(startPos.x, startPos.y)
                   val points = d <-- draggedHub(_
-                    .interruptWhen(promise)
+                    .interruptWhen(doneDrawing)
                     .map { event =>
                       val pos = helper.getClientPoint(event)
                       PathData.LineTo(pos.x, pos.y)

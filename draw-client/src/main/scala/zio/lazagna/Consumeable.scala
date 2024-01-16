@@ -20,7 +20,7 @@ trait Consumeable[T] {
     } yield ()
   }
 
-  def merge(other: Consumeable[T]) = MergedConsumeable(this, other, s => s)
+  def merge[T1 <: T](other: Consumeable[T1]) = MergedConsumeable(this, other, s => s)
 }
 
 case class HubConsumeable[H,T](private val hub: Hub[H], private val transform: ZStream[Any, Nothing, H] => ZStream[Any, Nothing, T]) extends Consumeable[T] {
@@ -33,7 +33,7 @@ case class HubConsumeable[H,T](private val hub: Hub[H], private val transform: Z
 
 }
 
-case class MergedConsumeable[H,T](a: Consumeable[H], b: Consumeable[H], transform: ZStream[Any, Nothing, H] => ZStream[Any, Nothing, T]) extends Consumeable[T] {
+case class MergedConsumeable[H1,H2 <: H1,T](a: Consumeable[H1], b: Consumeable[H2], transform: ZStream[Any, Nothing, H1] => ZStream[Any, Nothing, T]) extends Consumeable[T] {
   override def apply[U](t: ZStream[Any, Nothing, T] => ZStream[Any, Nothing, U]) = copy(transform = transform.andThen(t))
 
   override def stream(onStart: => ZIO[Any, Nothing, Any]): ZStream[Any, Nothing, T] = {
