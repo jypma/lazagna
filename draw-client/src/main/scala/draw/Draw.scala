@@ -85,7 +85,7 @@ object Draw extends ZIOAppDefault {
       _ = dom.console.log("EXITING")
     } yield ExitCode.success).catchAllCause { cause =>
       dom.console.log("Main failed")
-      dom.console.log(cause)
+      dom.console.log(cause.prettyPrint)
       ZIO.succeed(ExitCode.failure)
     }
   }
