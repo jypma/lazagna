@@ -28,6 +28,7 @@ case class Attribute(name: String) {
 }
 
 object Attribute {
+  val id = Attribute("id")
   val title = Attribute("title")
   val width = Attribute("width")
   val height = Attribute("height")
