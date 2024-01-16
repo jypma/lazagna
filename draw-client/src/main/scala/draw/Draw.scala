@@ -52,7 +52,7 @@ object Draw extends ZIOAppDefault {
                   DrawCommand.StartScribble(id, DrawCommand.Point(pos.x, pos.y))
                 })
               ) --> commandHub,
-              onMouseDown(_
+              onMouseDown.merge(onMouseMove)(_
                 .filter { e => (e.buttons & 1) != 0 }
                 .filter { ev => ev.getModifierState("Alt") }
                 .map(_.target)

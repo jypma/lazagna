@@ -7,11 +7,14 @@ import zio.Scope
 import zio.Promise
 import zio.Trace
 
+/** Represents something that can potentially create a stream of items T when started in a scope. */
 trait Consumeable[T] {
+  /** Applies the given transformation to the stream, once it starts */
   def apply[U](t: ZStream[Any, Nothing, T] => ZStream[Any, Nothing, U]): Consumeable[U]
 
   private[lazagna] def stream(onStart: => ZIO[Any, Nothing, Any]): ZStream[Any, Nothing, T]
 
+  /** Returns a ZIO that, when started, runs this consumable and its transformations */
   def consume: ZIO[Scope, Nothing, Unit] = {
     for {
       subscribed <- Promise.make[Nothing, Unit]
@@ -20,6 +23,7 @@ trait Consumeable[T] {
     } yield ()
   }
 
+  /** Returns a new Consumeable that emits values to its stream when either this or the other emit. */
   def merge[T1 <: T](other: Consumeable[T1]) = MergedConsumeable(this, other, s => s)
 }
 

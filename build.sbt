@@ -3,7 +3,7 @@ import org.scalajs.linker.interface.ModuleSplitStyle
 val zioVersion = "2.0.21"
 val javaTimeVersion = "2.5.0"
 
-lazy val root = project.in(file("."))
+lazy val client = project.in(file("draw-client"))
   .enablePlugins(ScalaJSPlugin) // Enable the Scala.js plugin in this project
   .settings(
     scalaVersion := "3.3.1",
