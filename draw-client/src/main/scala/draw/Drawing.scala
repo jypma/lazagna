@@ -1,15 +1,9 @@
 package draw
 
-import zio.ZIO
-import zio.ZLayer
 import zio.lazagna.Consumeable
-import draw.data.drawevent.DrawEvent
-import zio.Hub
-import zio.Clock
-import draw.data.drawevent.ScribbleStarted
-import draw.data.drawevent.ScribbleContinued
-import draw.data.drawevent.ScribbleDeleted
-import draw.data.drawevent.Point
+import zio.{Clock, Hub, ZIO, ZLayer}
+
+import draw.data.drawevent.{DrawEvent, Point, ScribbleContinued, ScribbleDeleted, ScribbleStarted}
 
 trait Drawing {
   def perform(command: DrawCommand): ZIO[Any, DrawCommand.Failed, Unit]
