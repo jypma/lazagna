@@ -1,20 +1,18 @@
 package draw
 
-import org.scalajs.dom
-
+import zio.Hub
 import zio.lazagna.Consumeable
-import zio.lazagna.dom.Modifier
-
-import zio.lazagna.dom.Element.tags._
-import zio.lazagna.dom.Element.svgtags._
-import zio.lazagna.dom.Events._
+import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.children
-import zio.lazagna.Consumeable.given
-import zio.Hub
-import zio.ZIO
+import zio.lazagna.dom.Element.svgtags._
+import zio.lazagna.dom.Element.tags._
+import zio.lazagna.dom.Events._
+import zio.lazagna.dom.Modifier
 import zio.lazagna.dom.svg.PathData
 import zio.stream.ZStream
+
+import org.scalajs.dom
 
 sealed trait DrawCommand
 

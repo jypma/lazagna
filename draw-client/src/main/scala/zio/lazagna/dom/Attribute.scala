@@ -1,9 +1,9 @@
 package zio.lazagna.dom
 
-import org.scalajs.dom
-import zio.ZIO
-import zio.Scope
 import zio.lazagna.Consumeable
+import zio.{Scope, ZIO}
+
+import org.scalajs.dom
 
 case class Attribute(name: String) {
   def :=(value: Double): Modifier = :=(value.toString)

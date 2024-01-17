@@ -1,28 +1,16 @@
 package draw
 
-import scala.scalajs.js
+import zio.lazagna.dom.Attribute._
+import zio.lazagna.dom.Element._
+import zio.lazagna.dom.Element.svgtags._
+import zio.lazagna.dom.Element.tags._
+import zio.lazagna.dom.Events._
+import zio.lazagna.dom.svg.SVGOps
+import zio.lazagna.dom.{Element, Modifier}
+import zio.{ExitCode, Hub, Ref, ZIO, ZIOAppDefault}
 
 import org.scalajs.dom
-import zio.stream.ZStream
-import zio._
-import zio.Clock._
-import zio.stream.ZPipeline
 import org.scalajs.dom.Node
-import zio.IO
-import java.util.concurrent.TimeUnit
-import scala.collection.mutable.LinkedHashMap
-import scala.scalajs.js.annotation.JSImport
-import zio.lazagna.dom.FastDiff
-import zio.lazagna.dom.Element
-import zio.lazagna.dom.Element._
-import zio.lazagna.dom.Element.tags._
-import zio.lazagna.dom.Element.svgtags._
-import zio.lazagna.dom.Events._
-import zio.lazagna.dom.Attribute._
-import zio.lazagna.Consumeable.given
-import zio.lazagna.dom.svg.SVGOps
-import zio.lazagna.dom.svg.PathData
-import zio.lazagna.dom.Modifier
 
 object Draw extends ZIOAppDefault {
   override def run = {

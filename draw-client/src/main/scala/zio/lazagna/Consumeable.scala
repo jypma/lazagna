@@ -1,11 +1,7 @@
 package zio.lazagna
 
-import zio.Hub
-import zio.ZIO
 import zio.stream.ZStream
-import zio.Scope
-import zio.Promise
-import zio.Trace
+import zio.{Hub, Promise, Scope, ZIO}
 
 /** Represents something that can potentially create a stream of items T when started in a scope. */
 trait Consumeable[T] {

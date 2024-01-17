@@ -1,14 +1,11 @@
 package zio.lazagna.dom
 
-import org.scalajs.dom
 import scala.scalajs.js
-import zio.Hub
-import zio.ZIO
-import zio.Scope
-import zio.Unsafe
+
 import zio.stream.ZStream
-import zio.Ref
-import zio.Chunk
+import zio.{Chunk, Hub, Scope, Unsafe, ZIO}
+
+import org.scalajs.dom
 
 /** Emits a certain kind of event, and can create Modifier instances that run those events into a Hub or execute side effects. */
 trait EventsEmitter[T] {

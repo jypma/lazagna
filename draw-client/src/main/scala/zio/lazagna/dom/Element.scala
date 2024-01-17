@@ -1,8 +1,8 @@
 package zio.lazagna.dom
 
+import zio.{Scope, ZIO}
+
 import org.scalajs.dom
-import zio.ZIO
-import zio.Scope
 
 case class Element[E <: dom.Element](target: E, children: Seq[Modifier]) extends Modifier {
   override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {

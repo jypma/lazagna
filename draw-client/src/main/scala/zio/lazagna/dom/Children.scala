@@ -1,12 +1,9 @@
 package zio.lazagna.dom
 
-import org.scalajs.dom
-import zio.Scope
-import zio.Hub
-import zio.ZIO
-import zio.Ref
 import zio.lazagna.Consumeable
-import zio.Exit
+import zio.{Exit, Ref, Scope, ZIO}
+
+import org.scalajs.dom
 
 object Children {
   /** An explicit diff operation that can be sent to a children-accepting modifier */

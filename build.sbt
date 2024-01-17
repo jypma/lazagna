@@ -3,8 +3,23 @@ import org.scalajs.linker.interface.ModuleSplitStyle
 val zioVersion = "2.0.21"
 val javaTimeVersion = "2.5.0"
 
+ThisBuild / scalacOptions ++= Seq(
+  "-Wunused:all",
+  "-feature",
+  "-explain",
+  "-language:implicitConversions"
+)
+
+ThisBuild / scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.6.0"
+
+val commonSettings = Seq(
+  semanticdbEnabled := true,
+  semanticdbVersion := scalafixSemanticdb.revision
+)
+
 lazy val client = project.in(file("draw-client"))
   .enablePlugins(ScalaJSPlugin) // Enable the Scala.js plugin in this project
+  .settings(commonSettings)
   .settings(
     scalaVersion := "3.3.1",
 

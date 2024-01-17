@@ -1,9 +1,8 @@
 package zio.lazagna.dom.svg
 
-import org.scalajs.dom
+import zio.lazagna.dom.{Element, Modifier}
 
-import zio.lazagna.dom.Modifier
-import zio.lazagna.dom.Element
+import org.scalajs.dom
 
 object SVGOps {
   /** Utility class that converts client mouse coordinates into local SVG coordinates */
