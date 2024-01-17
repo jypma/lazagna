@@ -3,26 +3,48 @@ import org.scalajs.linker.interface.ModuleSplitStyle
 val zioVersion = "2.0.21"
 val javaTimeVersion = "2.5.0"
 
-ThisBuild / scalacOptions ++= Seq(
-  "-Wunused:all",
-  "-feature",
-  "-explain",
-  "-language:implicitConversions"
-)
-
 ThisBuild / scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.6.0"
 
 val commonSettings = Seq(
+  scalaVersion := "3.3.1",
+  scalacOptions ++= Seq(
+    "-Wunused:all",
+    "-feature",
+    "-explain",
+    "-language:implicitConversions"
+  ),
   semanticdbEnabled := true,
-  semanticdbVersion := scalafixSemanticdb.revision
-)
+  semanticdbVersion := scalafixSemanticdb.revision,
+  Compile / PB.targets := Seq(
+    scalapb.gen() -> (Compile / sourceManaged).value / "protos"
+  ),
+
+  // (optional) If you need scalapb/scalapb.proto or anything from
+  // google/protobuf/*.proto
+  libraryDependencies ++= Seq(
+    "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
+  ))
+
+lazy val data = crossProject(JSPlatform, JVMPlatform).in(file("draw-data"))
+  .settings(commonSettings)
+  .settings(
+    Compile / PB.protoSources := Seq(baseDirectory.value / ".." / "shared" / "src" / "main" / "protobuf"),
+    //name := "foo",
+    //version := "0.1-SNAPSHOT",
+  ).
+  jvmSettings(
+    // Add JVM-specific settings here
+  ).
+  jsSettings(
+    // Add JS-specific settings here
+    //scalaJSUseMainModuleInitializer := true,
+  )
 
 lazy val client = project.in(file("draw-client"))
   .enablePlugins(ScalaJSPlugin) // Enable the Scala.js plugin in this project
   .settings(commonSettings)
+  .dependsOn(data.js)
   .settings(
-    scalaVersion := "3.3.1",
-
     // Tell Scala.js that this is an application with a main method
     scalaJSUseMainModuleInitializer := true,
 

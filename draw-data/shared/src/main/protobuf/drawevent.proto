@@ -1,0 +1,35 @@
+syntax = "proto2";
+
+package draw.data;
+
+message Point {
+    required double x = 1;
+    required double y = 2;
+}
+
+message DrawEvent {
+    required uint64 timestamp = 1;
+    required DrawEventBody body = 2;
+}
+
+message DrawEventBody {
+    oneof sealed_value {
+        ScribbleStarted scribbleStarted = 1;
+        ScribbleContinued scribbleContinued = 2;
+        ScribbleDeleted scribbleDeleted = 3;
+    }
+}
+
+message ScribbleStarted {
+    required uint64 id = 1;
+    optional Point start = 2;
+}
+
+message ScribbleContinued {
+    required uint64 id = 1;
+    repeated Point points = 2;
+}
+
+message ScribbleDeleted {
+    required uint64 id = 1;
+}
