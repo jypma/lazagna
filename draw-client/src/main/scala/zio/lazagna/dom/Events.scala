@@ -59,6 +59,10 @@ case class MergedEventsEmitter[E1,E2 <: E1,T](a: EventsEmitter[E1], b: EventsEmi
 object Events {
   private def event[E <: dom.Event](eventType: String) = SingleEventsEmitter[E,E](eventType, s => s)
 
+  def merge[T](a: EventsEmitter[T], b: EventsEmitter[T], others: EventsEmitter[T]*): EventsEmitter[T] = {
+    (a +: b +: others).reduce(_ merge _)
+  }
+
   val onClick = event[dom.MouseEvent]("click")
   val onMouseDown = event[dom.MouseEvent]("mousedown")
   val onMouseUp = event[dom.MouseEvent]("mouseup")
