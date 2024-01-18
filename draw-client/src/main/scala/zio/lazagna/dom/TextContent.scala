@@ -1,6 +1,7 @@
 package zio.lazagna.dom
 
 import zio.lazagna.Consumeable
+import zio.lazagna.Consumeable._
 import zio.{Scope, ZIO}
 
 import org.scalajs.dom
@@ -16,11 +17,9 @@ object TextContent {
 
   def <--(content: Consumeable[String]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      Consumeable.consume {
-        content.map { value =>
-          parent.textContent = value
-        }
-      }
+      content.map { value =>
+        parent.textContent = value
+      }.consume
     }
   }
 }

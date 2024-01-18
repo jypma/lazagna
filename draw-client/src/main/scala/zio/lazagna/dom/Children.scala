@@ -1,6 +1,7 @@
 package zio.lazagna.dom
 
 import zio.lazagna.Consumeable
+import zio.lazagna.Consumeable._
 import zio.{Exit, Ref, Scope, ZIO}
 
 import org.scalajs.dom
@@ -54,43 +55,41 @@ object Children {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       // TODO: add sentinel
       Ref.make(State()).flatMap { stateRef =>
-        Consumeable.consume {
-          content.mapZIO {
-            _ match {
-              case Append(elmt) =>
-                for {
-                  scope <- Scope.make
-                  _ <- stateRef.update {_.append(elmt, scope) }
-                  _ <- scope.extend(elmt.mount(parent))
-                } yield ()
+        content.mapZIO {
+          _ match {
+            case Append(elmt) =>
+              for {
+                scope <- Scope.make
+                _ <- stateRef.update {_.append(elmt, scope) }
+                _ <- scope.extend(elmt.mount(parent))
+              } yield ()
 
-              case Delete(elmt) =>
-                for {
-                  scope <- stateRef.modify(_.delete(elmt.target))
-                  _ <- scope.close(Exit.unit)
-                } yield ()
+            case Delete(elmt) =>
+              for {
+                scope <- stateRef.modify(_.delete(elmt.target))
+                _ <- scope.close(Exit.unit)
+              } yield ()
 
-              case DeleteDOM(elmt) =>
-                for {
-                  scope <- stateRef.modify(_.delete(elmt))
-                  _ <- scope.close(Exit.unit)
-                } yield ()
+            case DeleteDOM(elmt) =>
+              for {
+                scope <- stateRef.modify(_.delete(elmt))
+                _ <- scope.close(Exit.unit)
+              } yield ()
 
-              case InsertOrMove(elmt, after) =>
-                for {
-                  newScope <- Scope.make
-                  scope <- stateRef.modify(_.insertOrMove(elmt, after, newScope))
-                  isNew = scope eq newScope
-                  _ <- scope.extend {
-                    if (isNew)
-                      elmt.mount(parent, Some(after.target))
-                    else
-                      elmt.moveAfter(parent, after.target)
-                  }
-                } yield ()
-            }
+            case InsertOrMove(elmt, after) =>
+              for {
+                newScope <- Scope.make
+                scope <- stateRef.modify(_.insertOrMove(elmt, after, newScope))
+                isNew = scope eq newScope
+                _ <- scope.extend {
+                  if (isNew)
+                    elmt.mount(parent, Some(after.target))
+                  else
+                    elmt.moveAfter(parent, after.target)
+                }
+              } yield ()
           }
-        }
+        }.consume
       }
     }
   }
