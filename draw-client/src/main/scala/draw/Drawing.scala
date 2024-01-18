@@ -11,6 +11,7 @@ trait Drawing {
 }
 
 case class DrawingInMemory(storage: Hub[DrawEvent]) extends Drawing {
+
   override def perform(command: DrawCommand): ZIO[Any, DrawCommand.Failed, Unit] = {
     for {
       now <- Clock.instant
@@ -46,7 +47,7 @@ case class DrawingInMemory(storage: Hub[DrawEvent]) extends Drawing {
 }
 
 object Drawing {
-  val live = ZLayer.fromZIO {
+  val live = ZLayer.scoped {
     for {
       storage <- Hub.bounded[DrawEvent](16)
     } yield DrawingInMemory(storage)

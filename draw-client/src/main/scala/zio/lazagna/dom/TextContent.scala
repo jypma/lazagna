@@ -16,9 +16,11 @@ object TextContent {
 
   def <--(content: Consumeable[String]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      content(_.map { value =>
-        parent.textContent = value
-      }).consume
+      Consumeable.consume {
+        content.map { value =>
+          parent.textContent = value
+        }
+      }
     }
   }
 }

@@ -20,9 +20,11 @@ case class Attribute(name: String) {
 
   def <--(content: Consumeable[String]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      content(_.map { value =>
-        parent.setAttribute(name, value)
-      }).consume
+      Consumeable.consume {
+        content.map { value =>
+          parent.setAttribute(name, value)
+        }
+      }
     }
   }
 }

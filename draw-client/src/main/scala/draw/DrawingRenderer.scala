@@ -30,13 +30,13 @@ object DrawingRenderer {
       }
 
       val svgBody = g(
-        children <~~ drawing.events(_
+        children <~~ drawing.events
           .map(_.body)
           .map {
             case ScribbleStarted(scribbleId, Some(start), _) =>
               val ID = scribbleId
               val startData = PathData.MoveTo(start.x, start.y)
-              val points = d <-- drawing.events(_
+              val points = d <-- drawing.events
                 .map(_.body)
                 .takeUntil(_ match {
                   case ScribbleDeleted(ID, _) => true
@@ -47,7 +47,6 @@ object DrawingRenderer {
                 .map { pos => PathData.LineTo(pos.x, pos.y) }
                 .mapAccum(Seq[PathData](startData)) { (seq, e) => (seq :+ e, seq :+ e) }
                 .map(PathData.render)
-              )
 
               Some(children.Append(
                 g(
@@ -73,7 +72,6 @@ object DrawingRenderer {
           }
           .collect { case Some(op) => op }
         )
-      )
 
       val svgElem = div(
         svg(

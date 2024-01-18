@@ -54,57 +54,61 @@ object Children {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       // TODO: add sentinel
       Ref.make(State()).flatMap { stateRef =>
-        content(_.mapZIO {
-          _ match {
-            case Append(elmt) =>
-              for {
-                scope <- Scope.make
-                _ <- stateRef.update {_.append(elmt, scope) }
-                _ <- scope.extend(elmt.mount(parent))
-              } yield ()
+        Consumeable.consume {
+          content.mapZIO {
+            _ match {
+              case Append(elmt) =>
+                for {
+                  scope <- Scope.make
+                  _ <- stateRef.update {_.append(elmt, scope) }
+                  _ <- scope.extend(elmt.mount(parent))
+                } yield ()
 
-            case Delete(elmt) =>
-              for {
-                scope <- stateRef.modify(_.delete(elmt.target))
-                _ <- scope.close(Exit.unit)
-              } yield ()
+              case Delete(elmt) =>
+                for {
+                  scope <- stateRef.modify(_.delete(elmt.target))
+                  _ <- scope.close(Exit.unit)
+                } yield ()
 
-            case DeleteDOM(elmt) =>
-              for {
-                scope <- stateRef.modify(_.delete(elmt))
-                _ <- scope.close(Exit.unit)
-              } yield ()
+              case DeleteDOM(elmt) =>
+                for {
+                  scope <- stateRef.modify(_.delete(elmt))
+                  _ <- scope.close(Exit.unit)
+                } yield ()
 
-            case InsertOrMove(elmt, after) =>
-              for {
-                newScope <- Scope.make
-                scope <- stateRef.modify(_.insertOrMove(elmt, after, newScope))
-                isNew = scope eq newScope
-                _ <- scope.extend {
-                  if (isNew)
-                    elmt.mount(parent, Some(after.target))
-                  else
-                    elmt.moveAfter(parent, after.target)
-                }
-              } yield ()
+              case InsertOrMove(elmt, after) =>
+                for {
+                  newScope <- Scope.make
+                  scope <- stateRef.modify(_.insertOrMove(elmt, after, newScope))
+                  isNew = scope eq newScope
+                  _ <- scope.extend {
+                    if (isNew)
+                      elmt.mount(parent, Some(after.target))
+                    else
+                      elmt.moveAfter(parent, after.target)
+                  }
+                } yield ()
+            }
           }
-        }).consume
+        }
       }
     }
   }
 
   def <--(content: Consumeable[Seq[Element[_]]]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      content(_.zipWithPrevious.map { case (prev, next) =>
-        val ops = prev.map(FastDiff.diff(_, next)).getOrElse(next.zipWithIndex.map(FastDiff.Insert.apply _))
-        dom.console.log("Need to " + ops)
-        ops.map { _ match {
-          case FastDiff.Insert(element, index) =>
-            ???
-          case FastDiff.Delete(index) =>
-            ???
-        }}
-      }).consume
+      Consumeable.consume {
+        content.zipWithPrevious.map { case (prev, next) =>
+          val ops = prev.map(FastDiff.diff(_, next)).getOrElse(next.zipWithIndex.map(FastDiff.Insert.apply _))
+          dom.console.log("Need to " + ops)
+          ops.map { _ match {
+            case FastDiff.Insert(element, index) =>
+              ???
+            case FastDiff.Delete(index) =>
+              ???
+          }}
+        }
+      }
     }
   }
 }
