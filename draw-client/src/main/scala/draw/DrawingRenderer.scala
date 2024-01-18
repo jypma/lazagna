@@ -5,6 +5,7 @@ import zio.lazagna.dom.Element.children
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Events._
+import zio.lazagna.dom.Events.given
 import zio.lazagna.dom.Modifier
 import zio.lazagna.dom.svg.{PathData, SVGOps}
 import zio.stream.ZStream
@@ -85,38 +86,38 @@ object DrawingRenderer {
           svgBody,
           SVGOps.coordinateHelper { helper =>
             Modifier.combine(
-              merge(
-                onMouseDown(_
-                  .filter { e => (e.buttons & 1) != 0 }
-                  .filter(ev => !ev.getModifierState("Alt"))
-                  .mapZIO(ev => nextScribbleId.get.map { id =>
-                    val pos = helper.getClientPoint(ev)
-                    DrawCommand.StartScribble(id, DrawCommand.Point(pos.x, pos.y))
-                  })
-                ),
-                onMouseDown.merge(onMouseMove)(_
-                  .filter { e => (e.buttons & 1) != 0 }
-                  .filter { ev => ev.getModifierState("Alt") }
-                  .map(_.target)
-                  .collect { case elem: dom.Element => elem }
-                  .map(_.parentNode)
-                  .collect {
-                    case parent:dom.Element if parent.id.startsWith("scribble") =>
-                      val id = parent.id.substring("scribble".length).toLong
-                      DrawCommand.DeleteScribble(id)
-                  }
-                ),
-                onMouseMove(_
-                  .filter { e => (e.buttons & 1) != 0 }
-                  .mapZIO(ev => nextScribbleId.get.map(id =>
-                    val pos = helper.getClientPoint(ev)
-                      DrawCommand.ContinueScribble(id, Seq(DrawCommand.Point(pos.x, pos.y)))
-                  ))
+              onMouseDown
+                .filter { e => (e.buttons & 1) != 0 }
+                .filter(ev => !ev.getModifierState("Alt"))
+                .mapZIO(ev => nextScribbleId.get.map { id =>
+                  val pos = helper.getClientPoint(ev)
+                  DrawCommand.StartScribble(id, DrawCommand.Point(pos.x, pos.y))
+                })
+                .merge(
+                  onMouseDown
+                    .merge(onMouseMove)
+                    .filter { e => (e.buttons & 1) != 0 }
+                    .filter { ev => ev.getModifierState("Alt") }
+                    .map(_.target)
+                    .collect { case elem: dom.Element => elem }
+                    .map(_.parentNode)
+                    .collect {
+                      case parent:dom.Element if parent.id.startsWith("scribble") =>
+                        val id = parent.id.substring("scribble".length).toLong
+                        DrawCommand.DeleteScribble(id)
+                    }
                 )
-              )(_.mapZIO(performCommand)).run,
-              onMouseUp(_
+                .merge(
+                  onMouseMove
+                    .filter { e => (e.buttons & 1) != 0 }
+                    .mapZIO(ev => nextScribbleId.get.map(id =>
+                      val pos = helper.getClientPoint(ev)
+                        DrawCommand.ContinueScribble(id, Seq(DrawCommand.Point(pos.x, pos.y)))
+                    ))
+                )
+                .mapZIO(performCommand),
+              onMouseUp
                 .mapZIO(_ => nextScribbleId.update(_ + 1))
-              ).run
             )
           }
         )

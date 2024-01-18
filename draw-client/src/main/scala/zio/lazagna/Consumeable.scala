@@ -12,8 +12,8 @@ object Consumeable {
     setup <- ZIO.service[Setup]
     subscribed <- Promise.make[Nothing, Unit]
     _ <- setup.addStartAction(subscribed.await)
-    zioOfStream <- ZStream.fromHubScoped(hub).tap(_ => subscribed.succeed(()))
-  } yield zioOfStream)
+    stream <- ZStream.fromHubScoped(hub).tap(_ => subscribed.succeed(()))
+  } yield stream)
 
   extension(consumeable: Consumeable[_]) {
     /** Consumes everything of the given consumeable for its side effects only. */
