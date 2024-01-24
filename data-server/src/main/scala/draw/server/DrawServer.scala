@@ -1,16 +1,18 @@
 package draw.server
 
-import draw.data.drawcommand.DrawCommand
-import zio._
-import zio.http._
-import zio.http.codec.PathCodec.string
-import zio.http.ChannelEvent.Read
-import zio.http.endpoint.Endpoint
-import zio.http.codec.HttpCodec.{query}
-import zio.http.Header.{AccessControlAllowMethods, AccessControlAllowOrigin, Origin}
-import zio.http.Middleware.{cors, CorsConfig}
-import draw.server.Users.User
 import java.net.InetAddress
+
+import zio._
+import zio.http.ChannelEvent.Read
+import zio.http.Header.{AccessControlAllowMethods, AccessControlAllowOrigin, Origin}
+import zio.http.Middleware.{CorsConfig, cors}
+import zio.http._
+import zio.http.codec.HttpCodec.query
+import zio.http.codec.PathCodec.string
+import zio.http.endpoint.Endpoint
+
+import draw.data.drawcommand.DrawCommand
+import draw.server.Users.User
 
 object DrawServer extends ZIOAppDefault {
   // Create CORS configuration

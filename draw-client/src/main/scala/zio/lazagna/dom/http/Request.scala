@@ -1,10 +1,10 @@
 package zio.lazagna.dom.http
 
 import scala.scalajs.js
-import zio.IO
+
+import zio.{IO, ZIO}
+
 import org.scalajs.dom
-import zio.Promise
-import zio.ZIO
 
 object Request {
   case class ResponseHandler[T] private[http] (responseType: String, handle: js.Any => IO[RequestError, T])

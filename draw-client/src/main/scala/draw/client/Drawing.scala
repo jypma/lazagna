@@ -3,12 +3,9 @@ package draw.client
 import zio.lazagna.Consumeable
 import zio.{Clock, Hub, ZIO, ZLayer}
 
+import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble}
 import draw.data.drawevent.{DrawEvent, ScribbleContinued, ScribbleDeleted, ScribbleStarted}
 import draw.data.point.Point
-import draw.data.drawcommand.DrawCommand
-import draw.data.drawcommand.StartScribble
-import draw.data.drawcommand.ContinueScribble
-import draw.data.drawcommand.DeleteScribble
 
 trait Drawing {
   def perform(command: DrawCommand): ZIO[Any, Nothing, Unit]

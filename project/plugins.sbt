@@ -1,6 +1,6 @@
 addSbtPlugin("org.scala-js" % "sbt-scalajs" % "1.15.0")
 
-//addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.11.1")
+addSbtPlugin("ch.epfl.scala" % "sbt-scalafix" % "0.11.1")
 
 addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.6")
 

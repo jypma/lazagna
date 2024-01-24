@@ -1,12 +1,9 @@
 package draw.client
 
+import scala.collection.Searching.{Found, InsertionPoint}
+
 import zio.stream.ZStream
-import zio.UIO
-import zio.Hub
-import zio.Ref
-import zio.Semaphore
-import scala.collection.Searching.InsertionPoint
-import scala.collection.Searching.Found
+import zio.{Hub, Ref, Semaphore, UIO}
 
 trait EventStore[E] {
   def events: ZStream[Any, Nothing, E]

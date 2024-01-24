@@ -1,9 +1,6 @@
 package zio.lazagna
 
-import zio.UIO
-import zio.ZIO
-import zio.Ref
-import zio.ZLayer
+import zio.{Ref, UIO, ZIO, ZLayer}
 
 // TODO: Maybe this should just be a seq of Promise[Unit] to wait for, rather than full-on ZIO units.
 /** A Setup block contains extra start actions that should be waited after completing a ZIO.

@@ -1,14 +1,11 @@
 package draw.server
 
-import zio.ZLayer
-import zio.Ref
-import zio.UIO
-import zio.ZIO
-import zio.IO
 import java.security.MessageDigest
+
+import zio.schema.{DeriveSchema, Schema}
+import zio.{IO, Ref, UIO, ZIO, ZLayer}
+
 import Users._
-import zio.schema.Schema
-import zio.schema.DeriveSchema
 
 trait Users {
   def login(userName: String, password: String): IO[UserError, User]

@@ -1,19 +1,13 @@
 package draw.server
 
-import zio.{Clock, ZIO, ZLayer}
+import zio.stream.{SubscriptionRef, ZStream}
+import zio.{Clock, IO, Ref, ZIO, ZLayer}
 
+import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble}
 import draw.data.drawevent.{DrawEvent,  ScribbleContinued, ScribbleDeleted, ScribbleStarted}
-import zio.Ref
-import zio.stream.ZStream
-import draw.data.drawcommand.DrawCommand
-import zio.IO
+import draw.data.point.Point
 
 import Drawings.DrawingError
-import draw.data.drawcommand.StartScribble
-import draw.data.point.Point
-import draw.data.drawcommand.ContinueScribble
-import draw.data.drawcommand.DeleteScribble
-import zio.stream.SubscriptionRef
 
 trait Drawing {
   def perform(command: DrawCommand): ZIO[Any, DrawingError, Unit]

@@ -5,22 +5,15 @@ import zio.lazagna.dom.Element.children
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Events._
-import zio.lazagna.dom.Events.given
 import zio.lazagna.dom.Modifier
 import zio.lazagna.dom.svg.{PathData, SVGOps}
-import zio.lazagna.Consumeable.given
 import zio.stream.ZStream
-import zio.{Ref, ZIO, ZLayer}
+import zio.{Hub, Ref, ZIO, ZLayer}
 
+import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble}
 import draw.data.drawevent.{ScribbleContinued, ScribbleDeleted, ScribbleStarted}
-import org.scalajs.dom
-import zio.Hub
-import zio.lazagna.dom.Alternative
-import draw.data.drawcommand.DrawCommand
-import draw.data.drawcommand.StartScribble
 import draw.data.point.Point
-import draw.data.drawcommand.DeleteScribble
-import draw.data.drawcommand.ContinueScribble
+import org.scalajs.dom
 
 trait DrawingRenderer {
   def render(drawing: Drawing): Modifier
@@ -35,13 +28,6 @@ object DrawingRenderer {
     } yield new DrawingRenderer {
       def render(drawing: Drawing) = {
         def performCommand(command: DrawCommand) = drawing.perform(command)
-
-        val testAlternatives = div(
-          children <~~ (visibleHub >>> Alternative.alternative(_ match {
-            case 0 => div()
-            case _ => div()
-          }))
-        )
 
         val svgBody = g(
           children <~~ drawing.events

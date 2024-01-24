@@ -3,10 +3,11 @@ package zio.lazagna.dom
 import scala.scalajs.js
 
 import zio.stream.ZStream
-import zio.{Chunk, Hub, Scope, Unsafe, ZIO}
+import zio.{Chunk, Hub, Scope, Unsafe, ZIO, ZLayer}
 
 import org.scalajs.dom
-import zio.ZLayer
+
+type EventsEmitter[T] = ZStream[Scope with dom.Element, Nothing, T]
 
 object Events {
   private def event[E <: dom.Event](eventType: String): EventsEmitter[E] = {

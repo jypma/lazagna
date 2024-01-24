@@ -1,15 +1,12 @@
 package zio.lazagna.dom.http
 
-import org.scalajs.dom
-import zio.ZIO
 import zio.stream.ZStream
-import zio.Chunk
-import zio.Scope
-import zio.Promise
-import zio.IO
+import zio.{Chunk, IO, Promise, Scope, ZIO}
+
+import org.scalajs.dom
+
 import WebSocket.WebSocketError
-import scala.scalajs.js.typedarray.Int8Array
-import scalajs.js.typedarray.AB2TA
+import scalajs.js.typedarray._
 
 trait WebSocket {
   def send(text: String): IO[WebSocketError, Unit]
@@ -31,18 +28,14 @@ object WebSocket {
             val socket = new dom.WebSocket(url)
             socket.binaryType = "arraybuffer"
             socket.onopen = { event =>
-              dom.console.log("open")
               openedCB(ZIO.succeed(socket))
             }
             socket.onmessage = { event =>
-              //dom.console.log("message")
               cb(onMessage(event).map {
-                //dom.console.log("  handled.")
                 Chunk(_)
               })
             }
             socket.onerror = { event =>
-              dom.console.log("error")
               val failed = SocketFailed(event.toString)
               openedCB(ZIO.fail(failed))
               cb(ZIO.fail(Some(failed)))
@@ -51,7 +44,6 @@ object WebSocket {
           }
         } { socket =>
           ZIO.succeed {
-            dom.console.log("close")
             socket.close()
           }
         }
@@ -75,44 +67,4 @@ object WebSocket {
     }.runDrain.forkScoped
     ws <- socket.await
   } yield ws
-
-  /*
-  def connect(url: String)(promise: Promise[Nothing, WebSocket]): ZStream[Scope, WebSocketError, dom.MessageEvent] = {
-    ZStream.asyncScoped[Any, WebSocketError, dom.MessageEvent] { cb =>
-      for {
-        domSocket <- ZIO.acquireRelease {
-          ZIO.async[Any, WebSocketError, dom.WebSocket] { openedCB =>
-            val socket = new dom.WebSocket(url)
-            socket.binaryType = "arraybuffer"
-            socket.onopen = { event =>
-              openedCB(ZIO.succeed(socket))
-            }
-            socket.onmessage = { event =>
-              cb(ZIO.succeed(Chunk(event)))
-            }
-            socket.onerror = { event =>
-              val failed = SocketFailed(event.toString)
-              openedCB(ZIO.fail(failed))
-              cb(ZIO.fail(Some(failed)))
-            }
-          }
-        } { socket =>
-          ZIO.succeed {
-            socket.close()
-          }
-        }
-
-        webSocket = new WebSocket {
-          override def send(text:String) = {
-            if (domSocket.readyState == 1)
-              ZIO.succeed(domSocket.send(text))
-            else
-              ZIO.fail(SocketFailed(s"Socket is not ready to send data: ${domSocket.readyState}"))
-          }
-        }
-
-        _ <- promise.complete(ZIO.succeed(webSocket))
-      } yield ()
-    }
-  }*/
 }

@@ -1,27 +1,17 @@
 package draw.client
 
-import scalajs.js
-import org.scalajs.dom
-import zio.IO
-import DrawingClient._
-import zio.ZLayer
-import zio.ZIO
-import zio.lazagna.dom.http.Request.POST
-import zio.lazagna.dom.http.Request.AsDynamicJSON
-import zio.lazagna.dom.http.Request.RequestError
-import zio.lazagna.Consumeable
-import zio.lazagna.Consumeable.given
-import draw.data.drawevent.DrawEvent
-import draw.data.drawcommand.DrawCommand
+import scala.scalajs.js.typedarray.{ArrayBuffer, Int8Array}
+
+import zio.lazagna.dom.http.Request.{AsDynamicJSON, POST, RequestError}
 import zio.lazagna.dom.http.WebSocket
-import zio.Promise
-import zio.Hub
-import scala.scalajs.js.typedarray.Int8Array
-import scala.scalajs.js.typedarray.ArrayBuffer
-import zio.Scope
-import zio.stream.SubscriptionRef
-import zio.stream.ZStream
-import zio.Ref
+import zio.{Scope, ZIO, ZLayer}
+
+import draw.data.drawcommand.DrawCommand
+import draw.data.drawevent.DrawEvent
+import org.scalajs.dom
+
+import scalajs.js
+import DrawingClient._
 
 trait DrawingClient {
   def login(user: String, password: String, drawingName: String): ZIO[Scope, ClientError | RequestError, Drawing]
@@ -52,11 +42,11 @@ object DrawingClient {
           case s if s != null && !js.isUndefined(s) => ZIO.succeed(s)
           case _ => ZIO.fail(ClientError("Could not get token"))
         }
-        _ = dom.console.log(token)
         store <- EventStore.make[DrawEvent](_.sequenceNr)
         socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingName}/socket?token=${token}") { msg =>
           msg match {
             case m if m.data.isInstanceOf[ArrayBuffer] =>
+              // TODO: Catch parse errors and fail accordingly
               val event = DrawEvent.parseFrom(new Int8Array(m.data.asInstanceOf[ArrayBuffer]).toArray)
               store.publish(event)
             case _ => ZIO.unit

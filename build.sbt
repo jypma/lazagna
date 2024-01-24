@@ -3,8 +3,6 @@ import org.scalajs.linker.interface.ModuleSplitStyle
 val zioVersion = "2.0.21"
 val javaTimeVersion = "2.5.0"
 
-// ThisBuild / scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.6.0"
-
 val commonSettings = Seq(
   scalaVersion := "3.3.1",
   scalacOptions ++= Seq(
@@ -13,8 +11,8 @@ val commonSettings = Seq(
     "-explaintypes",
     "-language:implicitConversions"
   ),
-//  semanticdbEnabled := true,
-//  semanticdbVersion := scalafixSemanticdb.revision,
+  semanticdbEnabled := true,
+  semanticdbVersion := scalafixSemanticdb.revision,
   Compile / PB.targets := Seq(
     scalapb.gen() -> (Compile / sourceManaged).value / "protos"
   ),
@@ -29,15 +27,12 @@ lazy val data = crossProject(JSPlatform, JVMPlatform).in(file("draw-data"))
   .settings(commonSettings)
   .settings(
     Compile / PB.protoSources := Seq(baseDirectory.value / ".." / "shared" / "src" / "main" / "protobuf"),
-    //name := "foo",
-    //version := "0.1-SNAPSHOT",
   ).
   jvmSettings(
     // Add JVM-specific settings here
   ).
   jsSettings(
     // Add JS-specific settings here
-    //scalaJSUseMainModuleInitializer := true,
   )
 
 lazy val client = project.in(file("draw-client"))
@@ -61,9 +56,6 @@ lazy val client = project.in(file("draw-client"))
           ModuleSplitStyle.SmallModulesFor(List("draw")))
     },
 
-    /* Depend on the scalajs-dom library.
-     * It provides static types for the browser DOM APIs.
-     */
     libraryDependencies ++= Seq(
       "org.scala-js" %%% "scalajs-dom" % "2.4.0",
       "dev.zio" %%% "zio" % zioVersion,

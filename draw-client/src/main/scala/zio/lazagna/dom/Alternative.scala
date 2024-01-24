@@ -1,7 +1,7 @@
 package zio.lazagna.dom
 
-import zio.stream.ZPipeline
-import zio.stream.ZStream
+import zio.stream.{ZPipeline, ZStream}
+
 import org.scalajs.dom
 
 object Alternative {
