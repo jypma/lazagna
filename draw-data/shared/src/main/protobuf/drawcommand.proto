@@ -1,0 +1,30 @@
+syntax = "proto2";
+import "point.proto";
+
+package draw.data;
+
+message DrawCommand {
+    required DrawCommandBody body = 1;
+}
+
+message DrawCommandBody {
+    oneof sealed_value {
+        StartScribble startScribble = 1;
+        ContinueScribble continueScribble = 2;
+        DeleteScribble deleteScribble = 3;
+    }
+}
+
+message StartScribble {
+    required uint64 id = 1;
+    optional Point start = 2;
+}
+
+message ContinueScribble {
+    required uint64 id = 1;
+    repeated Point points = 2;
+}
+
+message DeleteScribble {
+    required uint64 id = 1;
+}

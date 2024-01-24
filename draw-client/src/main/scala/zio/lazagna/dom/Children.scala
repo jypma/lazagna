@@ -93,21 +93,4 @@ object Children {
       }
     }
   }
-
-  def <--(content: Consumeable[Seq[Element[_]]]) = new Modifier {
-    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      Consumeable.consume {
-        content.zipWithPrevious.map { case (prev, next) =>
-          val ops = prev.map(FastDiff.diff(_, next)).getOrElse(next.zipWithIndex.map(FastDiff.Insert.apply _))
-          dom.console.log("Need to " + ops)
-          ops.map { _ match {
-            case FastDiff.Insert(element, index) =>
-              ???
-            case FastDiff.Delete(index) =>
-              ???
-          }}
-        }
-      }
-    }
-  }
 }

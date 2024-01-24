@@ -1,4 +1,4 @@
-package draw
+package draw.client
 
 import zio.{ExitCode, Scope, ZIO, ZIOAppDefault}
 
@@ -8,18 +8,16 @@ object Main extends ZIOAppDefault {
 
   val root = dom.document.querySelector("#app")
 
-  def logCommandFailure(f: DrawCommand.Failed) = ZIO.succeed {
-    dom.console.log(f.message)
-  }
-
-  val main: ZIO[DrawingRenderer & Scope, Nothing, Unit] = for {
+  def main(drawing: Drawing): ZIO[DrawingRenderer & Scope, Nothing, Unit] = for {
     renderer <- ZIO.service[DrawingRenderer]
-    _ <- renderer.render.mount(root)
+    _ <- renderer.render(drawing).mount(root)
   } yield ()
 
   override def run = ZIO.scoped {
     (for {
-      _ <- main
+      client <- ZIO.service[DrawingClient]
+      drawing <- client.login("jan", "jan", "test")
+      _ <- main(drawing)
       _ = dom.console.log("Main is ready.")
       _ <- ZIO.never // We don't want to exit main, since our background fibers do the real work.
     } yield ExitCode.success)
@@ -27,5 +25,5 @@ object Main extends ZIOAppDefault {
       dom.console.log(cause.prettyPrint)
       ZIO.succeed(ExitCode.failure)
     }
-  }.provide(Drawing.live, DrawingRenderer.live)
+  }.provide(DrawingRenderer.live, DrawingClient.live, DrawingClient.configTest)
 }

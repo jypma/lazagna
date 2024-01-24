@@ -15,4 +15,17 @@ export default defineConfig({
       // default: 'scalajs' (so the plugin recognizes URIs starting with 'scalajs:')
       uriPrefix: 'scalajs',
   })],
+  server: {
+    host: "0.0.0.0",
+    proxy: {
+      // string shorthand: http://localhost:5173/foo -> http://localhost:4567/foo
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+        ws: true
+      }
+    }
+  }
 });

@@ -27,4 +27,11 @@ cd draw-client
 npm run dev
 ```
 
+and in a third console run:
+```sh
+sbt
+project server
+~reStart
+```
+
 The latter will open the example at `http://localhost:5173/`, which you can open in your web browser. The example is currently fully offline, but a multi-user version with a small server backend is being planned and developed.

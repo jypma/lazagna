@@ -3,18 +3,18 @@ import org.scalajs.linker.interface.ModuleSplitStyle
 val zioVersion = "2.0.21"
 val javaTimeVersion = "2.5.0"
 
-ThisBuild / scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.6.0"
+// ThisBuild / scalafixDependencies += "com.github.liancheng" %% "organize-imports" % "0.6.0"
 
 val commonSettings = Seq(
   scalaVersion := "3.3.1",
   scalacOptions ++= Seq(
-    "-Wunused:all",
+    "-Wunused:imports",
     "-feature",
-    "-explain",
+    "-explaintypes",
     "-language:implicitConversions"
   ),
-  semanticdbEnabled := true,
-  semanticdbVersion := scalafixSemanticdb.revision,
+//  semanticdbEnabled := true,
+//  semanticdbVersion := scalafixSemanticdb.revision,
   Compile / PB.targets := Seq(
     scalapb.gen() -> (Compile / sourceManaged).value / "protos"
   ),
@@ -77,5 +77,20 @@ lazy val client = project.in(file("draw-client"))
     ),
 
     testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
+  )
 
+lazy val server = project.in(file("data-server"))
+  .settings(commonSettings)
+  .dependsOn(data.jvm)
+  .settings(
+    libraryDependencies ++= Seq(
+      "dev.zio" %%% "zio" % zioVersion,
+      "dev.zio" %%% "zio-streams" % zioVersion,
+      "dev.zio" %%% "zio-test"          % zioVersion % Test,
+      "dev.zio" %%% "zio-test-sbt"      % zioVersion % Test,
+      "dev.zio" %%% "zio-test-magnolia" % zioVersion % Test,
+      "dev.zio" %% "zio-http" % "3.0.0-RC4"
+    ),
+
+    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
   )
