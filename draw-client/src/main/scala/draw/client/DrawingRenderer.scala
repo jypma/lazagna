@@ -14,6 +14,7 @@ import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, Sta
 import draw.data.drawevent.{ScribbleContinued, ScribbleDeleted, ScribbleStarted}
 import draw.data.point.Point
 import org.scalajs.dom
+import draw.data.drawevent.DrawEvent
 
 trait DrawingRenderer {
   def render(drawing: Drawing): Modifier
@@ -31,18 +32,17 @@ object DrawingRenderer {
 
         val svgBody = g(
           children <~~ drawing.events
-            .map(_.body)
             .tap {
-              case ScribbleStarted(scribbleId, _, _) =>
+              case DrawEvent(_, ScribbleStarted(scribbleId, _, _), _, _, _) =>
                 nextScribbleId.update(n => if (n > scribbleId) n else scribbleId + 1)
               case _ =>
                 ZIO.unit
             }
             .map {
-              case ScribbleStarted(scribbleId, Some(start), _) =>
+              case DrawEvent(sequenceNr, ScribbleStarted(scribbleId, Some(start), _), _, _, _) =>
                 val ID = scribbleId
                 val startData = PathData.MoveTo(start.x, start.y)
-                val points = d <-- drawing.events
+                val points = d <-- drawing.eventsAfter(sequenceNr)
                   .map(_.body)
                   .takeUntil(_ match {
                     case ScribbleDeleted(ID, _) => true
@@ -67,7 +67,7 @@ object DrawingRenderer {
                   )
                 ))
 
-              case ScribbleDeleted(id, _) =>
+              case DrawEvent(_, ScribbleDeleted(id, _), _, _, _) =>
                 dom.document.getElementById(s"scribble${id}") match {
                   case null => None
                   case domElmt => Some(children.DeleteDOM(domElmt))
