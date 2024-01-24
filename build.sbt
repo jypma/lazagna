@@ -13,6 +13,7 @@ val commonSettings = Seq(
   ),
   semanticdbEnabled := true,
   semanticdbVersion := scalafixSemanticdb.revision,
+  testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework"),
   Compile / PB.targets := Seq(
     scalapb.gen() -> (Compile / sourceManaged).value / "protos"
   ),
@@ -67,8 +68,6 @@ lazy val client = project.in(file("draw-client"))
       "dev.zio" %%% "zio-test-sbt"      % zioVersion % Test,
       "dev.zio" %%% "zio-test-magnolia" % zioVersion % Test
     ),
-
-    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
   )
 
 lazy val server = project.in(file("data-server"))
@@ -83,6 +82,4 @@ lazy val server = project.in(file("data-server"))
       "dev.zio" %%% "zio-test-magnolia" % zioVersion % Test,
       "dev.zio" %% "zio-http" % "3.0.0-RC4"
     ),
-
-    testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
   )
