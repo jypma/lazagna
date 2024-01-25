@@ -2,7 +2,7 @@ package draw.client
 
 import scala.scalajs.js.typedarray.{ArrayBuffer, Int8Array}
 
-import zio.lazagna.dom.http.Request.{AsDynamicJSON, POST, RequestError}
+import zio.lazagna.dom.http.Request.{AsDynamicJSON, POST, HEAD, RequestError}
 import zio.lazagna.dom.http.WebSocket
 import zio.{Scope, ZIO, ZLayer}
 
@@ -42,6 +42,7 @@ object DrawingClient {
           case s if s != null && !js.isUndefined(s) => ZIO.succeed(s)
           case _ => ZIO.fail(ClientError("Could not get token"))
         }
+        version <- HEAD(s"${config.baseUrl}/drawings/${drawingName}?token=${token}").map(_.header("ETag").map(_.drop(1).dropRight(1).toLong).getOrElse(0L))
         store <- EventStore.make[DrawEvent](_.sequenceNr)
         socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingName}/socket?token=${token}") { msg =>
           msg match {
@@ -53,12 +54,15 @@ object DrawingClient {
           }
         }
       } yield new Drawing {
-        override def perform(command: DrawCommand): ZIO[Any, Nothing, Unit] = socket.send(command.toByteArray).catchAll { err =>
+        override def perform(command: DrawCommand): ZIO[Any, Nothing, Unit] = {
+          socket.send(command.toByteArray).catchAll { err =>
           // FIXME: Show error or reconnect
-          ZIO.unit
+            ZIO.unit
+           }
         }
         override def events  = store.events
         override def eventsAfter(lastSeenSequenceNr: Long) = store.eventsAfter(lastSeenSequenceNr)
+        override def initialVersion = version
       })
     }
   }

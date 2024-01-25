@@ -15,7 +15,12 @@ message DrawEventBody {
         ScribbleStarted scribbleStarted = 1;
         ScribbleContinued scribbleContinued = 2;
         ScribbleDeleted scribbleDeleted = 3;
+        DrawingCreated drawingCreated = 4;
     }
+}
+
+message DrawingCreated {
+
 }
 
 message ScribbleStarted {

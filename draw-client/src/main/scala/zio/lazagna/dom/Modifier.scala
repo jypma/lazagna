@@ -12,9 +12,12 @@ trait Modifier {
 
 object Modifier {
   /** Returns a Modifier that combines all of the given modifiers to mount into the same parent when mounted. */
-  def combine(modifiers: Modifier*): Modifier = new Modifier {
+  implicit def combine(modifiers: Iterable[Modifier]): Modifier = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       ZIO.collectAll(modifiers.map(_.mount(parent))).unit
     }
   }
+
+  /** Returns a Modifier that combines all of the given modifiers to mount into the same parent when mounted. */
+  def combine(modifiers: Modifier*): Modifier = combine(modifiers.toSeq)
 }

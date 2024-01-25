@@ -11,6 +11,7 @@ trait Drawing {
   def perform(command: DrawCommand): ZIO[Any, Nothing, Unit]
   def events: Consumeable[DrawEvent]
   def eventsAfter(lastSeenSequenceNr: Long): Consumeable[DrawEvent]
+  def initialVersion: Long
 }
 
 case class DrawingInMemory(storage: Hub[DrawEvent]) extends Drawing {
@@ -51,6 +52,8 @@ case class DrawingInMemory(storage: Hub[DrawEvent]) extends Drawing {
   }
 
   def eventsAfter(lastSeenSequenceNr: Long): Consumeable[DrawEvent] = ???
+
+  def initialVersion = 0L
 }
 
 object Drawing {

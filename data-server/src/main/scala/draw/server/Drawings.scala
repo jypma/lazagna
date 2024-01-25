@@ -4,7 +4,7 @@ import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Clock, IO, Ref, ZIO, ZLayer}
 
 import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble}
-import draw.data.drawevent.{DrawEvent,  ScribbleContinued, ScribbleDeleted, ScribbleStarted}
+import draw.data.drawevent.{DrawEvent,  ScribbleContinued, ScribbleDeleted, ScribbleStarted, DrawingCreated}
 import draw.data.point.Point
 
 import Drawings.DrawingError
@@ -12,6 +12,7 @@ import Drawings.DrawingError
 trait Drawing {
   def perform(command: DrawCommand): ZIO[Any, DrawingError, Unit]
   def events: ZStream[Any,Nothing,DrawEvent]
+  def version: ZIO[Any, Nothing, Long]
 }
 
 trait Drawings {
@@ -73,6 +74,8 @@ case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Dra
       }
     }
   }
+
+  override def version = storage.get.map(_.events.size - 1)
 }
 
 case class DrawingsInMemory(storage: Ref.Synchronized[Map[String,Drawing]]) extends Drawings {
@@ -83,7 +86,9 @@ case class DrawingsInMemory(storage: Ref.Synchronized[Map[String,Drawing]]) exte
         ZIO.fail(DrawingError("Too many drawings"))
       case map if !map.contains(name) => for {
         drawStorage <- SubscriptionRef.make(DrawingStorage())
-      } yield map + (name -> DrawingInMemory(drawStorage))
+        _ <- drawStorage.update(_ :+ DrawEvent(0, DrawingCreated()))
+        drawing = DrawingInMemory(drawStorage)
+      } yield map + (name -> drawing)
     }.map(_(name))
   }
 }

@@ -58,14 +58,21 @@ object DrawServer extends ZIOAppDefault {
     users <- ZIO.service[Users]
     drawings <- ZIO.service[Drawings]
   } yield Routes(
-    Endpoint(
-      Method.POST / "users" / string("username") / "login"
-    ) .outError[Users.UserError](Status.BadRequest)
+    Endpoint(Method.POST / "users" / string("username") / "login")
+      .outError[Users.UserError](Status.BadRequest)
       .query(query("password")) // TODO: Nicer error messages from zio-http on missing query param?
       .out[User](MediaType.application.json)
       .implement(Handler.fromFunctionZIO((username: String, password: String) =>
           users.login(username, password)
       )),
+    Method.HEAD / "drawings" / string("drawing") -> handler { (drawing: String, request: Request) =>
+      for {
+        token <- request.url.queryParams.getAsZIO[String]("token")
+        user <- users.authenticate(token)
+        drawing <- drawings.getDrawing(drawing)
+        version <- drawing.version
+      } yield Response.ok.addHeader(Header.ETag.Strong(version.toString))
+    },
     Method.GET / "drawings" / string("drawing") / "socket" -> handler { (drawing: String, request: Request) =>
       for {
         token <- request.url.queryParams.getAsZIO[String]("token")

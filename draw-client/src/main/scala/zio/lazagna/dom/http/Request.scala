@@ -7,9 +7,14 @@ import zio.{IO, ZIO}
 import org.scalajs.dom
 
 object Request {
-  case class ResponseHandler[T] private[http] (responseType: String, handle: js.Any => IO[RequestError, T])
-  val AsString = ResponseHandler[String]("text", res => ZIO.succeed(res.toString))
-  val AsDynamicJSON = ResponseHandler[js.Dynamic]("json", res => ZIO.succeed(res.asInstanceOf[js.Dynamic]))
+  case class Response(private val request: dom.XMLHttpRequest) {
+    def header(name: String): Option[String] = Option(request.getResponseHeader(name))
+  }
+
+  case class ResponseHandler[T] private[http] (responseType: String, handle: dom.XMLHttpRequest => IO[RequestError, T])
+  val AsString = ResponseHandler[String]("text", r => ZIO.succeed(r.response.toString))
+  val AsDynamicJSON = ResponseHandler[js.Dynamic]("json", r => ZIO.succeed(r.response.asInstanceOf[js.Dynamic]))
+  val AsResponse = ResponseHandler[Response]("", r => ZIO.succeed(Response(r)))
 
   private def request[T](method: String, url: String, handler: ResponseHandler[T]): IO[RequestError, T] = {
     dom.console.log(s"${method} ${url}")
@@ -22,7 +27,7 @@ object Request {
         if (res == null) {
           cb(ZIO.fail(RequestFailed(request.status)))
         } else {
-          cb(handler.handle(res))
+          cb(handler.handle(request))
         }
       }
       request.ontimeout = { event =>
@@ -38,6 +43,8 @@ object Request {
 
   def GET[T](handler: ResponseHandler[T], url: String): IO[RequestError, T] = request("GET", url, handler)
   def POST[T](handler: ResponseHandler[T], url: String): IO[RequestError, T] = request("POST", url, handler)
+  def HEAD[T](handler: ResponseHandler[T], url: String): IO[RequestError, T] = request("HEAD", url, handler)
+  def HEAD(url: String): IO[RequestError, Response] = HEAD(AsResponse, url)
 
   sealed trait RequestError
   case class RequestFailed(statusCode: Int) extends RequestError
