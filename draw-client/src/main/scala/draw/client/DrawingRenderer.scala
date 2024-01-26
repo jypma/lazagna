@@ -157,7 +157,7 @@ object DrawingRenderer {
         Alternative.showOne(Map(
           0 -> svgLoading,
           1 -> svgMain
-        ), loading)
+        ), loading, Some(0))
       }
     }
   }

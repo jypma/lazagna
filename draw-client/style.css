@@ -27,3 +27,30 @@ path.clickTarget {
     stroke-width: 10px;
     opacity: 0;
 }
+
+.alternatives {
+    display: grid;
+    grid-template: 1fr / 1fr;
+    place-items: center;
+}
+
+.alternatives > .alternative {
+    grid-column: 1 / 1;
+    grid-row: 1 / 1;
+}
+
+.alternative {
+    transition: opacity 1s;
+}
+
+.alternative.active {
+    opacity: 100;
+}
+
+.alternative.inactive {
+    opacity: 0;
+}
+
+.alternative.hidden {
+    display: none;
+}

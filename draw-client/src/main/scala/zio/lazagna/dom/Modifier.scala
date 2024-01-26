@@ -3,6 +3,7 @@ package zio.lazagna.dom
 import zio.{Scope, ZIO}
 
 import org.scalajs.dom
+import zio.ZLayer
 
 trait Modifier {
   /** Returns a ZIO that applies this modifier to the visible DOM tree under the given parent and then returns. Any clean-up actions
@@ -15,6 +16,12 @@ object Modifier {
   implicit def combine(modifiers: Iterable[Modifier]): Modifier = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       ZIO.collectAll(modifiers.map(_.mount(parent))).unit
+    }
+  }
+
+  def run(zio: ZIO[Scope & dom.Element, Nothing, Any]): Modifier = new Modifier {
+    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
+      zio.provideSomeLayer[Scope](ZLayer.succeed(parent)).unit
     }
   }
 
