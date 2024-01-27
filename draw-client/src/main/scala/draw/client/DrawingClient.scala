@@ -12,6 +12,7 @@ import org.scalajs.dom
 
 import scalajs.js
 import DrawingClient._
+import zio.stream.SubscriptionRef
 
 trait DrawingClient {
   def login(user: String, password: String, drawingName: String): ZIO[Scope, ClientError | RequestError, Drawing]
@@ -34,6 +35,7 @@ object DrawingClient {
   val live = ZLayer.fromZIO {
     for {
       config <- ZIO.service[Config]
+      drawViewport <- SubscriptionRef.make(Drawing.Viewport())
     } yield new DrawingClient {
       override def login(user: String, password: String, drawingName: String) = (for {
         // FIXME: We really need a little path DSL to prevent injection here.
@@ -63,6 +65,7 @@ object DrawingClient {
         override def events  = store.events
         override def eventsAfter(lastSeenSequenceNr: Long) = store.eventsAfter(lastSeenSequenceNr)
         override def initialVersion = version
+        override def viewport = drawViewport
       })
     }
   }

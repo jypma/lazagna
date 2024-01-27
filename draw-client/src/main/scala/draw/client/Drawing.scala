@@ -6,12 +6,14 @@ import zio.{Clock, Hub, ZIO, ZLayer}
 import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble}
 import draw.data.drawevent.{DrawEvent, ScribbleContinued, ScribbleDeleted, ScribbleStarted}
 import draw.data.point.Point
+import zio.stream.SubscriptionRef
 
 trait Drawing {
   def perform(command: DrawCommand): ZIO[Any, Nothing, Unit]
   def events: Consumeable[DrawEvent]
   def eventsAfter(lastSeenSequenceNr: Long): Consumeable[DrawEvent]
   def initialVersion: Long
+  def viewport: SubscriptionRef[Drawing.Viewport]
 }
 
 case class DrawingInMemory(storage: Hub[DrawEvent]) extends Drawing {
@@ -54,9 +56,13 @@ case class DrawingInMemory(storage: Hub[DrawEvent]) extends Drawing {
   def eventsAfter(lastSeenSequenceNr: Long): Consumeable[DrawEvent] = ???
 
   def initialVersion = 0L
+
+  def viewport = ???
 }
 
 object Drawing {
+  case class Viewport(left: Double = 0, top: Double = 0, zoom: Double = 1.0)
+
   val inMemory = ZLayer.scoped {
     for {
       storage <- Hub.bounded[DrawEvent](16)

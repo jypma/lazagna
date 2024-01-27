@@ -53,4 +53,7 @@ object Attribute {
   val x = Attribute("x")
   val y = Attribute("y")
   val textAnchor = Attribute("text-anchor")
+  val viewBox = Attribute("viewBox")
+  val overflow = Attribute("overflow")
+  val preserveAspectRatio = Attribute("preserveAspectRatio")
 }

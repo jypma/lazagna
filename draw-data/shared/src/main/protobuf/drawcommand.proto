@@ -16,15 +16,15 @@ message DrawCommandBody {
 }
 
 message StartScribble {
-    required uint64 id = 1;
+    required string id = 1;
     optional Point start = 2;
 }
 
 message ContinueScribble {
-    required uint64 id = 1;
+    required string id = 1;
     repeated Point points = 2;
 }
 
 message DeleteScribble {
-    required uint64 id = 1;
+    required string id = 1;
 }

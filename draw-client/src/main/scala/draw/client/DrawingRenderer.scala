@@ -4,13 +4,10 @@ import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.{children, textContent}
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.tags._
-import zio.lazagna.dom.Events._
 import zio.lazagna.dom.Modifier
-import zio.lazagna.dom.svg.{PathData, SVGOps}
-import zio.stream.ZStream
-import zio.{Ref, ZIO, ZLayer}
+import zio.lazagna.dom.svg.{PathData}
+import zio.{ZIO, ZLayer}
 
-import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble}
 import draw.data.drawevent.{ScribbleContinued, ScribbleDeleted, ScribbleStarted}
 import draw.data.point.Point
 import org.scalajs.dom
@@ -24,29 +21,25 @@ trait DrawingRenderer {
 }
 
 object DrawingRenderer {
+  def toSvgViewBox(viewport: Drawing.Viewport): String = {
+    s"${viewport.left} ${viewport.top} ${viewport.zoom * 1000.0} ${viewport.zoom * 1000.0}"
+  }
+
   val live = ZLayer.fromZIO {
     for {
-      loading <- SubscriptionRef.make(0)
-      currentScribbleId <- Ref.make[Long](0)
-      nextScribbleId <- Ref.make[Long](0)
+      ready <- SubscriptionRef.make(false)
+      currentTool <- SubscriptionRef.make(0)
     } yield new DrawingRenderer {
       def render(drawing: Drawing) = {
 
         val svgBody = g(
           children <~~ drawing.events
-            .tap {
-              case DrawEvent(_, ScribbleStarted(scribbleId, _, _), _, _, _) =>
-                nextScribbleId.update(n => if (n > scribbleId) n else scribbleId + 1)
-              case _ =>
-                ZIO.unit
-            }
-            .tap { event => ZIO.when(event.sequenceNr == drawing.initialVersion)(loading.set(1)) }
+            .tap { event => ZIO.when(event.sequenceNr == drawing.initialVersion)(ready.set(true)) }
             .map {
               case DrawEvent(sequenceNr, ScribbleStarted(scribbleId, Some(start), _), _, _, _) =>
                 val ID = scribbleId
                 val startData = PathData.MoveTo(start.x, start.y)
                 val points = d <-- drawing.eventsAfter(sequenceNr)
-                  //.aggregateAsyncWithin(ZSink.collectAll, Schedule.fixed(100.milliseconds)) // <-- horribly slow on JS...
                   .chunks
                   .takeUntil(_.exists(_ match { // FIXME Handle update and delete within same small time window
                     case DrawEvent(_, ScribbleDeleted(ID, _), _, _, _) => true
@@ -59,7 +52,6 @@ object DrawingRenderer {
                   )
                   .filter(_.size > 0)
                   .mapAccum(Seq[PathData](startData)) { (seq, events) =>
-                    //println("Chunk of " + events.size)
                     val res = seq ++ events
                     (res, res)
                   }
@@ -90,18 +82,19 @@ object DrawingRenderer {
             .collect { case Some(op) => op }
         )
 
+        val pencilTool = DrawingTools.pencil(drawing)
+
         val svgLoading = div(
           svg(
-            width := 800,
-            height := 800,
+            cls := "loading",
             rect(
               width := "100%",
               height := "100%",
               fill := "#A88362"
             ),
             text(
-              x := 400,
-              y := 400,
+              x := "50%",
+              y := "50%",
               textAnchor := "middle",
               textContent := "Loading..."
             )
@@ -110,54 +103,18 @@ object DrawingRenderer {
 
         val svgMain = div(
           svg(
-            width := 800,
-            height := 800,
-            rect(
-              width := "100%",
-              height := "100%",
-              fill := "#80a080"
-            ),
+            cls := "main",
+            viewBox <-- drawing.viewport.map(toSvgViewBox),
+            overflow := "hidden",
             svgBody,
-            SVGOps.coordinateHelper { helper =>
-              onMouseDown
-                .filter { e => (e.buttons & 1) != 0 }
-                .filter(ev => !ev.getModifierState("Alt"))
-                .mapZIO(ev => nextScribbleId.get.flatMap(id => currentScribbleId.set(id).as(id)).map { id =>
-                  val pos = helper.getClientPoint(ev)
-                  DrawCommand(StartScribble(id, Some(Point(pos.x, pos.y))))
-                })
-                .merge(
-                  onMouseDown
-                    .merge(onMouseMove)
-                    .filter { e => (e.buttons & 1) != 0 }
-                    .filter { ev => ev.getModifierState("Alt") }
-                    .map(_.target)
-                    .collect { case elem: dom.Element => elem }
-                    .map(_.parentNode)
-                    .collect {
-                      case parent:dom.Element if parent.id.startsWith("scribble") =>
-                        val id = parent.id.substring("scribble".length).toLong
-                        DrawCommand(DeleteScribble(id))
-                    }
-                )
-                .merge(
-                  onMouseMove
-                    .filter { e => (e.buttons & 1) != 0 }
-                    .filter(ev => !ev.getModifierState("Alt"))
-                    .mapZIO(ev => currentScribbleId.get.map { id =>
-                      val pos = helper.getClientPoint(ev)
-                      DrawCommand(ContinueScribble(id, Seq(Point(pos.x, pos.y))))
-                    })
-                )
-                .mapZIO(drawing.perform _)
-            }
+            pencilTool
           )
         )
 
-        Alternative.showOne(Map(
-          0 -> svgLoading,
-          1 -> svgMain
-        ), loading, Some(0))
+        Alternative.showOne(ready, Map(
+          false -> svgLoading,
+          true -> svgMain
+        ), Some(false))
       }
     }
   }

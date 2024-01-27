@@ -35,7 +35,7 @@ object Alternative {
   /** Selects from a limited set of alternative renders. All renders are always mounted, but hidden using CSS.
     * Whenever the consumable pushes a new T, the matching alternative is shown. If no alternative matches,
     * none are shown. */
-  def showOne[T,E <: dom.Element](alternatives: Map[T, Element[E]], source: Consumeable[T], initial: Option[T] = None) = {
+  def showOne[T,E <: dom.Element](source: Consumeable[T], alternatives: Map[T, Element[E]], initial: Option[T] = None) = {
     def clsOf(name: String): String = s"alternative showOne ${name}"
     def cls(active: Boolean): String = clsOf(if (active) "active" else "inactive")
 
@@ -58,7 +58,6 @@ object Alternative {
             timeouts += key -> js.timers.setTimeout(1000) {
               parent.setAttribute("class", clsOf("hidden"))
             }
-          } else {
           }
         }
       }.consume),

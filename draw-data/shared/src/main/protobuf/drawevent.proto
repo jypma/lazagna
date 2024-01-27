@@ -24,15 +24,15 @@ message DrawingCreated {
 }
 
 message ScribbleStarted {
-    required uint64 id = 1;
+    required string id = 1;
     optional Point start = 2;
 }
 
 message ScribbleContinued {
-    required uint64 id = 1;
+    required string id = 1;
     repeated Point points = 2;
 }
 
 message ScribbleDeleted {
-    required uint64 id = 1;
+    required string id = 1;
 }
