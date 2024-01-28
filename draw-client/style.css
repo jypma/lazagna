@@ -26,6 +26,11 @@ path.clickTarget {
     opacity: 0;
 }
 
+.tool-eraser path.clickTarget:hover {
+    stroke: #fff;
+    opacity: 0.2;
+}
+
 .alternatives {
     display: grid;
     grid-template: 1fr / 1fr;

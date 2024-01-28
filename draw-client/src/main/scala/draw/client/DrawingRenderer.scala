@@ -102,7 +102,7 @@ object DrawingRenderer {
 
         val svgMain = div(
           svg(
-            cls := "main",
+            cls <-- drawingTools.currentToolName.map(t => s"main tool-${t}"),
             viewBox <-- drawing.viewport.map(toSvgViewBox),
             overflow := "hidden",
             svgBody,

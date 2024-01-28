@@ -22,10 +22,12 @@ import zio.ZLayer
 import zio.stream.SubscriptionRef
 import zio.ZIO
 import zio.lazagna.dom.Alternative
+import zio.lazagna.Consumeable
 
 trait DrawingTools {
   def renderHandlers: Modifier
   def renderToolbox: Modifier
+  def currentToolName: Consumeable[String]
 }
 
 object DrawingTools {
@@ -42,6 +44,8 @@ object DrawingTools {
       )
       selectedTool <- SubscriptionRef.make(tools(0))
     } yield new DrawingTools {
+      override def currentToolName = selectedTool.map(_.name)
+
       override val renderHandlers = Alternative.mountOne(selectedTool)(_.render)
 
       override val renderToolbox = div(
