@@ -36,4 +36,9 @@ object Modifier {
 
   /** Returns a Modifier that combines all of the given modifiers to mount into the same parent when mounted. */
   def combine(modifiers: Modifier*): Modifier = combine(modifiers.toSeq)
+
+  /** A Modifier that does nothing. */
+  val empty = new Modifier {
+    override def mount(parent: dom.Element) = ZIO.unit
+  }
 }

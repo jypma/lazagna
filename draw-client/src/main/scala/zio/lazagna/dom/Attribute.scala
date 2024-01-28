@@ -35,13 +35,22 @@ object Attribute {
   val height = Attribute("height")
   // TODO: Have typesafe setters for CSS style directly? Perhaps?
   val style = Attribute("style")
+  val name = Attribute("name")
+  val checked = Attribute("checked")
 
   // TODO: Allow combining of multiple Consumeable[_,String] to set className from several sources, using ZStream.zipLatestWith
   // Syntax would be a function Attribute.combine(Consumeable[_,String]*)
   val `class` = Attribute("class")
+  /** Alias for `class` */
   val className = `class`
+  /** Alias for `class` */
   val cls = `class`
 
+  val `type` = Attribute("type")
+  /** Alias for `type` */
+  val typ = `type`
+
+  val `for` = Attribute("for")
 
   // SVG attributes, keeping in shared scope for now
   val fill = Attribute("fill")

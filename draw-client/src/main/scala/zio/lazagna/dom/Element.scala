@@ -49,6 +49,8 @@ object Element {
 
   object tags {
     val div = CreateFn("div")
+    val input = CreateFn("input")
+    val label = CreateFn("label")
   }
 
   object svgtags {

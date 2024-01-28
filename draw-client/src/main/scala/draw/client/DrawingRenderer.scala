@@ -17,7 +17,7 @@ import zio.stream.SubscriptionRef
 import zio.lazagna.Consumeable._
 
 trait DrawingRenderer {
-  def render(drawing: Drawing): Modifier
+  def render: Modifier
 }
 
 object DrawingRenderer {
@@ -28,9 +28,10 @@ object DrawingRenderer {
   val live = ZLayer.fromZIO {
     for {
       ready <- SubscriptionRef.make(false)
-      currentTool <- SubscriptionRef.make(0)
+      drawingTools <- ZIO.service[DrawingTools]
+      drawing <- ZIO.service[Drawing]
     } yield new DrawingRenderer {
-      def render(drawing: Drawing) = {
+      override val render = {
 
         val svgBody = g(
           children <~~ drawing.events
@@ -82,8 +83,6 @@ object DrawingRenderer {
             .collect { case Some(op) => op }
         )
 
-        val pencilTool = DrawingTools.pencil(drawing)
-
         val svgLoading = div(
           svg(
             cls := "loading",
@@ -107,7 +106,7 @@ object DrawingRenderer {
             viewBox <-- drawing.viewport.map(toSvgViewBox),
             overflow := "hidden",
             svgBody,
-            pencilTool
+            drawingTools.renderHandlers
           )
         )
 

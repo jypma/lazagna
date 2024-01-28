@@ -71,7 +71,7 @@ svg.main {
     background-color: #80a080;
 }
 
-#toolbox {
+.toolbox {
     position: fixed;
     z-index: 3;
     top: 10px;

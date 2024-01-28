@@ -6,6 +6,7 @@ import zio.stream.ZStream
 import zio.{Chunk, Hub, Scope, Unsafe, ZIO, ZLayer}
 
 import org.scalajs.dom
+import zio.Ref
 
 type EventsEmitter[T] = ZStream[Scope with dom.Element, Nothing, T]
 
@@ -43,6 +44,10 @@ object Events {
   implicit class EventsEmitterOps[E](eventsEmitter: EventsEmitter[E]) {
     /** Returns a Modifier that runs this events emitter into the given hub when mounted */
     def -->(target: Hub[E]): Modifier = eventsEmitter.mapZIO(e => target.offer(e))
+
+    /** Returns a Modifier that runs this events emitter into the given ref when mounted */
+    def -->(target: Ref[E]): Modifier = eventsEmitter.mapZIO(e => target.set(e))
+
   }
 
   val onClick = event[dom.MouseEvent]("click")
