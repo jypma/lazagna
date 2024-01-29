@@ -38,7 +38,7 @@ object DrawingTools {
       drawing <- ZIO.service[Drawing]
       tools = Seq(
         Tool("pencil", "Add pencil strokes", "✏️", pencil(drawing)),
-        Tool("pan", "Hand (move drawing)", "🫳", Modifier.empty),
+        Tool("pan", "Hand (move drawing)", "🫳", hand(drawing)),
         Tool("note", "Add note", "📃", Modifier.empty),
         Tool("eraser", "Eraser (delete items)", "🗑️", eraser(drawing))
       )
@@ -77,6 +77,36 @@ object DrawingTools {
     Base64.getEncoder().encodeToString(uuid).take(22) // Remove the trailing ==
   }
 
+  def hand(drawing: Drawing): Modifier = Modifier.unwrap(for {
+    dragStart <- Ref.make(Point(0,0))
+  } yield SVGOps.coordinateHelper { helper =>
+    Modifier.combine(
+      onMouseDown.mapZIO { event =>
+        val pos = helper.getClientPoint(event)
+        dragStart.set(Point(pos.x, pos.y))
+      },
+      onMouseMove
+        .filter { e => (e.buttons & 1) != 0 }
+        .mapZIO { event =>
+          val pos = helper.getClientPoint(event)
+          for {
+            start <- dragStart.get
+            _ <- drawing.viewport.update(_.pan(start.x - pos.x, start.y - pos.y))
+          } yield ()
+        },
+      onWheel
+        .mapZIO { event =>
+          val factor = event.deltaMode match {
+            case 0 => (event.deltaY * 0.01) + 1
+            case 1 => (event.deltaY * 0.01) + 1
+            case _ => (event.deltaY * 0.01) + 1
+          }
+          val pos = helper.getClientPoint(event)
+          drawing.viewport.update(_.zoom(factor, pos.x, pos.y))
+        }
+    )
+  })
+
   def eraser(drawing: Drawing): Modifier = onMouseDown.merge(onMouseMove)
     .filter { e => (e.buttons & 1) != 0 }
     .map(_.target)
@@ -91,23 +121,22 @@ object DrawingTools {
 
   def pencil(drawing: Drawing): Modifier = Modifier.unwrap(for {
     currentScribbleId <- Ref.make[String]("")
-  } yield Modifier.combine(
-    SVGOps.coordinateHelper { helper =>
-      onMouseDown
-        .filter { e => (e.buttons & 1) != 0 }
-        .mapZIO(ev => makeUUID.flatMap(id => currentScribbleId.set(id).as(id)).map { id =>
-          val pos = helper.getClientPoint(ev)
-          DrawCommand(StartScribble(id, Some(Point(pos.x, pos.y))))
-        })
-        .merge(
-          onMouseMove
-            .filter { e => (e.buttons & 1) != 0 }
-            .mapZIO(ev => currentScribbleId.get.map { id =>
-              val pos = helper.getClientPoint(ev)
-              DrawCommand(ContinueScribble(id, Seq(Point(pos.x, pos.y))))
-            })
-        )
-        .mapZIO(drawing.perform _)
-    })
-  )
+  } yield SVGOps.coordinateHelper { helper =>
+    onMouseDown
+      .filter { e => (e.buttons & 1) != 0 }
+      .mapZIO(ev => makeUUID.flatMap(id => currentScribbleId.set(id).as(id)).map { id =>
+        val pos = helper.getClientPoint(ev)
+        DrawCommand(StartScribble(id, Some(Point(pos.x, pos.y))))
+      })
+      .merge(
+        onMouseMove
+          .filter { e => (e.buttons & 1) != 0 }
+          .mapZIO(ev => currentScribbleId.get.map { id =>
+            val pos = helper.getClientPoint(ev)
+            DrawCommand(ContinueScribble(id, Seq(Point(pos.x, pos.y))))
+          })
+      )
+      .mapZIO(drawing.perform _)
+  })
+
 }

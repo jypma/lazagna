@@ -21,13 +21,10 @@ trait DrawingRenderer {
 }
 
 object DrawingRenderer {
-  def toSvgViewBox(viewport: Drawing.Viewport): String = {
-    s"${viewport.left} ${viewport.top} ${viewport.zoom * 1000.0} ${viewport.zoom * 1000.0}"
-  }
-
   val live = ZLayer.fromZIO {
     for {
       ready <- SubscriptionRef.make(false)
+      start = System.currentTimeMillis()
       drawingTools <- ZIO.service[DrawingTools]
       drawing <- ZIO.service[Drawing]
     } yield new DrawingRenderer {
@@ -35,7 +32,12 @@ object DrawingRenderer {
 
         val svgBody = g(
           children <~~ drawing.events
-            .tap { event => ZIO.when(event.sequenceNr == drawing.initialVersion)(ready.set(true)) }
+            .tap { event => ZIO.when(event.sequenceNr == drawing.initialVersion)(ready.set(true).tap(_ => ZIO.succeed{
+              // Local: 0.5ms per event
+              // LAN: 0.8ms per event
+              val time = System.currentTimeMillis() - start
+              println(s"Loaded ${drawing.initialVersion} events in ${time}ms")
+            })) }
             .map {
               case DrawEvent(sequenceNr, ScribbleStarted(scribbleId, Some(start), _), _, _, _) =>
                 val ID = scribbleId
@@ -103,7 +105,7 @@ object DrawingRenderer {
         val svgMain = div(
           svg(
             cls <-- drawingTools.currentToolName.map(t => s"main tool-${t}"),
-            viewBox <-- drawing.viewport.map(toSvgViewBox),
+            viewBox <-- drawing.viewport.map(_.toSvgViewBox),
             overflow := "hidden",
             svgBody,
             drawingTools.renderHandlers

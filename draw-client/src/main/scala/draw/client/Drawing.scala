@@ -61,7 +61,19 @@ case class DrawingInMemory(storage: Hub[DrawEvent]) extends Drawing {
 }
 
 object Drawing {
-  case class Viewport(left: Double = 0, top: Double = 0, zoom: Double = 1.0)
+  case class Viewport(left: Double = 0, top: Double = 0, factor: Double = 1.0) {
+    def pan(dx: Double, dy: Double) = copy(left = left + dx, top = top + dy)
+    def zoom(f: Double, mx: Double, my: Double) = {
+      copy(
+        factor = factor * f,
+        left = left - ((mx - left) * (f - 1)),
+        top = top - ((my - top)) * (f - 1))
+    }
+
+    def toSvgViewBox: String = {
+      s"${left} ${top} ${factor * 1000.0} ${factor * 1000.0}"
+    }
+  }
 
   val inMemory = ZLayer.scoped {
     for {

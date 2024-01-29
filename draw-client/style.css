@@ -76,6 +76,13 @@ svg.main {
     background-color: #80a080;
 }
 
+svg.tool-pan {
+    cursor: grab;
+}
+svg.tool-pan:active {
+    cursor: grabbing;
+}
+
 .toolbox {
     position: fixed;
     z-index: 3;
