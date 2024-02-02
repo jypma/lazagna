@@ -8,10 +8,13 @@ import draw.data.drawevent.{DrawEvent,  ScribbleContinued, ScribbleDeleted, Scri
 import draw.data.point.Point
 
 import Drawings.DrawingError
+import scala.collection.Searching.Found
+import scala.collection.Searching.InsertionPoint
 
 trait Drawing {
   def perform(command: DrawCommand): ZIO[Any, DrawingError, Unit]
   def events: ZStream[Any,Nothing,DrawEvent]
+  def eventsAfter(sequenceNr: Long): ZStream[Any,Nothing,DrawEvent]
   def version: ZIO[Any, Nothing, Long]
 }
 
@@ -21,7 +24,7 @@ trait Drawings {
 
 case class DrawingStorage(events: Seq[DrawEvent] = Seq.empty) {
   def size = events.size
-  def add(event: DrawEvent) = copy(events = events :+ event.withSequenceNr(events.size))
+  def add(event: DrawEvent) = copy(events = events :+ event.withSequenceNr(events.size + 1))
   def :+(event: DrawEvent) = add(event)
 }
 
@@ -63,11 +66,21 @@ case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Dra
     } yield ()
   }
 
-  override def events = {
+  override def events = eventsAfter(-1)
+
+  override def eventsAfter(afterSequenceNr: Long) = {
     storage.changes.zipWithPrevious.flatMap { (prev, next) =>
       if (prev.isEmpty) {
         // First element -> emit all previous events
-        ZStream.fromIterable(next.events)
+        if (afterSequenceNr == -1)
+          ZStream.fromIterable(next.events)
+        else {
+          val toDrop = next.events.view.map(_.sequenceNr).search(afterSequenceNr) match {
+            case Found(idx) => idx + 1
+            case InsertionPoint(idx) => idx
+          }
+          ZStream.fromIterable(next.events.drop(toDrop))
+        }
       } else {
         // Further elements -> this is a new event, present as the last element
         ZStream(next.events.last)

@@ -54,7 +54,7 @@ lazy val client = project.in(file("draw-client"))
     scalaJSLinkerConfig ~= {
       _.withModuleKind(ModuleKind.ESModule)
         .withModuleSplitStyle(
-          ModuleSplitStyle.SmallModulesFor(List("draw")))
+          ModuleSplitStyle.SmallModulesFor(List("draw", "zio.lazagna")))
     },
 
     libraryDependencies ++= Seq(

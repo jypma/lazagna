@@ -23,11 +23,13 @@ trait DrawingRenderer {
 object DrawingRenderer {
   val live = ZLayer.fromZIO {
     for {
-      ready <- SubscriptionRef.make(false)
-      start = System.currentTimeMillis()
       drawingTools <- ZIO.service[DrawingTools]
       drawing <- ZIO.service[Drawing]
+      initiallyReady = drawing.initialVersion == 0
+      ready <- SubscriptionRef.make(initiallyReady)
     } yield new DrawingRenderer {
+      val start = System.currentTimeMillis()
+
       override val render = {
 
         val svgBody = g(
@@ -115,7 +117,7 @@ object DrawingRenderer {
         Alternative.showOne(ready, Map(
           false -> svgLoading,
           true -> svgMain
-        ), Some(false))
+        ), Some(initiallyReady))
       }
     }
   }

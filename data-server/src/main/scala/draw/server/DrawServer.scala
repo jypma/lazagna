@@ -29,11 +29,11 @@ object DrawServer extends ZIOAppDefault {
       allowedMethods = AccessControlAllowMethods(Method.PUT, Method.DELETE),
     )
 
-  private def edit(userId: Long, drawing: Drawing) /*: WebSocketApp[Ref[State]] */ =
+  private def drawingSocket(userId: Long, drawing: Drawing, afterSequenceNr: Long): WebSocketApp[Any] =
     Handler.webSocket { channel =>
       ZIO.scoped {
         for {
-          _ <- drawing.events.mapZIO { event =>
+          _ <- drawing.eventsAfter(afterSequenceNr).mapZIO { event =>
             val bytes = event.toByteArray
             channel.send(Read(WebSocketFrame.Binary(Chunk.fromArray(bytes))))
           }.runDrain.forkScoped
@@ -76,9 +76,10 @@ object DrawServer extends ZIOAppDefault {
     Method.GET / "drawings" / string("drawing") / "socket" -> handler { (drawing: String, request: Request) =>
       for {
         token <- request.url.queryParams.getAsZIO[String]("token")
+        after = request.url.queryParams.get("afterSequenceNr").map(_.toLong).getOrElse(-1L)
         user <- users.authenticate(token)
         drawing <- drawings.getDrawing(drawing)
-        res <- edit(user.id, drawing).toResponse
+        res <- drawingSocket(user.id, drawing, after).toResponse
       } yield res
     }
   ).handleError {
