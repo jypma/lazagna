@@ -18,7 +18,7 @@ object WebSocket {
   case class SocketFailed(message: String) extends WebSocketError
 
   /** Connects and handles the websocket, forking to a background fiber. */
-  def handle(url: String)(onMessage: dom.MessageEvent => ZIO[Any, Nothing, Any]): ZIO[Scope, Nothing, WebSocket] = for {
+  def handle(url: String)(onMessage: dom.MessageEvent => ZIO[Any, Nothing, Any], onClose: => ZIO[Any, Nothing, Any] = ZIO.unit): ZIO[Scope, Nothing, WebSocket] = for {
     socket <- Promise.make[Nothing, WebSocket]
     _ <- ZStream.asyncScoped[Any, WebSocketError, Any] { cb =>
       for {
@@ -30,12 +30,16 @@ object WebSocket {
             socket.onopen = { event =>
               openedCB(ZIO.succeed(socket))
             }
+            socket.onclose = { event =>
+              cb(onClose *> ZIO.fail(None))
+            }
             socket.onmessage = { event =>
               cb(onMessage(event).map {
                 Chunk(_)
               })
             }
             socket.onerror = { event =>
+              dom.console.log("Error!")
               val failed = SocketFailed(event.toString)
               openedCB(ZIO.fail(failed))
               cb(ZIO.fail(Some(failed)))

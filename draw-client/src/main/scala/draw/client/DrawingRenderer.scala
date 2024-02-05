@@ -25,8 +25,8 @@ object DrawingRenderer {
     for {
       drawingTools <- ZIO.service[DrawingTools]
       drawing <- ZIO.service[Drawing]
-      initiallyReady = drawing.initialVersion <= 1
-      ready <- SubscriptionRef.make(initiallyReady)
+      initialView = if (drawing.initialVersion <= 1) 1 else 0
+      currentView <- SubscriptionRef.make(initialView)
     } yield new DrawingRenderer {
       val start = System.currentTimeMillis()
 
@@ -34,7 +34,7 @@ object DrawingRenderer {
 
         val svgBody = g(
           children <~~ drawing.events
-            .tap { event => ZIO.when(event.sequenceNr == drawing.initialVersion)(ready.set(true).tap(_ => ZIO.succeed{
+            .tap { event => ZIO.when(event.sequenceNr == drawing.initialVersion)(currentView.set(1).tap(_ => ZIO.succeed{
               // Local: 0.5ms per event
               // LAN: 0.8ms per event
               val time = System.currentTimeMillis() - start
@@ -88,20 +88,13 @@ object DrawingRenderer {
         )
 
         val svgLoading = div(
-          svg(
-            cls := "loading",
-            rect(
-              width := "100%",
-              height := "100%",
-              fill := "#A88362"
-            ),
-            text(
-              x := "50%",
-              y := "50%",
-              textAnchor := "middle",
-              textContent := "Loading..."
-            )
-          )
+          cls := "loading",
+          textContent := "Loading..."
+        )
+
+        val svgDisconnected = div(
+          cls := "disconnected",
+          textContent := "The server has disconnected. Please reload this page to reconnect."
         )
 
         val svgMain = div(
@@ -114,10 +107,15 @@ object DrawingRenderer {
           )
         )
 
-        Alternative.showOne(ready, Map(
-          false -> svgLoading,
-          true -> svgMain
-        ), Some(initiallyReady))
+        val alternatives = Map(
+          0 -> svgLoading,
+          1 -> svgMain,
+          2 -> svgDisconnected
+        )
+        Alternative.showOne(currentView.merge(drawing.connectionStatus.map {
+          case Drawing.Connected => 1
+          case Drawing.Disconnected => 2
+        }), alternatives, Some(initialView))
       }
     }
   }

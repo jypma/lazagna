@@ -14,11 +14,7 @@ import org.scalajs.dom
 import scalajs.js
 import DrawingClient._
 import zio.stream.SubscriptionRef
-import zio.stream.ZStream
-import zio.lazagna.dom.indexeddb.IndexedDB
-import zio.lazagna.dom.indexeddb.Database
-import zio.lazagna.dom.indexeddb.Schema
-import zio.lazagna.dom.indexeddb.Schema.CreateObjectStore
+import zio.lazagna.Consumeable._
 
 trait DrawingClient {
   def login(user: String, password: String, drawingName: String): ZIO[Scope, ClientError | RequestError, Drawing]
@@ -43,6 +39,7 @@ object DrawingClient {
       config <- ZIO.service[Config]
       store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
       drawViewport <- SubscriptionRef.make(Drawing.Viewport())
+      connStatus <- SubscriptionRef.make[Drawing.ConnectionStatus](Drawing.Connected)
     } yield new DrawingClient {
       override def login(user: String, password: String, drawingName: String) = (for {
         // FIXME: We really need a little path DSL to prevent injection here.
@@ -57,7 +54,7 @@ object DrawingClient {
           dom.console.log(s"Resetting client event store, since we've seen event ${after} but server only has ${version}")
           store.reset
         } else ZIO.unit
-        socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingName}/socket?token=${token}&afterSequenceNr=${after}") { msg =>
+        socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingName}/socket?token=${token}&afterSequenceNr=${after}")({ msg =>
           msg match {
             case m if m.data.isInstanceOf[ArrayBuffer] =>
               // TODO: Catch parse errors and fail accordingly
@@ -68,20 +65,20 @@ object DrawingClient {
               }}
             case _ => ZIO.unit
           }
-        }
+        }, onClose = connStatus.set(Drawing.Disconnected))
       } yield new Drawing {
         override def perform(command: DrawCommand): ZIO[Any, Nothing, Unit] = {
           socket.send(command.toByteArray).catchAll { err =>
-          // FIXME: Show error or reconnect
+            // TODO: Reconnect or reload here
+            dom.console.log(err)
             ZIO.unit
            }
         }
         override def events  = store.events
-
         override def eventsAfter(lastSeenSequenceNr: Long) = store.eventsAfter(lastSeenSequenceNr)
-
         override def initialVersion = version
         override def viewport = drawViewport
+        override def connectionStatus = connStatus
       }).mapError { err => ClientError(err.toString) }
     }
   }
