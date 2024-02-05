@@ -1,9 +1,16 @@
 package draw.client
 
+import scala.scalajs.js.typedarray.{ArrayBuffer, Int8Array}
+import scalajs.js.typedarray._
+
 import zio.{ExitCode, Scope, ZIO, ZIOAppDefault}
 
 import org.scalajs.dom
 import zio.ZLayer
+import zio.lazagna.dom.indexeddb.IndexedDB
+import zio.lazagna.dom.indexeddb.Schema
+import zio.lazagna.dom.indexeddb.Schema.CreateObjectStore
+import draw.data.drawevent.DrawEvent
 
 object Main extends ZIOAppDefault {
 
@@ -15,17 +22,32 @@ object Main extends ZIOAppDefault {
     _ <- tools.renderToolbox.mount(dom.document.querySelector("#toolboxApp"))
   } yield ()
 
+  implicit val drawEventCodec: EventStore.Codec[DrawEvent, ArrayBuffer] = new EventStore.Codec[DrawEvent, ArrayBuffer] {
+    override def encode(e: DrawEvent): ArrayBuffer = e.toByteArray.toTypedArray.buffer
+    override def decode(b: ArrayBuffer): DrawEvent = DrawEvent.parseFrom(new Int8Array(b).toArray)
+  }
+
+  val eventStore = ZLayer.fromZIO(EventStore.indexedDB[DrawEvent,ArrayBuffer](s"events", _.sequenceNr).flatMap(EventStore.cached))
+
+  val drawingName = "test"
+
+  val database = ZLayer.fromZIO(IndexedDB.open(s"drawing-${drawingName}", Schema(
+    CreateObjectStore("events")
+  )))
+
   override def run = ZIO.scoped {
     (for {
       client <- ZIO.service[DrawingClient]
-      drawing <- client.login("jan", "jan", "test")
+      drawing <- client.login("jan", "jan", drawingName)
       _ <- main.provideSome[Scope](ZLayer.succeed(drawing), DrawingTools.live, DrawingRenderer.live)
+      store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
+//      _ <- store.start
       _ = dom.console.log("Main is ready.")
       _ <- ZIO.never // We don't want to exit main, since our background fibers do the real work.
     } yield ExitCode.success)
       .catchAllCause { cause =>
       dom.console.log(cause.prettyPrint)
       ZIO.succeed(ExitCode.failure)
-    }
-  }.provide(DrawingClient.live, DrawingClient.configTest)
+    }.provideSome[Scope](DrawingClient.live, DrawingClient.configTest, database, eventStore)
+  }
 }

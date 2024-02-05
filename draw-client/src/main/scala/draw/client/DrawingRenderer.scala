@@ -25,7 +25,7 @@ object DrawingRenderer {
     for {
       drawingTools <- ZIO.service[DrawingTools]
       drawing <- ZIO.service[Drawing]
-      initiallyReady = drawing.initialVersion == 0
+      initiallyReady = drawing.initialVersion <= 1
       ready <- SubscriptionRef.make(initiallyReady)
     } yield new DrawingRenderer {
       val start = System.currentTimeMillis()

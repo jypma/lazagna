@@ -1,5 +1,7 @@
 package zio.lazagna.dom.svg
 
+// L -74.91291809082031 650.100830078125L -98.75300598144531 676.6917114257812
+
 sealed trait PathData {
   def render(buf: StringBuffer): Unit
 }

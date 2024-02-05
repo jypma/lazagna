@@ -88,7 +88,7 @@ case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Dra
     }
   }
 
-  override def version = storage.get.map(_.events.size - 1)
+  override def version = storage.get.map(_.events.size)
 }
 
 case class DrawingsInMemory(storage: Ref.Synchronized[Map[String,Drawing]]) extends Drawings {

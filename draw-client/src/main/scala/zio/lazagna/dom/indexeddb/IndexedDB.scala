@@ -39,6 +39,8 @@ trait Database {
   def add(objectStore: String, value: js.Any): Request[Any] = doAdd(objectStore, value, None)
   def add(objectStore: String, value: js.Any, key: String): Request[Unit] = doAdd(objectStore, value, Some(key)).unit
   def add(objectStore: String, value: js.Any, key: Double): Request[Unit] = doAdd(objectStore, value, Some(key)).unit
+
+  def clear(objectStore: String): Request[Unit]
 }
 
 trait Transaction {
@@ -156,6 +158,14 @@ private[indexeddb] case class DatabaseImpl(db: dom.IDBDatabase) extends Database
       val t = db.transaction(Seq(objectStore).toJSArray, dom.IDBTransactionMode.readwrite)
       t.oncomplete = { _ => dom.console.log("Note: doAdd transaction completed here.") }
       t.objectStore(objectStore).add(value, key.getOrElse(js.undefined))
+    }
+  }
+
+  def clear(objectStore: String) = {
+    request {
+      val t = db.transaction(Seq(objectStore).toJSArray, dom.IDBTransactionMode.readwrite)
+      t.oncomplete = { _ => dom.console.log("Note: clear transaction completed here.") }
+      t.objectStore(objectStore).clear()
     }
   }
 

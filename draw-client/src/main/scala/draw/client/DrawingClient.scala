@@ -38,20 +38,13 @@ object DrawingClient {
     Config(dom.window.location.hostname, dom.window.location.port.toInt, dom.window.location.protocol == "https", "api")
   )
 
-  implicit val drawEventCodec: EventStore.Codec[DrawEvent, ArrayBuffer] = new EventStore.Codec[DrawEvent, ArrayBuffer] {
-    override def encode(e: DrawEvent): ArrayBuffer = e.toByteArray.toTypedArray.buffer
-    override def decode(b: ArrayBuffer): DrawEvent = DrawEvent.parseFrom(new Int8Array(b).toArray)
-  }
-
   val live = ZLayer.fromZIO {
     for {
       config <- ZIO.service[Config]
+      store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
       drawViewport <- SubscriptionRef.make(Drawing.Viewport())
     } yield new DrawingClient {
       override def login(user: String, password: String, drawingName: String) = (for {
-        database <- IndexedDB.open(s"drawing-${drawingName}", Schema(
-          CreateObjectStore("events")
-        ))
         // FIXME: We really need a little path DSL to prevent injection here.
         loginResp <- POST(AsDynamicJSON, s"${config.baseUrl}/users/${user}/login?password=${password}")
         token <- loginResp.token.asInstanceOf[String] match {
@@ -59,8 +52,11 @@ object DrawingClient {
           case _ => ZIO.fail(ClientError("Could not get token"))
         }
         version <- HEAD(s"${config.baseUrl}/drawings/${drawingName}?token=${token}").map(_.header("ETag").map(_.drop(1).dropRight(1).toLong).getOrElse(0L))
-        store <- EventStore.indexedDB[DrawEvent,ArrayBuffer](s"events", _.sequenceNr).provideSome[Scope](ZLayer.succeed(database))
         after <- store.latestSequenceNr
+        _ <- if (after > version) {
+          dom.console.log(s"Resetting client event store, since we've seen event ${after} but server only has ${version}")
+          store.reset
+        } else ZIO.unit
         socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingName}/socket?token=${token}&afterSequenceNr=${after}") { msg =>
           msg match {
             case m if m.data.isInstanceOf[ArrayBuffer] =>
@@ -80,16 +76,10 @@ object DrawingClient {
             ZIO.unit
            }
         }
-        override def events  = store.events.catchAll { err =>
-          dom.console.log("Error reading event:")
-          dom.console.log(err)
-          ZStream.empty
-        }
-        override def eventsAfter(lastSeenSequenceNr: Long) = store.eventsAfter(lastSeenSequenceNr).catchAll { err =>
-          dom.console.log("Error reading event:")
-          dom.console.log(err)
-          ZStream.empty
-        }
+        override def events  = store.events
+
+        override def eventsAfter(lastSeenSequenceNr: Long) = store.eventsAfter(lastSeenSequenceNr)
+
         override def initialVersion = version
         override def viewport = drawViewport
       }).mapError { err => ClientError(err.toString) }

@@ -8,6 +8,7 @@ import draw.data.drawevent.{DrawEvent, ScribbleContinued, ScribbleDeleted, Scrib
 import draw.data.point.Point
 import zio.stream.SubscriptionRef
 
+// FIXME: events, eventsAfter and initialVersion should just move to EventStore
 trait Drawing {
   def perform(command: DrawCommand): ZIO[Any, Nothing, Unit]
   def events: Consumeable[DrawEvent]
