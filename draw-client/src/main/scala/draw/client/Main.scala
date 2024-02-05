@@ -9,6 +9,7 @@ import org.scalajs.dom
 import zio.ZLayer
 import zio.lazagna.dom.indexeddb.IndexedDB
 import zio.lazagna.dom.indexeddb.Schema
+import zio.lazagna.dom.indexeddb.ValueCodec
 import zio.lazagna.dom.indexeddb.Schema.CreateObjectStore
 import draw.data.drawevent.DrawEvent
 
@@ -22,7 +23,7 @@ object Main extends ZIOAppDefault {
     _ <- tools.renderToolbox.mount(dom.document.querySelector("#toolboxApp"))
   } yield ()
 
-  implicit val drawEventCodec: EventStore.Codec[DrawEvent, ArrayBuffer] = new EventStore.Codec[DrawEvent, ArrayBuffer] {
+  implicit val drawEventCodec: ValueCodec[DrawEvent, ArrayBuffer] = new ValueCodec[DrawEvent, ArrayBuffer] {
     override def encode(e: DrawEvent): ArrayBuffer = e.toByteArray.toTypedArray.buffer
     override def decode(b: ArrayBuffer): DrawEvent = DrawEvent.parseFrom(new Int8Array(b).toArray)
   }
@@ -41,7 +42,6 @@ object Main extends ZIOAppDefault {
       drawing <- client.login("jan", "jan", drawingName)
       _ <- main.provideSome[Scope](ZLayer.succeed(drawing), DrawingTools.live, DrawingRenderer.live)
       store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
-//      _ <- store.start
       _ = dom.console.log("Main is ready.")
       _ <- ZIO.never // We don't want to exit main, since our background fibers do the real work.
     } yield ExitCode.success)

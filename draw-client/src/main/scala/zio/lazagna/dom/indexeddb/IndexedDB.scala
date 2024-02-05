@@ -15,128 +15,93 @@ import org.scalajs.dom.IDBKeyRange
 import org.scalajs.dom.IDBCursorDirection
 import zio.stream.ZStream
 import zio.Chunk
-import zio.Runtime
-
-// FIXME: Only allow proper types for keys (NOT Long)
-// FIXME: We need our own range type, since scalajs.dom accepts Long
-// TODO: OutOfLineKeyedObjectStore, generic in K and V
 
 trait Database {
   def version: Version
-
   def objectStoreNames: Seq[String]
-
-  def transaction(
-    objectStoreNames: Seq[String],
-    mode: dom.IDBTransactionMode = dom.IDBTransactionMode.readonly,
-    durability: dom.IDBTransactionDurability = dom.IDBTransactionDurability.default
-  ): ZIO[Scope, dom.DOMException, Transaction]
-
-  def doGetRange(objectStore: String, range: Option[IDBKeyRange], direction: IDBCursorDirection): ZStream[Any, dom.ErrorEvent, Any]
-  def getRange1(objectStore: String, range: IDBKeyRange, direction: IDBCursorDirection = IDBCursorDirection.next): ZStream[Any, dom.ErrorEvent | dom.DOMException, Any] = {doGetRange(objectStore, Some(range), direction)}
-  def getAll(objectStore: String, direction: IDBCursorDirection = IDBCursorDirection.next): ZStream[Any, dom.ErrorEvent | dom.DOMException, Any] = doGetRange(objectStore, None, direction)
-  private[lazagna] def doAdd(objectStore: String, value: js.Any, key: Option[Any]): Request[Any]
-  def add(objectStore: String, value: js.Any): Request[Any] = doAdd(objectStore, value, None)
-  def add(objectStore: String, value: js.Any, key: String): Request[Unit] = doAdd(objectStore, value, Some(key)).unit
-  def add(objectStore: String, value: js.Any, key: Double): Request[Unit] = doAdd(objectStore, value, Some(key)).unit
-
-  def clear(objectStore: String): Request[Unit]
+  def objectStore[T, TV <: js.Any, K](name: String)(using keyCodec: KeyCodec[K], valueCodec: ValueCodec[T,TV]): ObjectStore[T,K]
 }
 
-trait Transaction {
-  def objectStore(name: String): Effect[ObjectStore]
+trait KeyCodec[T] {
+  def encode(t: T): js.Any
+}
+object KeyCodec {
+  def from[T](enc: T => js.Any) = new KeyCodec[T] { override def encode(t: T) = enc(t) }
+
+  private def cast[T] = from[T](_.asInstanceOf[js.Any])
+
+  given string: KeyCodec[String] = cast
+  given int: KeyCodec[Int] = cast
+  given float: KeyCodec[Float] = cast
+  given double: KeyCodec[Double] = cast
+  given boolean: KeyCodec[Boolean] = cast
+  given long: KeyCodec[Long] = from(_.toDouble)
+
+  given iterable[T, S <: Iterable[T]](using codec: KeyCodec[T]): KeyCodec[S] =
+    from(_.map(codec.encode).toJSArray)
+  given tuple2[T1,T2](using c1: KeyCodec[T1], c2: KeyCodec[T2]): KeyCodec[(T1,T2)] =
+    from(t => js.Array(c1.encode(t._1), c2.encode(t._2)))
 }
 
-// Cursor isn't directly implemented, since reactive stream elements should really be immutable.
-
-trait ObjectStore {
-  /** Returns the key of the added object. */
-  private[lazagna] def doAdd(value: js.Any, key: Option[Any]): Request[Any]
-  def delete(key: Any): Request[Unit]
-  def deleteRange(range: IDBKeyRange): Request[Unit]
-  def get(key: Any): Request[Any]
-  /** Returns the key of the putted object. */
-  private[lazagna] def doPut(value: js.Any, key: Option[Any]): Request[Any]
-  private[lazagna] def doGetRange(range: Option[IDBKeyRange], direction: IDBCursorDirection): ZStream[Any, dom.ErrorEvent | dom.DOMException, Any]
-
-  /** Returns the key of the added object. */
-  def add(value: js.Any): Request[Any] = doAdd(value, None)
-  def add(value: js.Any, key: String): Request[Unit] = doAdd(value, Some(key)).unit
-  def add(value: js.Any, key: Double): Request[Unit] = doAdd(value, Some(key)).unit
-  /** Returns the key of the putted object. */
-  def put(value: js.Any): Request[Any] = doPut(value, None)
-  /** Returns the key of the putted object. */
-  def put(value: js.Any, key: String): Request[Unit] = doPut(value, Some(key)).unit
-  def getRange(range: IDBKeyRange, direction: IDBCursorDirection = IDBCursorDirection.next): ZStream[Any, dom.ErrorEvent | dom.DOMException, Any] = doGetRange(Some(range), direction)
-  def getAll(direction: IDBCursorDirection = IDBCursorDirection.next): ZStream[Any, dom.ErrorEvent | dom.DOMException, Any] = doGetRange(None, direction)
+trait ValueCodec[T, U <: js.Any] {
+  type JsType = U
+  def encode(t: T): U
+  def decode(u: U): T
 }
 
-private[indexeddb] case class ObjectStoreImpl(s: dom.IDBObjectStore) extends ObjectStore {
-  dom.console.log("Object store ready.")
-  def doAdd(value: js.Any, key: Option[Any]) = {
-    println("add:")
-    dom.console.log(value)
-    key.foreach(dom.console.log(_))
-    request(key.map(s.add(value, _)).getOrElse(s.add(value)))
+object ValueCodec {
+  def from[T, U <: js.Any](enc: T => U, dec: U => T) = new ValueCodec[T,U] {
+    override def encode(t: T) = enc(t)
+    override def decode(u: U) = dec(u)
   }
-  def delete(key: Any) = request(s.delete(key))
-  def deleteRange(range: IDBKeyRange) = request(s.delete(range))
-  def get(key: Any) = request(s.get(key))
-  def doPut(value: js.Any, key: Option[Any]) = {
-    println("put")
-    request(key.map(s.put(value, _)).getOrElse(s.put(value)))
-  }
-  def doGetRange(range: Option[IDBKeyRange], direction: IDBCursorDirection) = {
-    println("get range " + range)
-    ZStream.unwrap( for {
-      request <- effect(range.map(s.openCursor(_, direction)).getOrElse(s.openCursor(direction = direction)))
-      _ = "range started"
-    } yield ZStream.async[Any, dom.ErrorEvent | dom.DOMException, Any] { cb =>
-      request.onsuccess = { event =>
-        val cursor = event.target.result
-        dom.console.log("Found: " + cursor)
-        if (cursor != null) {
-          cb(ZIO.succeed(Chunk(request.result.value)))
-          cursor.continue()
-        } else {
-          cb(ZIO.fail(None))
-        }
-      }
-      request.onerror = { event =>
-        cb(ZIO.fail(Some(event)))
-      }
-    })
+
+  private def cast[T, U <: js.Any] = from[T, U](_.asInstanceOf[U], _.asInstanceOf[T])
+
+  given string: ValueCodec[String, js.Any] = cast
+  given int: ValueCodec[Int, js.Any] = cast
+  given float: ValueCodec[Float, js.Any] = cast
+  given double: ValueCodec[Double, js.Any] = cast
+  given boolean: ValueCodec[Boolean, js.Any] = cast
+
+  given vector[T,U <: js.Any](using codec: ValueCodec[T,U]): ValueCodec[Vector[T], js.Array[U]] =
+    from(_.map(codec.encode).toJSArray, _.view.map(codec.decode).toVector)
+}
+
+/** A range of keys, used to grab a sequence of objects from a database */
+case class Range[K](private[indexeddb] val idbRange: IDBKeyRange)
+object Range {
+  /** The bounds can be open (that is, the bounds exclude the endpoint values) or closed (that is, the bounds
+    * include the endpoint values). By default, the bounds are closed.
+    */
+  def bound[K,KV <: js.Any](lower: K, upper: K, lowerOpen: Boolean = false, upperOpen: Boolean = false)(using codec: KeyCodec[K]): Range[K] = {
+    Range(IDBKeyRange.bound(codec.encode(lower), codec.encode(upper), lowerOpen, upperOpen))
   }
 }
 
-private[indexeddb] case class TransactionImpl(t: dom.IDBTransaction) extends Transaction {
-  override def objectStore(name: String) = {
-    dom.console.log("Object store " + name)
-    effect(ObjectStoreImpl(t.objectStore(name)))
-  }
+/** A type-safe object store (currently only supporting out-of-line keys) */
+trait ObjectStore[T, K] {
+  private[indexeddb] def doGetRange(range: Option[Range[K]], direction: IDBCursorDirection): ZStream[Any, dom.ErrorEvent, T]
+  def getRange(range: Range[K], direction: IDBCursorDirection = IDBCursorDirection.next): ZStream[Any, dom.ErrorEvent, T] = doGetRange(Some(range), direction)
+  def getAll(direction: IDBCursorDirection = IDBCursorDirection.next): ZStream[Any, dom.ErrorEvent, T] = doGetRange(None, direction)
+
+  def add(value: T, key: K): Request[Unit]
+  def clear: Request[Unit]
 }
 
-private[indexeddb] case class DatabaseImpl(db: dom.IDBDatabase) extends Database {
-  override def version = db.version.toInt
-  override def objectStoreNames = db.objectStoreNames.toSeq
-
-  def doGetRange(objectStore: String, range: Option[IDBKeyRange], direction: IDBCursorDirection) = {
-    dom.console.log("doGetRange")
-    range.foreach(dom.console.log(_))
-    ZStream.asyncInterrupt[Any, dom.ErrorEvent, Any] { cb =>
+private[indexeddb] case class ObjectStoreImpl[T, TV <: js.Any, K](db: dom.IDBDatabase, objectStoreName: String)(using keyCodec: KeyCodec[K], valueCodec: ValueCodec[T,TV]) extends ObjectStore[T, K] {
+  def doGetRange(range: Option[Range[K]], direction: IDBCursorDirection): ZStream[Any, dom.ErrorEvent, T] = {
+    ZStream.asyncInterrupt[Any, dom.ErrorEvent, T] { cb =>
       var cancelled = false
       var count = 0
-      val t = db.transaction(Seq(objectStore).toJSArray)
-      t.oncomplete = { _ => dom.console.log("Note: stream transaction completed for range " + range) }
-      val request = t.objectStore(objectStore).openCursor(range.getOrElse(js.undefined), direction)
+      val t = db.transaction(Seq(objectStoreName).toJSArray)
+      val request = t.objectStore(objectStoreName).openCursor(range.map(_.idbRange).getOrElse(js.undefined), direction)
       request.onsuccess = { event =>
         val cursor = event.target.result
         if (!cancelled && cursor != null) {
           count += 1
-          cb(ZIO.succeed(Chunk(cursor.value)))
+          cb(ZIO.succeed(Chunk(valueCodec.decode(cursor.value.asInstanceOf[TV]))))
           cursor.continue()
         } else {
-          println("end of stream")
           cb(ZIO.fail(None))
         }
       }
@@ -144,62 +109,26 @@ private[indexeddb] case class DatabaseImpl(db: dom.IDBDatabase) extends Database
         cb(ZIO.fail(Some(event)))
       }
       Left(ZIO.succeed {
-        println("Cancelled after " + count)
         cancelled = true
       })
     }
   }
 
-  def doAdd(objectStore: String, value: js.Any, key: Option[Any]) = {
-    println("add:")
-    dom.console.log(value)
-    key.foreach(dom.console.log(_))
-    request {
-      val t = db.transaction(Seq(objectStore).toJSArray, dom.IDBTransactionMode.readwrite)
-      t.oncomplete = { _ => dom.console.log("Note: doAdd transaction completed here.") }
-      t.objectStore(objectStore).add(value, key.getOrElse(js.undefined))
-    }
-  }
+  def add(value: T, key: K): Request[Unit] = request {
+    val t = db.transaction(Seq(objectStoreName).toJSArray, dom.IDBTransactionMode.readwrite)
+    t.objectStore(objectStoreName).add(valueCodec.encode(value), keyCodec.encode(key))
+  }.unit
 
-  def clear(objectStore: String) = {
-    request {
-      val t = db.transaction(Seq(objectStore).toJSArray, dom.IDBTransactionMode.readwrite)
-      t.oncomplete = { _ => dom.console.log("Note: clear transaction completed here.") }
-      t.objectStore(objectStore).clear()
-    }
+  def clear: Request[Unit] = request {
+    val t = db.transaction(Seq(objectStoreName).toJSArray, dom.IDBTransactionMode.readwrite)
+    t.objectStore(objectStoreName).clear()
   }
+}
 
-  override def transaction(objectStoreNames: Seq[String], mode: dom.IDBTransactionMode, durab: dom.IDBTransactionDurability) = {
-    ZIO.acquireReleaseExit {
-      effect {
-        dom.console.log("Starting transaction")
-        val t = TransactionImpl(db.transaction(objectStoreNames.toJSArray, mode, new dom.IDBTransactionOptions {
-          override val durability = durab
-        }))
-        t.t.oncomplete = { _ => dom.console.log("Note: transaction completed here.") }
-        t
-      }
-    } { (transaction, exit) =>
-      if (exit.isSuccess) {
-        ZIO.succeed {
-          try {
-            transaction.t.asInstanceOf[js.Dynamic].commit()
-          } catch {
-            case x:Throwable => dom.console.log(x)
-          }
-        }
-      } else {
-        ZIO.succeed {
-          try {
-            dom.console.log("Aborting transaction due to " + exit)
-            transaction.t.abort()
-          } catch {
-            case x:Throwable => dom.console.log(x)
-          }
-        }
-      }
-    }
-  }
+private[indexeddb] case class DatabaseImpl(db: dom.IDBDatabase) extends Database {
+  override def version = db.version.toInt
+  override def objectStoreNames = db.objectStoreNames.toSeq
+  override def objectStore[T, TV <: js.Any, K](name: String)(using keyCodec: KeyCodec[K], valueCodec: ValueCodec[T,TV]) = ObjectStoreImpl(db, name)
 }
 
 /** Schema to use for a database. On released subsequent application versions, operations must ONLY be added to this
