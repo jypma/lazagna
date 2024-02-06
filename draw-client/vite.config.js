@@ -1,8 +1,10 @@
 import { defineConfig } from "vite";
 import scalaJSPlugin from "@scala-js/vite-plugin-scalajs";
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 export default defineConfig({
-  plugins: [scalaJSPlugin({
+  plugins: [
+    scalaJSPlugin({
       // path to the directory containing the sbt build
       // default: '.'
       cwd: '..',
@@ -14,9 +16,19 @@ export default defineConfig({
       // URI prefix of imports that this plugin catches (without the trailing ':')
       // default: 'scalajs' (so the plugin recognizes URIs starting with 'scalajs:')
       uriPrefix: 'scalajs',
-  })],
+    }),
+    basicSsl({
+      /** name of certification */
+      name: 'test',
+      /** custom trust domains */
+      //domains: ['*.custom.com'],
+      /** custom certification directory */
+      //certDir: '/Users/.../.devServer/cert'
+    })
+  ],
   server: {
     host: "0.0.0.0",
+    https: true,
     proxy: {
       // string shorthand: http://localhost:5173/foo -> http://localhost:4567/foo
       '/api': {

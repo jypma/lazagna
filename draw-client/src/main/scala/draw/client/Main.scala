@@ -28,9 +28,9 @@ object Main extends ZIOAppDefault {
     override def decode(b: ArrayBuffer): DrawEvent = DrawEvent.parseFrom(new Int8Array(b).toArray)
   }
 
-  val eventStore = ZLayer.fromZIO(EventStore.indexedDB[DrawEvent,ArrayBuffer](s"events", _.sequenceNr).flatMap(EventStore.cached))
-
   val drawingName = "test"
+
+  val eventStore = ZLayer.fromZIO(EventStore.indexedDB[DrawEvent,ArrayBuffer](s"events", s"${drawingName}-events", _.sequenceNr).flatMap(EventStore.cached))
 
   val database = ZLayer.fromZIO(IndexedDB.open(s"drawing-${drawingName}", Schema(
     CreateObjectStore("events")

@@ -14,6 +14,10 @@ import zio.lazagna.dom.indexeddb.Range
 import scala.scalajs.js
 import org.scalajs.dom
 import zio.lazagna.Consumeable
+import zio.lazagna.dom.weblocks.Lock
+import zio.Scope
+import zio.Promise
+import zio.durationInt
 
 trait EventStore[E,Err] {
   def events: Consumeable[E] // No error type, the event stream should transparently reconnect, or inform the user if it's disconnected.
@@ -116,11 +120,30 @@ object EventStore {
   }
 
   type Err = DOMException | ErrorEvent
-  def indexedDB[E,T <: js.Any](objectStoreName: String, _getSequenceNr: E => Long)(using codec: ValueCodec[E,T]): ZIO[Database, Nothing, EventStore[E, Err]] = {
+  def indexedDB[E,T <: js.Any](objectStoreName: String, uniqueName: String, _getSequenceNr: E => Long)(using codec: ValueCodec[E,T]): ZIO[Database with Scope, Nothing, EventStore[E, Err]] = {
     for {
       db <- ZIO.service[Database]
-      objectStore = db.objectStore[E,T,Long]("events")
+      objectStore = db.objectStore[E,T,Long](objectStoreName)
       hub <- Hub.unbounded[E]
+      lock <- Lock.make(uniqueName)
+      haveLock <- Ref.make(false)
+      lockInitiallyAvailable <- lock.withExclusiveLockIfAvailable(ZIO.succeed(true)).catchAll { _ => ZIO.succeed(false) }
+      promise <- Promise.make[Nothing, Unit]
+      start = System.currentTimeMillis()
+      _ <- lock.withExclusiveLock(
+        haveLock.set(true) *>
+        promise.completeWith(ZIO.unit) *>
+        ZIO.succeed(println(s"Lock acquired after ${System.currentTimeMillis - start}ms!")) *>
+        ZIO.never
+      ).forkScoped
+      _ <- if (lockInitiallyAvailable) {
+        // Acquire lock, and wait up to 5 seconds for it to actually be acquired
+        promise.await.timeout(5.seconds)
+      } else {
+        // Acquire lock, don't wait
+        println("Couldn't get lock, waiting for it.")
+        ZIO.unit
+      }
     } yield new EventStore[E, Err] {
       override def getSequenceNr(event: E) = _getSequenceNr(event)
 
@@ -150,13 +173,10 @@ object EventStore {
       }
       def latestSequenceNr = getLastSequenceNr
 
-      // FIXME: Only write to event store if we get a Web Lock
       // TODO: Add publish with type T directly (from websocket), so we can bypass codec there.
-      def publish(event: E) = {
-        objectStore.add(event, getSequenceNr(event)) <* hub.publish(event)
-      }
+      def publish(event: E) = objectStore.add(event, getSequenceNr(event)).whenZIO(haveLock.get) *> hub.publish(event).unit
 
-      def reset = objectStore.clear.catchAll { err =>
+      def reset = objectStore.clear.whenZIO(haveLock.get).unit.catchAll { err =>
         dom.console.log(err)
         ZIO.unit
       }

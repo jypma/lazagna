@@ -37,6 +37,9 @@ object DrawingRenderer {
             .tap { event => ZIO.when(event.sequenceNr == drawing.initialVersion)(currentView.set(1).tap(_ => ZIO.succeed{
               // Local: 0.5ms per event
               // LAN: 0.8ms per event
+              // With IndexedDB (cursor), plus read from remote websocket: 3ms per event
+              // With IndexedDB (cursor), plus read from local websocket: 2ms per event
+              // With IndexedDB (cursor), from DB: 0.8ms per event
               val time = System.currentTimeMillis() - start
               println(s"Loaded ${drawing.initialVersion} events in ${time}ms")
             })) }
@@ -112,8 +115,7 @@ object DrawingRenderer {
           1 -> svgMain,
           2 -> svgDisconnected
         )
-        Alternative.showOne(currentView.merge(drawing.connectionStatus.map {
-          case Drawing.Connected => 1
+        Alternative.showOne(currentView.merge(drawing.connectionStatus.collect {
           case Drawing.Disconnected => 2
         }), alternatives, Some(initialView))
       }

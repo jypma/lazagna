@@ -16,6 +16,8 @@ import org.scalajs.dom.IDBCursorDirection
 import zio.stream.ZStream
 import zio.Chunk
 
+// TODO: Create an ObjectStoreDefinition[T,TV,K] and make database with that, instead of schema.
+
 trait Database {
   def version: Version
   def objectStoreNames: Seq[String]

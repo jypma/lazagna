@@ -30,9 +30,10 @@ object DrawingClient {
     def baseWs = s"${ws}://${server}:${port}/${path}"
   }
 
-  val configTest = ZLayer.succeed(
-    Config(dom.window.location.hostname, dom.window.location.port.toInt, dom.window.location.protocol == "https", "api")
-  )
+  val configTest = ZLayer.succeed {
+    println("Building config. Proto is " + dom.window.location.protocol)
+    Config(dom.window.location.hostname, dom.window.location.port.toInt, dom.window.location.protocol == "https:", "api")
+  }
 
   val live = ZLayer.fromZIO {
     for {
