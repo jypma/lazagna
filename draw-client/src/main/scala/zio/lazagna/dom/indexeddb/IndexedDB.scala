@@ -2,19 +2,14 @@ package zio.lazagna.dom.indexeddb
 
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters._
-import org.scalajs.dom
-import zio.ZIO
-import zio.IO
-import IndexedDB._
-import zio.Unsafe
-import org.scalajs.dom.IDBCreateObjectStoreOptions
-import org.scalajs.dom.IDBCreateIndexOptions
-import zio.Scope
-import org.scalajs.dom.IDBRequest
-import org.scalajs.dom.IDBKeyRange
-import org.scalajs.dom.IDBCursorDirection
+
 import zio.stream.ZStream
-import zio.Chunk
+import zio.{Chunk, IO, Scope, Unsafe, ZIO}
+
+import org.scalajs.dom
+import org.scalajs.dom.{IDBCreateIndexOptions, IDBCreateObjectStoreOptions, IDBCursorDirection, IDBKeyRange, IDBRequest}
+
+import IndexedDB._
 
 // TODO: No more schema definition, but Database can have an optional version Int. Otherwise, it keeps track of how many ObjectStores use it (that's the version).
 // When an ObjectStore starts, and the db doesn't have that ObjectStore, it causes the db to close itself (if opened), then migrate to create that ObjectStore (incrementing

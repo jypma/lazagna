@@ -1,22 +1,18 @@
 package draw.client
 
+import zio.lazagna.Consumeable._
 import zio.lazagna.dom.Attribute._
-import zio.lazagna.dom.Element.{children, textContent}
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.tags._
-import zio.lazagna.dom.Modifier
-import zio.lazagna.dom.svg.{PathData}
-import zio.{ZIO, ZLayer}
+import zio.lazagna.dom.Element.{children, textContent}
+import zio.lazagna.dom.svg.PathData
+import zio.lazagna.dom.{Alternative, Modifier}
+import zio.stream.{SubscriptionRef, ZPipeline}
+import zio.{Chunk, ZIO, ZLayer}
 
-import draw.data.drawevent.{ScribbleContinued, ScribbleDeleted, ScribbleStarted}
+import draw.data.drawevent.{DrawEvent, ScribbleContinued, ScribbleDeleted, ScribbleStarted}
 import draw.data.point.Point
 import org.scalajs.dom
-import draw.data.drawevent.DrawEvent
-import zio.lazagna.dom.Alternative
-import zio.stream.SubscriptionRef
-import zio.lazagna.Consumeable._
-import zio.stream.ZPipeline
-import zio.Chunk
 
 trait DrawingRenderer {
   def render: Modifier

@@ -1,9 +1,8 @@
 package zio.lazagna.dom
 
-import zio.{Scope, ZIO}
+import zio.{Scope, ZIO, ZLayer}
 
 import org.scalajs.dom
-import zio.ZLayer
 
 // TODO: Investigate replacing with type alias to ZIO[dom.Element & Scope, Nothing, Unit]. That might be too weak though.
 trait Modifier {

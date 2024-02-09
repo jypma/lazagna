@@ -1,16 +1,13 @@
 package zio.lazagna.dom.weblocks
 
 import scala.scalajs.js
+
+import zio.stream.SubscriptionRef
+import zio.{Promise, Ref, Scope, UIO, ZIO, durationInt}
+
 import org.scalajs.dom
-import zio.ZIO
-import zio.UIO
-import zio.Scope
 
 import Lock._
-import zio.Ref
-import zio.Promise
-import zio.durationInt
-import zio.stream.SubscriptionRef
 
 /** A wrapper around the Web Locks API */
 trait Lock {

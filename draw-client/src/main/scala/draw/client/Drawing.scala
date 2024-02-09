@@ -1,11 +1,11 @@
 package draw.client
 
+import zio.ZIO
 import zio.lazagna.Consumeable
-import zio.{ZIO}
-
-import draw.data.drawcommand.{DrawCommand}
-import draw.data.drawevent.{DrawEvent}
 import zio.stream.SubscriptionRef
+
+import draw.data.drawcommand.DrawCommand
+import draw.data.drawevent.DrawEvent
 
 trait Drawing {
   def connectionStatus: Consumeable[Drawing.ConnectionStatus]

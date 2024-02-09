@@ -1,28 +1,22 @@
 package draw.client
 
-import zio.lazagna.dom.Modifier
-import zio.lazagna.dom.Modifier._
-import zio.Ref
-import zio.lazagna.dom.svg.SVGOps
-import zio.lazagna.dom.Events._
-import zio.lazagna.dom.Element.tags._
-import zio.lazagna.dom.Element._
-import zio.lazagna.dom.Attribute._
+import java.util.Base64
+
+import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable._
+import zio.lazagna.dom.Attribute._
+import zio.lazagna.dom.Element._
+import zio.lazagna.dom.Element.tags._
+import zio.lazagna.dom.Events._
+import zio.lazagna.dom.Modifier._
+import zio.lazagna.dom.svg.SVGOps
+import zio.lazagna.dom.{Alternative, Modifier}
+import zio.stream.SubscriptionRef
+import zio.{Clock, Random, Ref, UIO, ZIO, ZLayer}
 
 import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble}
 import draw.data.point.Point
-
 import org.scalajs.dom
-import zio.Clock
-import zio.Random
-import zio.UIO
-import java.util.Base64
-import zio.ZLayer
-import zio.stream.SubscriptionRef
-import zio.ZIO
-import zio.lazagna.dom.Alternative
-import zio.lazagna.Consumeable
 
 trait DrawingTools {
   def renderHandlers: Modifier

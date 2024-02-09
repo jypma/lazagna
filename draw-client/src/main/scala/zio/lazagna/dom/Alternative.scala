@@ -1,20 +1,17 @@
 package zio.lazagna.dom
 
-import zio.stream.{ZPipeline, ZStream}
-
-import org.scalajs.dom
 import scala.scalajs.js
+import scala.scalajs.js.timers.SetTimeoutHandle
 
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable._
-import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Attribute._
+import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Modifier._
-import scala.scalajs.js.timers.SetTimeoutHandle
-import zio.Ref
-import zio.Scope
-import zio.ZIO
-import zio.Exit
+import zio.stream.{ZPipeline, ZStream}
+import zio.{Exit, Ref, Scope, ZIO}
+
+import org.scalajs.dom
 
 object Alternative {
   /** Selects from a potentially unlimited lists of alternative renders, based on an element T. Whenever the stream

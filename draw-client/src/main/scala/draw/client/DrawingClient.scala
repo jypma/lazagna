@@ -1,20 +1,21 @@
 package draw.client
 
 import scala.scalajs.js.typedarray.{ArrayBuffer, Int8Array}
-import scalajs.js.typedarray._
 
-import zio.lazagna.dom.http.Request.{AsDynamicJSON, POST, HEAD, RequestError}
+import zio.lazagna.Consumeable._
+import zio.lazagna.dom.http.Request.{AsDynamicJSON, HEAD, POST, RequestError}
 import zio.lazagna.dom.http.WebSocket
+import zio.lazagna.eventstore.EventStore
+import zio.stream.SubscriptionRef
 import zio.{Scope, ZIO, ZLayer}
 
 import draw.data.drawcommand.DrawCommand
 import draw.data.drawevent.DrawEvent
 import org.scalajs.dom
 
+import scalajs.js.typedarray._
 import scalajs.js
 import DrawingClient._
-import zio.stream.SubscriptionRef
-import zio.lazagna.Consumeable._
 
 trait DrawingClient {
   def login(user: String, password: String, drawingName: String): ZIO[Scope, ClientError | RequestError, Drawing]

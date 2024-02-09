@@ -1,20 +1,19 @@
 package draw.client
 
 import scala.scalajs.js.typedarray.{ArrayBuffer, Int8Array}
-import scalajs.js.typedarray._
 
-import zio.{ExitCode, Scope, ZIO, ZIOAppDefault}
-
-import org.scalajs.dom
-import zio.ZLayer
-import zio.lazagna.dom.indexeddb.IndexedDB
-import zio.lazagna.dom.indexeddb.Schema
-import zio.lazagna.dom.indexeddb.ValueCodec
-import zio.lazagna.dom.indexeddb.Schema.CreateObjectStore
-import draw.data.drawevent.DrawEvent
-import zio.lazagna.dom.weblocks.Lock
-import zio.stream.SubscriptionRef
 import zio.lazagna.Setup
+import zio.lazagna.dom.indexeddb.Schema.CreateObjectStore
+import zio.lazagna.dom.indexeddb.{IndexedDB, Schema, ValueCodec}
+import zio.lazagna.dom.weblocks.Lock
+import zio.lazagna.eventstore.{CachedEventStore, EventStore, IndexedDBEventStore, PrunedEventStore}
+import zio.stream.SubscriptionRef
+import zio.{ExitCode, Scope, ZIO, ZIOAppDefault, ZLayer}
+
+import draw.data.drawevent.DrawEvent
+import org.scalajs.dom
+
+import scalajs.js.typedarray._
 
 object Main extends ZIOAppDefault {
 
@@ -37,10 +36,10 @@ object Main extends ZIOAppDefault {
     Setup.start {
       for {
         lock <- ZIO.service[SubscriptionRef[Boolean]]
-        store <- EventStore.indexedDB[DrawEvent,ArrayBuffer](s"events", lock, _.sequenceNr)
-        prunedStore <- EventStore.indexedDB[DrawEvent,ArrayBuffer](s"events-pruned", lock, _.sequenceNr)
-        pruned <- PrunedEventStore.make(store, prunedStore, lock)
-        cached <- EventStore.cached(pruned)
+        store <- IndexedDBEventStore.make[DrawEvent,ArrayBuffer](s"events", lock, _.sequenceNr)
+        prunedStore <- IndexedDBEventStore.make[DrawEvent,ArrayBuffer](s"events-pruned", lock, _.sequenceNr)
+        pruned <- PrunedEventStore.make(store, prunedStore, lock, Pruned.State())(_.prune(_))(_.recover(_))
+        cached <- CachedEventStore.make(pruned)
       } yield cached
     }
   }
