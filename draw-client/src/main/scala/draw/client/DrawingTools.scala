@@ -114,21 +114,28 @@ object DrawingTools {
     .mapZIO(drawing.perform _)
 
   def pencil(drawing: Drawing): Modifier = Modifier.unwrap(for {
-    currentScribbleId <- Ref.make[String]("")
+    currentScribbleId <- Ref.make[Option[String]](None)
   } yield SVGOps.coordinateHelper { helper =>
     onMouseDown
       .filter { e => (e.buttons & 1) != 0 }
-      .mapZIO(ev => makeUUID.flatMap(id => currentScribbleId.set(id).as(id)).map { id =>
+      .mapZIO(ev => makeUUID.flatMap(id => currentScribbleId.set(Some(id)).as(id)).map { id =>
         val pos = helper.getClientPoint(ev)
         DrawCommand(StartScribble(id, Some(Point(pos.x, pos.y))))
       })
       .merge(
         onMouseMove
           .filter { e => (e.buttons & 1) != 0 }
-          .mapZIO(ev => currentScribbleId.get.map { id =>
+          .mapZIO(ev => currentScribbleId.get.map((_, ev)))
+          .collect { case (Some(id), ev) => (id, ev) }
+          .map { (id, ev) =>
             val pos = helper.getClientPoint(ev)
             DrawCommand(ContinueScribble(id, Seq(Point(pos.x, pos.y))))
-          })
+          }
+      ).merge(
+        onMouseUp.merge(
+          onMouseMove
+            .filter { e => (e.buttons & 1) == 0 }
+        ).mapZIO(ev => currentScribbleId.set(None)).drain
       )
       .mapZIO(drawing.perform _)
   })
