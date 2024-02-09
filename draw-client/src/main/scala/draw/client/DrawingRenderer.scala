@@ -51,16 +51,12 @@ object DrawingRenderer {
                   startPoints.headOption.map(start => PathData.MoveTo(start.x, start.y)) ++
                   startPoints.tail.map(pos => PathData.LineTo(pos.x, pos.y))
                 val points = d <-- drawing.eventsAfter(sequenceNr)
-                  .chunks
-                  .takeUntil(_.exists(_ match { // FIXME Handle update and delete within same small time window
+                  .takeUntil(_ match {
                     case DrawEvent(_, ScribbleDeleted(ID, _), _, _, _) => true
                     case _ => false
-                  }))
-                  .map(_
-                    .collect { case DrawEvent(_, ScribbleContinued(ID, points, _), _, _, _) => points }
-                    .flatMap(p => p)
-                    .map { pos => PathData.LineTo(pos.x, pos.y) }
-                  )
+                  })
+                  .collect { case DrawEvent(_, ScribbleContinued(ID, points, _), _, _, _) => points }
+                  .map(_.map { pos => PathData.LineTo(pos.x, pos.y) })
                   .via(ZPipeline.prepend(Chunk(Chunk.empty))) // in order to also trigger render on the initial starting points
                   .mapAccum(startData) { (seq, events) =>
                     val res = seq ++ events
