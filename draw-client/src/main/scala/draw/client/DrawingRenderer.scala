@@ -108,6 +108,7 @@ object DrawingRenderer {
             cls <-- drawingTools.currentToolName.map(t => s"main tool-${t}"),
             viewBox <-- drawing.viewport.map(_.toSvgViewBox),
             overflow := "hidden",
+            tabindex := 0, // To enable keyboard events
             svgBody,
             drawingTools.renderHandlers
           )

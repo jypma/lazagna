@@ -54,4 +54,5 @@ object Events {
   val onMouseUp = event[dom.MouseEvent]("mouseup")
   val onMouseMove = event[dom.MouseEvent]("mousemove")
   val onWheel = event[dom.WheelEvent]("wheel")
+  val onKeyDown = event[dom.KeyboardEvent]("keydown")
 }

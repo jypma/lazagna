@@ -97,6 +97,13 @@ object DrawingTools {
           }
           val pos = helper.getClientPoint(event)
           drawing.viewport.update(_.zoom(factor, pos.x, pos.y))
+        },
+      onKeyDown
+        .filter(_.key == "f")
+        .mapZIO { _ =>
+          val rect = helper.svg.getBBox();
+          dom.console.log(rect)
+          drawing.viewport.update(_.fit(rect))
         }
     )
   })
@@ -132,10 +139,7 @@ object DrawingTools {
             DrawCommand(ContinueScribble(id, Seq(Point(pos.x, pos.y))))
           }
       ).merge(
-        onMouseUp.merge(
-          onMouseMove
-            .filter { e => (e.buttons & 1) == 0 }
-        ).mapZIO(ev => currentScribbleId.set(None)).drain
+        onMouseUp.mapZIO(ev => currentScribbleId.set(None)).drain
       )
       .mapZIO(drawing.perform _)
   })
