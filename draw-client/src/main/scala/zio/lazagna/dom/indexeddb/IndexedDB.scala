@@ -16,7 +16,10 @@ import org.scalajs.dom.IDBCursorDirection
 import zio.stream.ZStream
 import zio.Chunk
 
-// TODO: Create an ObjectStoreDefinition[T,TV,K] and make database with that, instead of schema.
+// TODO: No more schema definition, but Database can have an optional version Int. Otherwise, it keeps track of how many ObjectStores use it (that's the version).
+// When an ObjectStore starts, and the db doesn't have that ObjectStore, it causes the db to close itself (if opened), then migrate to create that ObjectStore (incrementing
+// version), and then reopen.
+// DatabaseImpl will have a Ref[dom.IDBDatabase].
 
 trait Database {
   def version: Version
@@ -88,6 +91,7 @@ trait ObjectStore[T, K] {
 
   def add(value: T, key: K): Request[Unit]
   def clear: Request[Unit]
+  def delete(key: K): Request[Unit]
 }
 
 private[indexeddb] case class ObjectStoreImpl[T, TV <: js.Any, K](db: dom.IDBDatabase, objectStoreName: String)(using keyCodec: KeyCodec[K], valueCodec: ValueCodec[T,TV]) extends ObjectStore[T, K] {
@@ -124,6 +128,11 @@ private[indexeddb] case class ObjectStoreImpl[T, TV <: js.Any, K](db: dom.IDBDat
   def clear: Request[Unit] = request {
     val t = db.transaction(Seq(objectStoreName).toJSArray, dom.IDBTransactionMode.readwrite)
     t.objectStore(objectStoreName).clear()
+  }
+
+  def delete(key: K) = request {
+    val t = db.transaction(Seq(objectStoreName).toJSArray, dom.IDBTransactionMode.readwrite)
+    t.objectStore(objectStoreName).delete(keyCodec.encode(key))
   }
 }
 

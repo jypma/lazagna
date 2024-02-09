@@ -25,7 +25,7 @@ message DrawingCreated {
 
 message ScribbleStarted {
     required string id = 1;
-    optional Point start = 2;
+    repeated Point points = 2;
 }
 
 message ScribbleContinued {

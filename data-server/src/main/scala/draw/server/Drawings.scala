@@ -39,7 +39,7 @@ case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Dra
           storage.update(_ :+ DrawEvent(
             0,
             ScribbleStarted(
-              id, Some(Point(start.x, start.y))
+              id, Seq(Point(start.x, start.y))
             ),
             Some(now.toEpochMilli())
           ))

@@ -7,6 +7,10 @@ import zio.UIO
 import zio.Scope
 
 import Lock._
+import zio.Ref
+import zio.Promise
+import zio.durationInt
+import zio.stream.SubscriptionRef
 
 /** A wrapper around the Web Locks API */
 trait Lock {
@@ -70,4 +74,29 @@ object Lock {
 
   /** Makes a lock with the given name. */
   def make(name: String): UIO[Lock] = ZIO.succeed(LockImpl(name))
+
+  /** Make a lock and try to acquire it under the given scope in a forked fiber, reflecting the current lock
+    * state in the returned Ref. If the lock is available at creation time, this tries to wait for the lock to
+    * actually be acquired. */
+  def makeAndLockExclusively(name: String): ZIO[Scope, Nothing, SubscriptionRef[Boolean]] = for {
+    lock <- Lock.make(name)
+    haveLock <- SubscriptionRef.make(false)
+    lockInitiallyAvailable <- lock.withExclusiveLockIfAvailable(ZIO.succeed(true)).catchAll { _ => ZIO.succeed(false) }
+    promise <- Promise.make[Nothing, Unit]
+    start = System.currentTimeMillis()
+    _ <- lock.withExclusiveLock(
+      haveLock.set(true) *>
+        promise.completeWith(ZIO.unit) *>
+        ZIO.succeed(println(s"Lock acquired after ${System.currentTimeMillis - start}ms!")) *>
+        ZIO.never
+    ).forkScoped
+    _ <- if (lockInitiallyAvailable) {
+      // Acquire lock, and wait up to 5 seconds for it to actually be acquired
+      promise.await.timeout(5.seconds)
+    } else {
+      // Acquire lock, don't wait
+      println("Couldn't get lock, waiting for it.")
+      ZIO.unit
+    }
+  } yield haveLock
 }

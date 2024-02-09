@@ -44,7 +44,6 @@ object WebSocket {
               openedCB(ZIO.fail(failed))
               cb(ZIO.fail(Some(failed)))
             }
-            dom.console.log(socket)
           }
         } { socket =>
           ZIO.succeed {

@@ -4,6 +4,8 @@ import zio.stream.ZStream
 import zio.{Hub, Promise, Scope, ZIO}
 import zio.stream.SubscriptionRef
 
+// TODO: Reconsider if Consumeable is allowed to have an error E, which we ignore when calling consume.
+
 /** A Consumeable is a ZStream that has extra Setup actions, and a Scope for background fibers. */
 type Consumeable[T] = ZStream[Scope & Setup, Nothing, T]
 

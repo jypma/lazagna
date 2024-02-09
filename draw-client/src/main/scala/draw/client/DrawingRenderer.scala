@@ -15,6 +15,8 @@ import draw.data.drawevent.DrawEvent
 import zio.lazagna.dom.Alternative
 import zio.stream.SubscriptionRef
 import zio.lazagna.Consumeable._
+import zio.stream.ZPipeline
+import zio.Chunk
 
 trait DrawingRenderer {
   def render: Modifier
@@ -31,22 +33,27 @@ object DrawingRenderer {
       val start = System.currentTimeMillis()
 
       override val render = {
-
+        var eventCountDebug = 0
         val svgBody = g(
           children <~~ drawing.events
-            .tap { event => ZIO.when(event.sequenceNr == drawing.initialVersion)(currentView.set(1).tap(_ => ZIO.succeed{
-              // Local: 0.5ms per event
-              // LAN: 0.8ms per event
-              // With IndexedDB (cursor), plus read from remote websocket: 3ms per event
-              // With IndexedDB (cursor), plus read from local websocket: 2ms per event
-              // With IndexedDB (cursor), from DB: 0.8ms per event
-              val time = System.currentTimeMillis() - start
-              println(s"Loaded ${drawing.initialVersion} events in ${time}ms")
-            })) }
+            .tap { event =>
+              eventCountDebug += 1
+              ZIO.when(event.sequenceNr == drawing.initialVersion)(currentView.set(1).tap(_ => ZIO.succeed{
+                // Local: 0.5ms per event
+                // LAN: 0.8ms per event
+                // With IndexedDB (cursor), plus read from remote websocket: 3ms per event
+                // With IndexedDB (cursor), plus read from local websocket: 2ms per event
+                // With IndexedDB (cursor), from DB: 0.8ms per event
+                val time = System.currentTimeMillis() - start
+                println(s"Loaded ${eventCountDebug} events, until sequence nr ${drawing.initialVersion}, in ${time}ms")
+              }))
+            }
             .map {
-              case DrawEvent(sequenceNr, ScribbleStarted(scribbleId, Some(start), _), _, _, _) =>
+              case DrawEvent(sequenceNr, ScribbleStarted(scribbleId, startPoints, _), _, _, _) =>
                 val ID = scribbleId
-                val startData = PathData.MoveTo(start.x, start.y)
+                val startData =
+                  startPoints.headOption.map(start => PathData.MoveTo(start.x, start.y)) ++
+                  startPoints.tail.map(pos => PathData.LineTo(pos.x, pos.y))
                 val points = d <-- drawing.eventsAfter(sequenceNr)
                   .chunks
                   .takeUntil(_.exists(_ match { // FIXME Handle update and delete within same small time window
@@ -58,8 +65,8 @@ object DrawingRenderer {
                     .flatMap(p => p)
                     .map { pos => PathData.LineTo(pos.x, pos.y) }
                   )
-                  .filter(_.size > 0)
-                  .mapAccum(Seq[PathData](startData)) { (seq, events) =>
+                  .via(ZPipeline.prepend(Chunk(Chunk.empty))) // in order to also trigger render on the initial starting points
+                  .mapAccum(startData) { (seq, events) =>
                     val res = seq ++ events
                     (res, res)
                   }

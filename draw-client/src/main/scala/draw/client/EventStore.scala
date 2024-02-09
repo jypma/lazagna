@@ -18,11 +18,15 @@ import zio.lazagna.dom.weblocks.Lock
 import zio.Scope
 import zio.Promise
 import zio.durationInt
+import zio.stream.SubscriptionRef
+import zio.Chunk
 
 trait EventStore[E,Err] {
   def events: Consumeable[E] // No error type, the event stream should transparently reconnect, or inform the user if it's disconnected.
   def eventsAfter(sequenceNr: Long): Consumeable[E]
   def publish(event: E): IO[Err, Unit]
+  def publishAndReplace(event: E, oldSequenceNr: Long): IO[Err, Unit]
+  def delete(sequenceNr: Long): IO[Err, Unit]
   def latestSequenceNr: ZIO[Any, Err, Long]
   def reset: UIO[Unit]
   def getSequenceNr(event: E): Long
@@ -54,6 +58,17 @@ object EventStore {
         State(
           events = events :+ event,
           sequenceNrs = sequenceNrs :+ store.getSequenceNr(event)
+        )
+      }
+
+      def delete(sequenceNr: Long) = {
+        val idx = sequenceNrs.search(sequenceNr) match {
+          case Found(i) => i
+          case _ => -1
+        }
+        copy(
+          events = events.patch(idx, Seq.empty, if (idx == -1) 0 else 1),
+          sequenceNrs = sequenceNrs.patch(idx, Seq.empty, if (idx == -1) 0 else 1)
         )
       }
     }
@@ -116,34 +131,23 @@ object EventStore {
       def reset = semaphore.withPermit {
         state.set(State()) *> store.reset
       }
+
+      def publishAndReplace(event: E, oldSequenceNr: Long) = semaphore.withPermit {
+        state.update(_.delete(oldSequenceNr).publish(event)) <* store.publishAndReplace(event, oldSequenceNr) <* hub.publish(event)
+      }
+
+      def delete(sequenceNr: Long): IO[Err, Unit] = semaphore.withPermit {
+        state.update(_.delete(sequenceNr)) *> store.delete(sequenceNr)
+      }
     }
   }
 
   type Err = DOMException | ErrorEvent
-  def indexedDB[E,T <: js.Any](objectStoreName: String, uniqueName: String, _getSequenceNr: E => Long)(using codec: ValueCodec[E,T]): ZIO[Database with Scope, Nothing, EventStore[E, Err]] = {
+  def indexedDB[E,T <: js.Any](objectStoreName: String, haveLock: SubscriptionRef[Boolean], _getSequenceNr: E => Long)(using codec: ValueCodec[E,T]): ZIO[Database with Scope, Nothing, EventStore[E, Err]] = {
     for {
       db <- ZIO.service[Database]
       objectStore = db.objectStore[E,T,Long](objectStoreName)
       hub <- Hub.unbounded[E]
-      lock <- Lock.make(uniqueName)
-      haveLock <- Ref.make(false)
-      lockInitiallyAvailable <- lock.withExclusiveLockIfAvailable(ZIO.succeed(true)).catchAll { _ => ZIO.succeed(false) }
-      promise <- Promise.make[Nothing, Unit]
-      start = System.currentTimeMillis()
-      _ <- lock.withExclusiveLock(
-        haveLock.set(true) *>
-        promise.completeWith(ZIO.unit) *>
-        ZIO.succeed(println(s"Lock acquired after ${System.currentTimeMillis - start}ms!")) *>
-        ZIO.never
-      ).forkScoped
-      _ <- if (lockInitiallyAvailable) {
-        // Acquire lock, and wait up to 5 seconds for it to actually be acquired
-        promise.await.timeout(5.seconds)
-      } else {
-        // Acquire lock, don't wait
-        println("Couldn't get lock, waiting for it.")
-        ZIO.unit
-      }
     } yield new EventStore[E, Err] {
       override def getSequenceNr(event: E) = _getSequenceNr(event)
 
@@ -153,9 +157,10 @@ object EventStore {
         for {
           live <- ZStream.fromHubScoped(hub)
           latest <- getLastSequenceNr
-          includeFirst = afterSequenceNr == latest
-          range = Range.bound(afterSequenceNr, latest, !includeFirst, false)
-          events <- objectStore.getRange(range).runCollect
+          events <- if (afterSequenceNr == latest) ZIO.succeed(Chunk.empty) else {
+            val range = Range.bound(afterSequenceNr, latest, true, false)
+            objectStore.getRange(range).runCollect
+          }
           old = ZStream.fromIterable(events)
         } yield old ++ live.dropWhile { e => getSequenceNr(e) <= latest }
       }.catchAll { err =>
@@ -180,6 +185,12 @@ object EventStore {
         dom.console.log(err)
         ZIO.unit
       }
+
+      def publishAndReplace(event: E, oldSequenceNr: Long): IO[Err, Unit] = {
+        objectStore.add(event, getSequenceNr(event)) *> objectStore.delete(oldSequenceNr)
+      }.whenZIO(haveLock.get) *> hub.publish(event).unit
+
+      def delete(sequenceNr: Long): IO[Err, Unit] = objectStore.delete(sequenceNr).whenZIO(haveLock.get).unit
     }
   }
 }

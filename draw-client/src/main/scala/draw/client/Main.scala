@@ -12,6 +12,9 @@ import zio.lazagna.dom.indexeddb.Schema
 import zio.lazagna.dom.indexeddb.ValueCodec
 import zio.lazagna.dom.indexeddb.Schema.CreateObjectStore
 import draw.data.drawevent.DrawEvent
+import zio.lazagna.dom.weblocks.Lock
+import zio.stream.SubscriptionRef
+import zio.lazagna.Setup
 
 object Main extends ZIOAppDefault {
 
@@ -30,24 +33,39 @@ object Main extends ZIOAppDefault {
 
   val drawingName = "test"
 
-  val eventStore = ZLayer.fromZIO(EventStore.indexedDB[DrawEvent,ArrayBuffer](s"events", s"${drawingName}-events", _.sequenceNr).flatMap(EventStore.cached))
+  val eventStore = ZLayer.fromZIO {
+    Setup.start {
+      for {
+        lock <- ZIO.service[SubscriptionRef[Boolean]]
+        store <- EventStore.indexedDB[DrawEvent,ArrayBuffer](s"events", lock, _.sequenceNr)
+        prunedStore <- EventStore.indexedDB[DrawEvent,ArrayBuffer](s"events-pruned", lock, _.sequenceNr)
+        pruned <- PrunedEventStore.make(store, prunedStore, lock)
+        cached <- EventStore.cached(pruned)
+      } yield cached
+    }
+  }
 
   val database = ZLayer.fromZIO(IndexedDB.open(s"drawing-${drawingName}", Schema(
-    CreateObjectStore("events")
+    CreateObjectStore("events"),
+    CreateObjectStore("events-pruned")
   )))
 
-  override def run = ZIO.scoped {
-    (for {
-      client <- ZIO.service[DrawingClient]
-      drawing <- client.login("jan", "jan", drawingName)
-      _ <- main.provideSome[Scope](ZLayer.succeed(drawing), DrawingTools.live, DrawingRenderer.live)
-      store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
-      _ = dom.console.log("Main is ready.")
-      _ <- ZIO.never // We don't want to exit main, since our background fibers do the real work.
-    } yield ExitCode.success)
-      .catchAllCause { cause =>
-      dom.console.log(cause.prettyPrint)
-      ZIO.succeed(ExitCode.failure)
-    }.provideSome[Scope](DrawingClient.live, DrawingClient.configTest, database, eventStore)
+  override def run = {
+    for {
+      writeLock <- ZLayer.fromZIO(Lock.makeAndLockExclusively(s"${drawingName}-writeLock")).memoize
+      _ <- (for {
+        client <- ZIO.service[DrawingClient]
+        drawing <- client.login("jan", "jan", drawingName)
+        _ <- main.provideSome[Scope](ZLayer.succeed(drawing), DrawingTools.live, DrawingRenderer.live)
+        store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
+        _ = dom.console.log("Main is ready.")
+        _ <- ZIO.never // We don't want to exit main, since our background fibers do the real work.
+      } yield ()).provideSome[Scope](
+        DrawingClient.live, DrawingClient.configTest, database, eventStore, writeLock
+      )
+    } yield ExitCode.success
+  }.catchAllCause { cause =>
+    dom.console.log(cause.prettyPrint)
+    ZIO.succeed(ExitCode.failure)
   }
 }

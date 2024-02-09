@@ -31,7 +31,6 @@ object DrawingClient {
   }
 
   val configTest = ZLayer.succeed {
-    println("Building config. Proto is " + dom.window.location.protocol)
     Config(dom.window.location.hostname, dom.window.location.port.toInt, dom.window.location.protocol == "https:", "api")
   }
 
