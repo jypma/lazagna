@@ -9,7 +9,7 @@ import zio.lazagna.dom.Element._
 import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Events._
 import zio.lazagna.dom.Modifier._
-import zio.lazagna.dom.svg.SVGOps
+import zio.lazagna.dom.svg.SVGHelper
 import zio.lazagna.dom.{Alternative, Modifier}
 import zio.stream.SubscriptionRef
 import zio.{Clock, Random, Ref, UIO, ZIO, ZLayer}
@@ -106,7 +106,7 @@ object DrawingTools {
   private def hand(drawing: Drawing, keyboard: Children) = Modifier.unwrap(for {
     dragStart <- Ref.make(Point(0,0))
   } yield {
-    SVGOps.coordinateHelper { helper =>
+    SVGHelper { helper =>
       Modifier.combine(
         onMouseDown.mapZIO { event =>
           val pos = helper.getClientPoint(event)
@@ -132,8 +132,13 @@ object DrawingTools {
             drawing.viewport.update(_.zoom(factor, pos.x, pos.y))
           },
         keyboard.child { _ =>
-          keyboardAction("f", "Fit into view",
-            drawing.viewport.update { _ .fit(helper.svg.getBBox()) }
+          div(
+            keyboardAction("f", "Fit into view",
+              drawing.viewport.update { _ .fit(helper.svg.getBBox()) }
+            ),
+            keyboardAction("e", "Export as SVG",
+              ZIO.succeed { helper.triggerSVGDownload() }
+            )
           )
         }
       )
@@ -154,7 +159,7 @@ object DrawingTools {
 
   def pencil(drawing: Drawing): Modifier = Modifier.unwrap(for {
     currentScribbleId <- Ref.make[Option[String]](None)
-  } yield SVGOps.coordinateHelper { helper =>
+  } yield SVGHelper { helper =>
     onMouseDown
       .filter { e => (e.buttons & 1) != 0 }
       .mapZIO(ev => makeUUID.flatMap(id => currentScribbleId.set(Some(id)).as(id)).map { id =>
