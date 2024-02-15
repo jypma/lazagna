@@ -36,7 +36,11 @@ object DrawingTools {
 
     div(
       cls := "hint",
-      div(cls := "key", textContent := keyName),
+      div(
+        cls := "key",
+        textContent := keyName,
+        onClick.mapZIO(_ => execute)
+      ),
       div(cls := "description", textContent := description),
       windowEvents(
         onKeyDown.filter { e =>
