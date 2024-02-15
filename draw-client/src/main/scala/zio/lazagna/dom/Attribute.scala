@@ -38,6 +38,7 @@ object Attribute {
   val name = Attribute("name")
   val checked = Attribute("checked")
   val tabindex = Attribute("tabindex")
+  val placeholder = Attribute("placeholder")
 
   // TODO: Allow combining of multiple Consumeable[_,String] to set className from several sources, using ZStream.zipLatestWith
   // Syntax would be a function Attribute.combine(Consumeable[_,String]*)

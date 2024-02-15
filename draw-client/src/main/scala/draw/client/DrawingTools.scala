@@ -17,23 +17,49 @@ import zio.{Clock, Random, Ref, UIO, ZIO, ZLayer}
 import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble}
 import draw.data.point.Point
 import org.scalajs.dom
+import zio.lazagna.dom.Element
+import zio.lazagna.dom.Children
 
 trait DrawingTools {
+  def renderKeyboard: Modifier
   def renderHandlers: Modifier
   def renderToolbox: Modifier
   def currentToolName: Consumeable[String]
 }
 
 object DrawingTools {
+  private def keyboardAction(key: String, description: String, execute: UIO[Unit]): Element[dom.Element] = {
+    val keyName = key match {
+      case "Escape" => "Esc"
+      case s => s.toUpperCase()
+    }
+
+    div(
+      cls := "hint",
+      div(cls := "key", textContent := keyName),
+      div(cls := "description", textContent := description),
+      windowEvents(
+        onKeyDown.filter { e =>
+          // The key is the one we're listening on:
+          (e.key == key) &&
+          // It's a function key, OR it's a normal key and we're not on an input element:
+          (e.key.length() > 1 || !e.target.isInstanceOf[dom.HTMLInputElement])
+        }.mapZIO(_ => execute)
+      )
+    )
+  }
+
   private case class Tool(name: String, hint: String, icon: String, render: Modifier)
 
-  val live = ZLayer.fromZIO {
+  val live = ZLayer.scoped {
     for {
       drawing <- ZIO.service[Drawing]
+      dialogs <- ZIO.service[Children]
+      keyboard <- Children.make
       tools = Seq(
         Tool("pencil", "Add pencil strokes", "✏️", pencil(drawing)),
-        Tool("pan", "Hand (move drawing)", "🫳", hand(drawing)),
-        Tool("note", "Add note", "📃", Modifier.empty),
+        Tool("pan", "Hand (move drawing)", "🫳", hand(drawing, keyboard)),
+        Tool("icon", "Add icon", "📃", icon(drawing, dialogs, keyboard)),
         Tool("eraser", "Eraser (delete items)", "🗑️", eraser(drawing))
       )
       selectedTool <- SubscriptionRef.make(tools(0))
@@ -56,6 +82,12 @@ object DrawingTools {
           )
         }
       )
+
+      override val renderKeyboard =
+        div(
+          cls := "keyboard-hints",
+          keyboard.render
+        )
     }
   }
 
@@ -71,41 +103,41 @@ object DrawingTools {
     Base64.getEncoder().encodeToString(uuid).take(22) // Remove the trailing ==
   }
 
-  def hand(drawing: Drawing): Modifier = Modifier.unwrap(for {
+  private def hand(drawing: Drawing, keyboard: Children) = Modifier.unwrap(for {
     dragStart <- Ref.make(Point(0,0))
-  } yield SVGOps.coordinateHelper { helper =>
-    Modifier.combine(
-      onMouseDown.mapZIO { event =>
-        val pos = helper.getClientPoint(event)
-        dragStart.set(Point(pos.x, pos.y))
-      },
-      onMouseMove
-        .filter { e => (e.buttons & 1) != 0 }
-        .mapZIO { event =>
+  } yield {
+    SVGOps.coordinateHelper { helper =>
+      Modifier.combine(
+        onMouseDown.mapZIO { event =>
           val pos = helper.getClientPoint(event)
-          for {
-            start <- dragStart.get
-            _ <- drawing.viewport.update(_.pan(start.x - pos.x, start.y - pos.y))
-          } yield ()
+          dragStart.set(Point(pos.x, pos.y))
         },
-      onWheel
-        .mapZIO { event =>
-          val factor = event.deltaMode match {
-            case 0 => (event.deltaY * 0.01) + 1
-            case 1 => (event.deltaY * 0.01) + 1
-            case _ => (event.deltaY * 0.01) + 1
-          }
-          val pos = helper.getClientPoint(event)
-          drawing.viewport.update(_.zoom(factor, pos.x, pos.y))
-        },
-      onKeyDown
-        .filter(_.key == "f")
-        .mapZIO { _ =>
-          val rect = helper.svg.getBBox();
-          dom.console.log(rect)
-          drawing.viewport.update(_.fit(rect))
+        onMouseMove
+          .filter { e => (e.buttons & 1) != 0 }
+          .mapZIO { event =>
+            val pos = helper.getClientPoint(event)
+            for {
+              start <- dragStart.get
+              _ <- drawing.viewport.update(_.pan(start.x - pos.x, start.y - pos.y))
+            } yield ()
+          },
+        onWheel
+          .mapZIO { event =>
+            val factor = event.deltaMode match {
+              case 0 => (event.deltaY * 0.01) + 1
+              case 1 => (event.deltaY * 0.01) + 1
+              case _ => (event.deltaY * 0.01) + 1
+            }
+            val pos = helper.getClientPoint(event)
+            drawing.viewport.update(_.zoom(factor, pos.x, pos.y))
+          },
+        keyboard.child { _ =>
+          keyboardAction("f", "Fit into view",
+            drawing.viewport.update { _ .fit(helper.svg.getBBox()) }
+          )
         }
-    )
+      )
+    }
   })
 
   def eraser(drawing: Drawing): Modifier = onMouseDown.merge(onMouseMove)
@@ -143,5 +175,31 @@ object DrawingTools {
       )
       .mapZIO(drawing.perform _)
   })
+
+  private def icon(drawing: Drawing, dialogs: Children, keyboard: Children): Modifier = {
+    val selectDialog = dialogs.prepareChild { close =>
+      div(
+        cls := "dialog icon-dialog",
+        div(
+          div(
+            input(typ := "text", placeholder := "Search icon...", focusNow)
+          ),
+          div(
+            cls := "results"
+          )
+        ),
+        keyboard.child { _ =>
+          keyboardAction("Escape", "Close dialog", close)
+        }
+      )
+    }
+
+    Modifier.combine(
+      selectDialog,
+      keyboard.child { _ =>
+        keyboardAction("t", "Select icon", selectDialog.create)
+      }
+    )
+  }
 
 }

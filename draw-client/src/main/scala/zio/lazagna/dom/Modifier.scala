@@ -12,6 +12,10 @@ trait Modifier {
 }
 
 object Modifier {
+  def apply(fn: dom.Element => ZIO[Scope, Nothing, Unit]) = new Modifier {
+    def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = fn(parent)
+  }
+
   /** Returns a Modifier that combines all of the given modifiers to mount into the same parent when mounted. */
   implicit def combine(modifiers: Iterable[Modifier]): Modifier = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {

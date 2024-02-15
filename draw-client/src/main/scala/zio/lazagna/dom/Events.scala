@@ -7,15 +7,15 @@ import zio.{Chunk, Hub, Ref, Scope, Unsafe, ZIO, ZLayer}
 
 import org.scalajs.dom
 
-type EventsEmitter[T] = ZStream[Scope with dom.Element, Nothing, T]
+type EventsEmitter[T] = ZStream[Scope with dom.EventTarget, Nothing, T]
 
 object Events {
   private def event[E <: dom.Event](eventType: String): EventsEmitter[E] = {
     type JsEventHandler = js.Function1[dom.Event, Unit]
 
-    ZStream.asyncScoped[Scope with dom.Element, Nothing, E] { cb =>
+    ZStream.asyncScoped[Scope with dom.EventTarget, Nothing, E] { cb =>
       for {
-        parent <- ZIO.service[dom.Element]
+        parent <- ZIO.service[dom.EventTarget]
         _ <- ZIO.acquireRelease {
           ZIO.succeed {
             val listener: JsEventHandler = { (event: dom.Event) =>
@@ -34,9 +34,13 @@ object Events {
   }
 
   /** Returns a Modifier that runs the current EventsEmitter (and its transformations) for side effects */
-  implicit def emitter2modifier[E](eventsEmitter: EventsEmitter[E]): Modifier = new Modifier {
-    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
+  implicit class EmitterAsModifier[E](eventsEmitter: EventsEmitter[E]) extends Modifier {
+    def mountEvents(parent: dom.EventTarget): ZIO[Scope, Nothing, Unit] = {
       eventsEmitter.provideSomeLayer[Scope](ZLayer.succeed(parent)).runDrain.forkScoped.unit
+    }
+
+    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
+      mountEvents(parent)
     }
   }
 
@@ -47,6 +51,24 @@ object Events {
     /** Returns a Modifier that runs this events emitter into the given ref when mounted */
     def -->(target: Ref[E]): Modifier = eventsEmitter.mapZIO(e => target.set(e))
 
+  }
+
+  /** Makes the included event handlers receive events for scalajs.dom.window (instead of their actual parent) */
+  def windowEvents(handlers: Modifier*): Modifier = rerouteEvents(dom.window, handlers)
+
+  /** Makes the included event handlers receive events for scalajs.dom.document (instead of their actual parent) */
+  def documentEvents(handlers: Modifier*): Modifier = rerouteEvents(dom.document, handlers)
+
+  private def rerouteEvents(target: dom.EventTarget, handlers: Seq[Modifier]): Modifier = {
+    Modifier.combine(handlers.map {
+      case m:EmitterAsModifier[_] => new Modifier {
+        override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
+          m.mountEvents(target)
+        }
+      }
+
+      case other => other
+    })
   }
 
   val onClick = event[dom.MouseEvent]("click")

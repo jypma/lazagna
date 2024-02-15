@@ -37,9 +37,17 @@ object Element {
   val textContent = TextContent
   val children = Children
 
-  def thisElementAs(fn: dom.Element => Modifier): Modifier = new Modifier {
-    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      fn.apply(parent).mount(parent)
+  def thisElementAs(fn: dom.Element => Modifier): Modifier = Modifier { parent =>
+    fn.apply(parent).mount(parent)
+  }
+
+  /** Sets keyboard focus on the parent element directly after creating it (by calling element.focus()) */
+  def focusNow: Modifier = Modifier {
+    _ match {
+      case e:dom.HTMLElement =>
+        ZIO.succeed(e.focus())
+      case _ =>
+        ZIO.unit
     }
   }
 

@@ -2,10 +2,42 @@ package zio.lazagna.dom
 
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable._
-import zio.{Exit, Ref, Scope, ZIO}
+import zio.lazagna.Consumeable.given
+import zio.{Exit, Ref, Scope, ZIO, UIO, Hub}
 
 import org.scalajs.dom
 
+/** A special Modifier that represents a child element, which might be created and destroyed
+  * at different times from when it is mounted. */
+trait Child extends Modifier {
+  /** Creates the child at the mounted position (if it's not already created). */
+  def create: UIO[Unit]
+  /** Destroys the child (if it has been currently created) */
+  def destroy: UIO[Unit]
+}
+
+/** Tracks a set of children of differing owner scopes, and renders them into a single parent. Children can be
+  * rendered into here while being owned from other places. */
+trait Children {
+  /** Renders the children into their actual location. This must be invoked before .child() has any effect. */
+  def render: Modifier
+
+  /** Adds the given element as a child, creating it where [render] was invoked. The child is present as long as
+    * the returned Modifier from this method is mounted (i.e. it is tied to that Modifier's
+    * scope). There are two other ways to destroy the child earlier:
+    * - The returned Child instance has a .destroy ZIO instance
+    * - The same "destroy" ZIO instance is also given as argument to the [creator] function, so it can be used in there.
+    */
+  def child[E <: dom.Element](creator: UIO[Unit] => Element[E]): Child
+
+  /** Prepares to add the given element as a child, creating it where [render] was invoked. The child is not
+    * created until .create() is invoked on it. See .child() for more information. */
+  def prepareChild[E <: dom.Element](element: UIO[Unit] => Element[E]): Child
+}
+
+/** Allows Element children to be directly added and removed by stream operations. If you're looking
+  * for a way to just directly set the children (or any other Modifier), without regards for re-use, look
+  * at Alternative.mountOne */
 object Children {
   /** An explicit diff operation that can be sent to a children-accepting modifier */
   sealed trait ChildOp
@@ -51,6 +83,7 @@ object Children {
     }
   }
 
+  /** Directly affects the children of this parent by the given stream of child operations */
   def <~~(content: Consumeable[ChildOp]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       // TODO: add sentinel
@@ -90,6 +123,36 @@ object Children {
               } yield ()
           }
         }.consume
+      }
+    }
+  }
+
+  /** Makes a receiver for child elements, which can be rendered into a different owner scope than the owner
+    * scope of the actual children. */
+  def make: UIO[Children] = for {
+    hub <- Hub.bounded[ChildOp](1)
+  } yield new Children {
+    def render: Modifier = Children <~~ hub
+
+    def child[E <: dom.Element](creator: UIO[Unit] => Element[E]) = makeChild(creator, true)
+
+    def prepareChild[E <: dom.Element](creator: UIO[Unit] => Element[E]) = makeChild(creator, false)
+
+    private def makeChild[E <: dom.Element](creator: UIO[Unit] => Element[E], initiallyCreate: Boolean) = new Child {
+      var element: Element[E] = null
+
+      val destroy = ZIO.unless(element == null)(
+        hub.publish(Children.Delete(element)) *>
+          ZIO.succeed{element = null}
+      ).unit
+
+      val create = ZIO.unless(element != null)(hub.publish {
+        element = creator(destroy)
+        Children.Append(element)
+      }).unit
+
+      def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
+        ZIO.acquireRelease(create.when(initiallyCreate))(_ => destroy).unit
       }
     }
   }

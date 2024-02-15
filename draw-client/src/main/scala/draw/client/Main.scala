@@ -14,6 +14,7 @@ import draw.data.drawevent.DrawEvent
 import org.scalajs.dom
 
 import scalajs.js.typedarray._
+import zio.lazagna.dom.Children
 
 object Main extends ZIOAppDefault {
 
@@ -21,8 +22,11 @@ object Main extends ZIOAppDefault {
     renderer <- ZIO.service[DrawingRenderer]
     drawing <- ZIO.service[Drawing]
     tools <- ZIO.service[DrawingTools]
+    dialogs <- ZIO.service[Children]
+    _ <- dialogs.render.mount(dom.document.querySelector("#dialogApp"))
     _ <- renderer.render.mount(dom.document.querySelector("#app"))
     _ <- tools.renderToolbox.mount(dom.document.querySelector("#toolboxApp"))
+    _ <- tools.renderKeyboard.mount(dom.document.querySelector("#keyboardApp"))
   } yield ()
 
   implicit val drawEventCodec: ValueCodec[DrawEvent, ArrayBuffer] = new ValueCodec[DrawEvent, ArrayBuffer] {
@@ -54,8 +58,9 @@ object Main extends ZIOAppDefault {
       writeLock <- ZLayer.fromZIO(Lock.makeAndLockExclusively(s"${drawingName}-writeLock")).memoize
       _ <- (for {
         client <- ZIO.service[DrawingClient]
+        dialogs <- Children.make
         drawing <- client.login("jan", "jan", drawingName)
-        _ <- main.provideSome[Scope](ZLayer.succeed(drawing), DrawingTools.live, DrawingRenderer.live)
+        _ <- main.provideSome[Scope](ZLayer.succeed(drawing), DrawingTools.live, DrawingRenderer.live, ZLayer.succeed(dialogs))
         store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
         _ = dom.console.log("Main is ready.")
         _ <- ZIO.never // We don't want to exit main, since our background fibers do the real work.
