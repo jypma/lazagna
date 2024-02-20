@@ -48,6 +48,7 @@ object Pruned {
         case e@DrawEvent(_, ScribbleDeleted(scribbleId, _), _, _, _) =>
           scribbles.get(scribbleId) match {
             case Some(DrawEvent(sequenceNr, _, _, _, _)) =>
+              // We don't need to keep the Deleted event itself, since we're removing all traces of the scribble.
               storage.delete(sequenceNr).as(copy(
                 scribbles = scribbles - scribbleId
               ))

@@ -32,7 +32,7 @@ trait Children {
 
   /** Prepares to add the given element as a child, creating it where [render] was invoked. The child is not
     * created until .create() is invoked on it. See .child() for more information. */
-  def prepareChild[E <: dom.Element](element: UIO[Unit] => Element[E]): Child
+  def prepareChild[E <: dom.Element](creator: UIO[Unit] => Element[E]): Child
 }
 
 /** Allows Element children to be directly added and removed by stream operations. If you're looking

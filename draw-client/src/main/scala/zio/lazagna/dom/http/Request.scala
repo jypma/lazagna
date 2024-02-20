@@ -13,7 +13,8 @@ object Request {
 
   case class ResponseHandler[T] private[http] (responseType: String, handle: dom.XMLHttpRequest => IO[RequestError, T])
   val AsString = ResponseHandler[String]("text", r => ZIO.succeed(r.response.toString))
-  val AsDynamicJSON = ResponseHandler[js.Dynamic]("json", r => ZIO.succeed(r.response.asInstanceOf[js.Dynamic]))
+  def JSONAs[T <: js.Any] = ResponseHandler[T]("json", r => ZIO.succeed(r.response.asInstanceOf[T]))
+  val AsDynamicJSON = JSONAs[js.Dynamic]
   val AsResponse = ResponseHandler[Response]("", r => ZIO.succeed(Response(r)))
 
   private def request[T](method: String, url: String, handler: ResponseHandler[T]): IO[RequestError, T] = {

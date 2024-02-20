@@ -2,8 +2,8 @@ package draw.client
 
 import zio.lazagna.Consumeable._
 import zio.lazagna.dom.Attribute._
-import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.tags._
+import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.{children, textContent}
 import zio.lazagna.dom.svg.PathData
 import zio.lazagna.dom.{Alternative, Modifier}
@@ -66,6 +66,7 @@ object DrawingRenderer {
 
                 Some(children.Append(
                   g(
+                    cls := "scribble",
                     id := s"scribble${scribbleId}",
                     path(
                       points

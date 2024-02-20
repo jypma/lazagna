@@ -4,7 +4,6 @@ import zio.{Scope, ZIO, ZLayer}
 
 import org.scalajs.dom
 
-// TODO: Investigate replacing with type alias to ZIO[dom.Element & Scope, Nothing, Unit]. That might be too weak though.
 trait Modifier {
   /** Returns a ZIO that applies this modifier to the visible DOM tree under the given parent and then returns. Any clean-up actions
     * that should be performed on unmount are tied to the given Scope. */

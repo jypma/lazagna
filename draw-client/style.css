@@ -14,21 +14,29 @@ body {
     width: 100%;
 }
 
-path {
+g.scribble path {
     fill: none;
     stroke: #000;
     stroke-width: 2px;
 }
 
-path.clickTarget {
-    fill: none;
+g.scribble path.clickTarget {
     stroke-width: 10px;
     opacity: 0;
+}
+
+use.icon {
+    width: 100;
+    height: 100;
 }
 
 .tool-eraser path.clickTarget:hover {
     stroke: #fff;
     opacity: 0.2;
+}
+
+.tool-icon.main {
+    cursor: crosshair;
 }
 
 .alternatives {
@@ -86,12 +94,34 @@ svg.tool-pan:active {
 .dialog {
     z-index: 3;
     position: fixed;
-    left: 50%;
-    top: 50%;
+    width: 100%;
+    height: 100%;
     display: flex;
     justify-content: center;
     flex-direction: column;
     text-align: center;
+    align-items: center;
+}
+
+.dialog > div {
+    background-color: #ADD7CD;
+    border: 2px solid black;
+    max-width: 1000px;
+    box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.5);
+    padding: 5px;
+}
+
+.icon-dialog .results {
+    width: 100%;
+    height: 100px;
+    overflow-y: scroll;
+    scrollbar-color: black black;
+}
+
+.icon-dialog .result {
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
 }
 
 .keyboard-hints {
@@ -117,6 +147,10 @@ svg.tool-pan:active {
 .keyboard-hints .description {
     display: inline;
     text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.5);
+}
+
+.icon-preview {
+    filter: opacity(50%);
 }
 
 .toolbox {

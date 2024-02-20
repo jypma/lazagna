@@ -60,7 +60,7 @@ object Main extends ZIOAppDefault {
         client <- ZIO.service[DrawingClient]
         dialogs <- Children.make
         drawing <- client.login("jan", "jan", drawingName)
-        _ <- main.provideSome[Scope](ZLayer.succeed(drawing), DrawingTools.live, DrawingRenderer.live, ZLayer.succeed(dialogs))
+        _ <- main.provideSome[Scope](ZLayer.succeed(drawing), DrawingTools.live, DrawingRenderer.live, ZLayer.succeed(dialogs), ZLayer.fromZIO(SymbolIndex.make))
         store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
         _ = dom.console.log("Main is ready.")
         _ <- ZIO.never // We don't want to exit main, since our background fibers do the real work.

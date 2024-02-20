@@ -19,6 +19,7 @@ case class Attribute(name: String) {
     }
   }
 
+  // TODO: Evidence magic to allow Double and Int here as well
   def <--(content: Consumeable[String]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       content.map { value =>
@@ -39,6 +40,9 @@ object Attribute {
   val checked = Attribute("checked")
   val tabindex = Attribute("tabindex")
   val placeholder = Attribute("placeholder")
+  val href = Attribute("href")
+  val list = Attribute("list")
+  val value = Attribute("value")
 
   // TODO: Allow combining of multiple Consumeable[_,String] to set className from several sources, using ZStream.zipLatestWith
   // Syntax would be a function Attribute.combine(Consumeable[_,String]*)

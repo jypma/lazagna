@@ -55,15 +55,21 @@ project server
 
 The latter will open the example at `http://localhost:5173/`, which you can open in your web browser. The example is currently fully offline, but a multi-user version with a small server backend is being planned and developed.
 
-# Notes
+## Icons
 
-## Manual layout
+Source: https://github.com/leungwensen/svg-icon
+-`npm install`
+- Copy packaged SVG icon symbol collections from `dist/sprite/symbol` to `public/symbols`
+
+## Notes
+
+### Manual layout
 - Widget has padding
 - Icon (or any widget, e.g. note), moveable at will (but keep padding in tact)
   -> Push and shove moving?
 - Arrows between widgets
 
-## Automatic layout
+### Automatic layout
 - Band
   -> weight on distance
   -> preferred angle

@@ -50,7 +50,14 @@ object Events {
 
     /** Returns a Modifier that runs this events emitter into the given ref when mounted */
     def -->(target: Ref[E]): Modifier = eventsEmitter.mapZIO(e => target.set(e))
+  }
 
+  implicit class EventsEmitterTargetOps[E <: dom.Event](eventsEmitter: EventsEmitter[E]) {
+    /** Maps the event to the event target's "value" property (assuming the target is a HTMLInputElement) */
+    def asTargetValue: EventsEmitter[String] = eventsEmitter.map(e => e.target match {
+      case e:dom.HTMLInputElement => e.value
+      case _ => ""
+    })
   }
 
   /** Makes the included event handlers receive events for scalajs.dom.window (instead of their actual parent) */
@@ -77,4 +84,5 @@ object Events {
   val onMouseMove = event[dom.MouseEvent]("mousemove")
   val onWheel = event[dom.WheelEvent]("wheel")
   val onKeyDown = event[dom.KeyboardEvent]("keydown")
+  val onInput = event[dom.InputEvent]("input")
 }

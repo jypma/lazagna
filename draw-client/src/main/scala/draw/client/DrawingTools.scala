@@ -4,9 +4,11 @@ import java.util.Base64
 
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable._
+import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element._
 import zio.lazagna.dom.Element.tags._
+import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Events._
 import zio.lazagna.dom.Modifier._
 import zio.lazagna.dom.svg.SVGHelper
@@ -19,6 +21,7 @@ import draw.data.point.Point
 import org.scalajs.dom
 import zio.lazagna.dom.Element
 import zio.lazagna.dom.Children
+import zio.Hub
 
 trait DrawingTools {
   def renderKeyboard: Modifier
@@ -59,18 +62,20 @@ object DrawingTools {
     for {
       drawing <- ZIO.service[Drawing]
       dialogs <- ZIO.service[Children]
+      index <- ZIO.service[SymbolIndex]
       keyboard <- Children.make
+      iconTool <- icon(drawing, dialogs, keyboard, index)
       tools = Seq(
         Tool("pencil", "Add pencil strokes", "✏️", pencil(drawing)),
         Tool("pan", "Hand (move drawing)", "🫳", hand(drawing, keyboard)),
-        Tool("icon", "Add icon", "📃", icon(drawing, dialogs, keyboard)),
+        Tool("icon", "Add icon", "🚶", iconTool),
         Tool("eraser", "Eraser (delete items)", "🗑️", eraser(drawing))
       )
       selectedTool <- SubscriptionRef.make(tools(0))
     } yield new DrawingTools {
       override def currentToolName = selectedTool.map(_.name)
 
-      override val renderHandlers = Alternative.mountOne(selectedTool)(_.render)
+      override val renderHandlers = Alternative.mountOneMemoized(selectedTool)(_.render)
 
       override val renderToolbox = div(
         cls := "toolbox",
@@ -164,6 +169,7 @@ object DrawingTools {
   def pencil(drawing: Drawing): Modifier = Modifier.unwrap(for {
     currentScribbleId <- Ref.make[Option[String]](None)
   } yield SVGHelper { helper =>
+    // FIXME: Don't emit an event until we've at least moved the mouse once (so there's something to draw and delete)
     onMouseDown
       .filter { e => (e.buttons & 1) != 0 }
       .mapZIO(ev => makeUUID.flatMap(id => currentScribbleId.set(Some(id)).as(id)).map { id =>
@@ -185,17 +191,47 @@ object DrawingTools {
       .mapZIO(drawing.perform _)
   })
 
-  private def icon(drawing: Drawing, dialogs: Children, keyboard: Children): Modifier = {
+  private val iconSize = 64
+
+  private def icon(drawing: Drawing, dialogs: Children, keyboard: Children, index: SymbolIndex) = for {
+    searchResult <- Hub.bounded[SymbolIndex.Result](1)
+    selectedIcon <- SubscriptionRef.make(SymbolRef.person)
+    cursorPos <- SubscriptionRef.make[Option[dom.SVGPoint]](None)
+  } yield {
     val selectDialog = dialogs.prepareChild { close =>
       div(
         cls := "dialog icon-dialog",
         div(
           div(
-            input(typ := "text", placeholder := "Search icon...", focusNow)
+            cls := "results",
+            Alternative.mountOne(searchResult) {
+              _.symbols.map { symbol =>
+                svg(
+                  cls := "result",
+                  tabindex := 0,
+                  use(
+                    svgTitle(textContent := symbol.name),
+                    href := symbol.href,
+                    cls := "icon",
+                    width := 24,
+                    height := 24
+                  ),
+                  (onClick.merge(onKeyDown.filter(_.key == "Enter"))).mapZIO { _ =>
+                    selectedIcon.set(symbol) *> close
+                  }
+                )
+              }
+            }
           ),
           div(
-            cls := "results"
-          )
+            input(typ := "text", placeholder := "Search icon...", list := "icon-dialog-list", focusNow, onInput.asTargetValue.mapZIO { text =>
+              println("Lookup" + text)
+              index.lookup(text).flatMap(searchResult.publish)
+            }),
+            datalist(id := "icon-dialog-list",
+              Alternative.mountOne(searchResult) { _.completions.map { s => option(value := s) } }
+            )
+          ),
         ),
         keyboard.child { _ =>
           keyboardAction("Escape", "Close dialog", close)
@@ -203,12 +239,25 @@ object DrawingTools {
       )
     }
 
-    Modifier.combine(
-      selectDialog,
-      keyboard.child { _ =>
-        keyboardAction("t", "Select icon", selectDialog.create)
-      }
-    )
+    SVGHelper { helper =>
+      Modifier.combine(
+        selectDialog,
+        onMouseMove.mapZIO { e =>
+          cursorPos.set(Some(helper.getClientPoint(e)))
+        },
+        keyboard.child { _ =>
+          keyboardAction("t", "Select icon", selectDialog.create)
+        },
+        use(
+          x <-- cursorPos.map(p => (p.map(_.x).getOrElse(-100000.0) - iconSize / 2).toString),
+          y <-- cursorPos.map(p => (p.map(_.y).getOrElse(-100000.0) - iconSize / 2).toString),
+          width := iconSize,
+          height := iconSize,
+          cls := "icon-preview",
+          href <-- selectedIcon.map(_.href),
+        )
+      )
+    }
   }
 
 }

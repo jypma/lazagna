@@ -13,8 +13,10 @@ import zio.{Exit, Ref, Scope, ZIO}
 import org.scalajs.dom
 
 object Alternative {
-  /** Selects from a potentially unlimited lists of alternative renders, based on an element T. Whenever the stream
-    * pushes a new T, the current render is fully replaced if T has changed. */
+  /** Selects from a potentially unlimited lists of alternative renders, based on an element T. Whenever the
+    * stream pushes a new T, the current render is fully replaced if T has changed.
+    *
+    * Renders of previous elements are discarded. */
   def mountOne[T](source: Consumeable[T])(render: T => Modifier): Modifier = {
     case class State(t: T, scope: Scope.Closeable)
 
@@ -38,6 +40,26 @@ object Alternative {
         }
       }
     }
+  }
+
+  /** Selects from a potentially unlimited lists of alternative renders, based on an element T. Whenever the stream
+    * pushes a new T, the current render is fully replaced if T has changed.
+    *
+    * Renders of previous elements are remembered and cached (with no current limit or eviction). */
+  def mountOneMemoized[T](source: Consumeable[T])(render: T => Modifier): Modifier = {
+    val stream = source
+      .changes
+      .mapAccum(Map.empty[T,Modifier]) { (map, t) =>
+        map.get(t) match {
+          case None =>
+            val r = render(t)
+            (map + (t -> r), r)
+          case Some(rendered) =>
+            (map, rendered)
+        }
+      }
+
+    mountOne(stream)(r => r)
   }
 
   /** Selects from a limited set of alternative renders. All renders are always mounted, but hidden using CSS.

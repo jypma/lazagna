@@ -10,6 +10,7 @@ case class Element[E <: dom.Element](target: E, children: Seq[Modifier]) extends
   }
 
   private[lazagna] def mount(parent: dom.Element, after: Option[dom.Element]): ZIO[Scope, Nothing, Unit] = {
+    // We mount the children after the parent, so it's guaranteed to be in the DOM tree.
     val mountChildren = ZIO.collectAll(children.map(_.mount(target)))
     ZIO.acquireRelease {
       ZIO.succeed {
@@ -59,6 +60,8 @@ object Element {
     val div = CreateFn("div")
     val input = CreateFn("input")
     val label = CreateFn("label")
+    val datalist = CreateFn("datalist")
+    val option = CreateFn("option")
   }
 
   object svgtags {
@@ -72,5 +75,9 @@ object Element {
     val g = CreateFn[dom.svg.G]("g")
     val path = CreateFn[dom.svg.Path]("path")
     val text = CreateFn[dom.svg.Text]("text")
+    val image = CreateFn[dom.svg.Image]("image")
+    val use = CreateFn[dom.svg.Use]("use")
+    /** The "title" tag, aliased to not conflict with the "title" attribute */
+    val svgTitle = CreateFn[dom.svg.Use]("title")
   }
 }
