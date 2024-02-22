@@ -51,7 +51,10 @@ object DrawingTools {
           (e.key == key) &&
           // It's a function key, OR it's a normal key and we're not on an input element:
           (e.key.length() > 1 || !e.target.isInstanceOf[dom.HTMLInputElement])
-        }.mapZIO(_ => execute)
+        }.mapZIO{_ =>
+          println(s"Running action for [${key}]")
+          execute
+        }
       )
     )
   }
@@ -75,7 +78,7 @@ object DrawingTools {
     } yield new DrawingTools {
       override def currentToolName = selectedTool.map(_.name)
 
-      override val renderHandlers = Alternative.mountOneMemoized(selectedTool)(_.render)
+      override val renderHandlers = Alternative.mountOne(selectedTool)(_.render)
 
       override val renderToolbox = div(
         cls := "toolbox",
@@ -157,7 +160,9 @@ object DrawingTools {
   def eraser(drawing: Drawing): Modifier = onMouseDown.merge(onMouseMove)
     .filter { e => (e.buttons & 1) != 0 }
     .map(_.target)
-    .collect { case elem: dom.Element => elem }
+    .collect { case elem: dom.Element =>
+      dom.console.log(elem)
+      elem }
     .map(_.parentNode)
     .collect {
       case parent:dom.Element if parent.id.startsWith("scribble") =>
@@ -216,7 +221,7 @@ object DrawingTools {
                     width := 24,
                     height := 24
                   ),
-                  (onClick.merge(onKeyDown.filter(_.key == "Enter"))).mapZIO { _ =>
+                  onClick.merge(onKeyDown.filter(_.key == "Enter")).mapZIO { _ =>
                     selectedIcon.set(symbol) *> close
                   }
                 )
@@ -225,7 +230,6 @@ object DrawingTools {
           ),
           div(
             input(typ := "text", placeholder := "Search icon...", list := "icon-dialog-list", focusNow, onInput.asTargetValue.mapZIO { text =>
-              println("Lookup" + text)
               index.lookup(text).flatMap(searchResult.publish)
             }),
             datalist(id := "icon-dialog-list",

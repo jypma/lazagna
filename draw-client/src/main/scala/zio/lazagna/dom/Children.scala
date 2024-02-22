@@ -81,13 +81,15 @@ object Children {
           (existingScope, this)
       }
     }
+
+    def closeAll = ZIO.collectAll(children.values.map(_._2.close(Exit.unit)))
   }
 
   /** Directly affects the children of this parent by the given stream of child operations */
+  // TEST: Close current scope when unmounted
   def <~~(content: Consumeable[ChildOp]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      // TODO: add sentinel
-      Ref.make(State()).flatMap { stateRef =>
+      ZIO.acquireRelease(Ref.make(State()))(_.get.flatMap(_.closeAll)).flatMap { stateRef =>
         content.mapZIO {
           _ match {
             case Append(elmt) =>

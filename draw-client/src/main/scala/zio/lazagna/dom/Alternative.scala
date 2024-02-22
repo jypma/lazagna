@@ -17,12 +17,14 @@ object Alternative {
     * stream pushes a new T, the current render is fully replaced if T has changed.
     *
     * Renders of previous elements are discarded. */
+
+  // TEST: Close current scope when unmounted
   def mountOne[T](source: Consumeable[T])(render: T => Modifier): Modifier = {
     case class State(t: T, scope: Scope.Closeable)
 
     Modifier.unwrap{
       for {
-        current <- Ref.make[Option[State]](None)
+        current <- ZIO.acquireRelease(Ref.make[Option[State]](None))(_.get.flatMap(_.map(_.scope.close(Exit.unit)).getOrElse(ZIO.unit)))
       } yield new Modifier {
         override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
           source.changes
