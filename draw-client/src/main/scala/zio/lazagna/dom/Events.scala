@@ -26,6 +26,7 @@ object Events {
           }
         } { listener =>
           ZIO.succeed {
+            cb(ZIO.fail(None))
             parent.removeEventListener(eventType, listener)
           }
         }
