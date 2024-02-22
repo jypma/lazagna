@@ -10,6 +10,8 @@ import org.scalajs.dom
 type EventsEmitter[T] = ZStream[Scope with dom.EventTarget, Nothing, T]
 
 object Events {
+  // TODO: Consider a redesign where we run all event handlers for a single scope on one fiber (through a new environment type)
+  // - Instead of .runDrain.forkScoped, we could merge all known streams into one fiber when mounting, perhaps through Startup
   // TEST: Events are unregistered when the scope closes
   private def event[E <: dom.Event](eventType: String): EventsEmitter[E] = {
     type JsEventHandler = js.Function1[dom.Event, Unit]
