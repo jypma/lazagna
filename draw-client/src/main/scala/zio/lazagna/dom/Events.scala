@@ -10,12 +10,10 @@ import org.scalajs.dom
 type EventsEmitter[T] = ZStream[Scope with dom.EventTarget, Nothing, T]
 
 object Events {
-  // TODO: See if we can do the event listening with just one fiber per scope, delegating into running handlers where necessary?
   // TEST: Events are unregistered when the scope closes
   private def event[E <: dom.Event](eventType: String): EventsEmitter[E] = {
     type JsEventHandler = js.Function1[dom.Event, Unit]
 
-    // Not asyncScoped, since we want the scope to control the stream, not the other way around.
     ZStream.unwrap {
       ZIO.service[Scope].map { scope =>
         ZStream.asyncZIO[Scope with dom.EventTarget, Nothing, E] { cb =>
@@ -45,8 +43,8 @@ object Events {
   implicit class EmitterAsModifier[E](eventsEmitter: EventsEmitter[E]) extends Modifier {
     def mountEvents(parent: dom.EventTarget): ZIO[Scope, Nothing, Unit] = {
       // forkScoped is slow here (stopping 1000 fibers from scope takes a long time).
-      // Instead, we only fork, and rely on the scope stopping causing the callback to stop the stream (and fiber) instead.
-      eventsEmitter.provideSomeLayer[Scope](ZLayer.succeed(parent)).runDrain.fork.unit
+      // Instead, we fork to the background, and rely on the scope stopping causing the callback to stop the stream (and fiber) instead.
+      eventsEmitter.provideSomeLayer[Scope](ZLayer.succeed(parent)).runDrain.forkDaemon.unit
     }
 
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
