@@ -15,6 +15,12 @@ import org.scalajs.dom
 
 import scalajs.js.typedarray._
 import zio.lazagna.dom.Children
+import zio.Chunk
+import zio.Fiber
+import zio.Exit
+import zio.stream.ZStream
+import zio.Schedule
+import zio.durationInt
 
 object Main extends ZIOAppDefault {
 
@@ -53,8 +59,29 @@ object Main extends ZIOAppDefault {
     CreateObjectStore("events-pruned")
   )))
 
+  var knownDone = Set.empty[Fiber.Runtime[_,_]]
+  def logFibers(fibers: Chunk[Fiber.Runtime[_,_]]): ZIO[Any,Nothing,Unit] = for {
+    fibersWithStatus <- ZIO.collectAll(fibers.map{f => f.status.map((f, _))})
+    newlyDone = fibersWithStatus.filter(_._2 == Fiber.Status.Done).map(_._1).toSet -- knownDone
+    runningCount = fibersWithStatus.count(_._2 != Fiber.Status.Done)
+    newlyWithResult <- ZIO.collectAll(newlyDone.map{f => f.poll.map((f, _))})
+    _ <- ZIO.collectAll(newlyWithResult.map {
+      case (fiber, Some(Exit.Failure(cause))) if !cause.isInterrupted =>
+        println(s"Fiber failed with ${cause}")
+        fiber.dump.flatMap(_.prettyPrint).map(println)
+      case _ =>
+        ZIO.unit
+    })
+  } yield {
+    knownDone = knownDone ++ newlyDone
+    println(s"Now ${runningCount} fibers.")
+  }
+
+  val dump = ZStream.repeatZIOWithSchedule(Fiber.roots, Schedule.spaced(2.seconds)).changes.mapZIO(logFibers).runDrain
+
   override def run = {
     for {
+      _ <- dump.fork
       writeLock <- ZLayer.fromZIO(Lock.makeAndLockExclusively(s"${drawingName}-writeLock")).memoize
       _ <- (for {
         client <- ZIO.service[DrawingClient]
