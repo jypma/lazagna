@@ -19,6 +19,12 @@ object CachedEventStore {
       // TODO: Remove these checks after we have tests
       if (sequenceNrs.size != sequenceNrs.toSet.size) {
         dom.console.log("Warning: cached duplicate sequenceNrs: " + sequenceNrs)
+        events.groupBy(store.getSequenceNr).filter(_._2.size > 1).foreach { (nr, events) =>
+          println(s"${nr}:")
+          for (e <- events) {
+            println(s"  ${e}")
+          }
+        }
       }
       if (sequenceNrs.sorted != sequenceNrs) {
         dom.console.log("Warning: sequenceNrs not sorted: " + sequenceNrs)

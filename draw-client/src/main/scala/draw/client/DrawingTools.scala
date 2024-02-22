@@ -52,7 +52,6 @@ object DrawingTools {
           // It's a function key, OR it's a normal key and we're not on an input element:
           (e.key.length() > 1 || !e.target.isInstanceOf[dom.HTMLInputElement])
         }.mapZIO{_ =>
-          println(s"Running action for [${key}]")
           execute
         }
       )
@@ -161,7 +160,6 @@ object DrawingTools {
     .filter { e => (e.buttons & 1) != 0 }
     .map(_.target)
     .collect { case elem: dom.Element =>
-      dom.console.log(elem)
       elem }
     .map(_.parentNode)
     .collect {
