@@ -3,7 +3,6 @@ package draw.client
 import java.util.Base64
 
 import zio.lazagna.Consumeable
-import zio.lazagna.Consumeable._
 import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element._
@@ -45,16 +44,14 @@ object DrawingTools {
         onClick.mapZIO(_ => execute)
       ),
       div(cls := "description", textContent := description),
-      windowEvents(
-        onKeyDown.filter { e =>
-          // The key is the one we're listening on:
-          (e.key == key) &&
-          // It's a function key, OR it's a normal key and we're not on an input element:
-          (e.key.length() > 1 || !e.target.isInstanceOf[dom.HTMLInputElement])
-        }.mapZIO{_ =>
-          execute
-        }
-      )
+      onKeyDown.toWindow.filter { e =>
+        // The key is the one we're listening on:
+        (e.key == key) &&
+        // It's a function key, OR it's a normal key and we're not on an input element:
+        (e.key.length() > 1 || !e.target.isInstanceOf[dom.HTMLInputElement])
+      }.mapZIO{_ =>
+        execute
+      }
     )
   }
 
