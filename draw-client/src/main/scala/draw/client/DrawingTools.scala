@@ -44,7 +44,7 @@ object DrawingTools {
         onClick.mapZIO(_ => execute)
       ),
       div(cls := "description", textContent := description),
-      onKeyDown.toWindow.filter { e =>
+      onKeyDown.forWindow.filter { e =>
         // The key is the one we're listening on:
         (e.key == key) &&
         // It's a function key, OR it's a normal key and we're not on an input element:

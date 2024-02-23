@@ -50,17 +50,19 @@ case class EventsEmitter[-E <: dom.Event, +T](
   // Merge implementation is rather slow, but we'll only be merging a few similar event emitters together (hopefully).
   def merge[T1 >: T](other: EventsEmitter[_,T1]): EventsEmitter[E,T1] = copy(others = others :+ other)
 
-  /** Maps the event to the event target's "value" property (assuming the target is a HTMLInputElement) */
+  /** Maps the event to the event target's "value" property (assuming the target is a DOM element with a String
+    * value property, e.g. input or textarea) */
   def asTargetValue(implicit ev: T <:< dom.Event): EventsEmitter[E, String] = map(e => e.target match {
     case e:dom.HTMLInputElement => e.value
+    case e:dom.HTMLTextAreaElement => e.value
     case _ => ""
   })
 
   /** Makes the included event handlers receive events for scalajs.dom.window (instead of their actual parent) */
-  def toWindow = copy(overrideTarget = Some(dom.window))
+  def forWindow: EventsEmitter[E,T] = copy(overrideTarget = Some(dom.window))
 
   /** Makes the included event handlers receive events for scalajs.dom.document (instead of their actual parent) */
-  def toDocument = copy(overrideTarget = Some(dom.document))
+  def forDocument: EventsEmitter[E,T] = copy(overrideTarget = Some(dom.document))
 
   def as[U](value: U): EventsEmitter[E, U] = map(_ => value)
 
