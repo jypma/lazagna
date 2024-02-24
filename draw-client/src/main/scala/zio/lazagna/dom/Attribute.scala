@@ -7,6 +7,8 @@ import zio.{Scope, ZIO}
 import org.scalajs.dom
 
 case class Attribute(name: String) {
+  import Attribute._
+
   def :=(value: Double): Modifier = :=(value.toString)
 
   def :=(value: Int): Modifier = :=(value.toString)
@@ -19,17 +21,26 @@ case class Attribute(name: String) {
     }
   }
 
-  // TODO: Evidence magic to allow Double and Int here as well
-  def <--(content: Consumeable[String]) = new Modifier {
+  def <--[T](content: Consumeable[T])(implicit ev: SafeToString[T]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       content.map { value =>
-        parent.setAttribute(name, value)
+        parent.setAttribute(name, value.toString)
       }.consume
     }
   }
 }
 
 object Attribute {
+  /** Marker trait that indicates values of these types can be set as attributes (by calling toString on them) */
+  sealed trait SafeToString[T]
+  object SafeToString {
+    implicit case object string extends SafeToString[String]
+    implicit case object int extends SafeToString[Int]
+    implicit case object long extends SafeToString[Long]
+    implicit case object float extends SafeToString[Float]
+    implicit case object double extends SafeToString[Double]
+  }
+
   val id = Attribute("id")
   val title = Attribute("title")
   val width = Attribute("width")
@@ -71,4 +82,5 @@ object Attribute {
   val viewBox = Attribute("viewBox")
   val overflow = Attribute("overflow")
   val preserveAspectRatio = Attribute("preserveAspectRatio")
+  val transform = Attribute("transform")
 }

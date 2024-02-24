@@ -30,9 +30,17 @@ use.icon {
     height: 100;
 }
 
-.tool-eraser path.clickTarget:hover {
+.tool-eraser path.clickTarget:hover, .tool-move path.clickTarget:hover {
     stroke: #fff;
     opacity: 0.2;
+}
+
+.tool-move path.clickTarget:hover {
+    cursor: move;
+}
+
+.tool-eraser path.clickTarget:hover {
+    cursor: crosshair;
 }
 
 .tool-icon.main {

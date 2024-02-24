@@ -12,6 +12,7 @@ message DrawCommandBody {
         StartScribble startScribble = 1;
         ContinueScribble continueScribble = 2;
         DeleteScribble deleteScribble = 3;
+        MoveObject moveObject = 4;
     }
 }
 
@@ -27,4 +28,9 @@ message ContinueScribble {
 
 message DeleteScribble {
     required string id = 1;
+}
+
+message MoveObject {
+    required string id = 1;
+    optional Point position = 2;
 }

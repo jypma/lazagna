@@ -1,6 +1,7 @@
 package draw.client
 
 import zio.lazagna.Consumeable._
+import zio.lazagna.dom.Attribute
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Element.svgtags._
@@ -10,7 +11,7 @@ import zio.lazagna.dom.{Alternative, Modifier}
 import zio.stream.{SubscriptionRef, ZPipeline}
 import zio.{Chunk, ZIO, ZLayer}
 
-import draw.data.drawevent.{DrawEvent, ScribbleContinued, ScribbleDeleted, ScribbleStarted}
+import draw.data.drawevent.{DrawEvent, ScribbleContinued, ScribbleDeleted, ScribbleStarted, ObjectMoved}
 import draw.data.point.Point
 import org.scalajs.dom
 
@@ -19,6 +20,27 @@ trait DrawingRenderer {
 }
 
 object DrawingRenderer {
+  case class ObjectTarget(id: String, position: Point)
+
+  val dataX = Attribute("data-x")
+  val dataY = Attribute("data-y")
+
+  /** Returns information about an object that might have been clicked as an event target */
+  def getTargetObject(event: dom.MouseEvent): Option[ObjectTarget] = {
+    Some(event)
+      .filter { e => (e.buttons & 1) != 0 }
+      .map(_.target)
+      .collect { case elem: dom.Element =>
+        elem }
+      .map(_.parentNode)
+      .collect {
+        case parent:dom.Element if parent.id.startsWith("scribble") =>
+          ObjectTarget(parent.id.substring("scribble".length), Point(
+            if (parent.hasAttribute("data-x")) parent.getAttribute("data-x").toDouble else 0,
+            if (parent.hasAttribute("data-y")) parent.getAttribute("data-y").toDouble else 0))
+      }
+  }
+
   val live = ZLayer.fromZIO {
     for {
       drawingTools <- ZIO.service[DrawingTools]
@@ -47,14 +69,15 @@ object DrawingRenderer {
             .map {
               case DrawEvent(sequenceNr, ScribbleStarted(scribbleId, startPoints, _), _, _, _) =>
                 val ID = scribbleId
-                val startData =
-                  startPoints.headOption.map(start => PathData.MoveTo(start.x, start.y)) ++
-                  startPoints.tail.map(pos => PathData.LineTo(pos.x, pos.y))
-                val points = d <-- drawing.eventsAfter(sequenceNr)
+                val furtherEvents = drawing.eventsAfter(sequenceNr)
                   .takeUntil(_ match {
                     case DrawEvent(_, ScribbleDeleted(ID, _), _, _, _) => true
                     case _ => false
                   })
+                val startData =
+                  startPoints.headOption.map(start => PathData.MoveTo(start.x, start.y)) ++
+                  startPoints.tail.map(pos => PathData.LineTo(pos.x, pos.y))
+                val points = d <-- furtherEvents
                   .collect { case DrawEvent(_, ScribbleContinued(ID, points, _), _, _, _) => points }
                   .map(_.map { pos => PathData.LineTo(pos.x, pos.y) })
                   .via(ZPipeline.prepend(Chunk(Chunk.empty))) // in order to also trigger render on the initial starting points
@@ -64,10 +87,16 @@ object DrawingRenderer {
                   }
                   .map(PathData.render)
 
+                val position = furtherEvents
+                  .collect { case DrawEvent(_, ObjectMoved(ID, Some(position), _), _, _, _) => position}
+
                 Some(children.Append(
                   g(
                     cls := "scribble",
                     id := s"scribble${scribbleId}",
+                    transform <-- position.map(p => s"translate(${p.x},${p.y})"),
+                    dataX <-- position.map(_.x),
+                    dataY <-- position.map(_.y),
                     path(
                       points
                     ),

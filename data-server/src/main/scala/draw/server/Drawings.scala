@@ -3,8 +3,8 @@ package draw.server
 import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Clock, IO, Ref, ZIO, ZLayer}
 
-import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble}
-import draw.data.drawevent.{DrawEvent,  ScribbleContinued, ScribbleDeleted, ScribbleStarted, DrawingCreated}
+import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble, MoveObject}
+import draw.data.drawevent.{DrawEvent,  ScribbleContinued, ScribbleDeleted, ScribbleStarted, DrawingCreated, ObjectMoved}
 import draw.data.point.Point
 
 import Drawings.DrawingError
@@ -45,6 +45,7 @@ case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Dra
           ))
 
         case DrawCommand(ContinueScribble(id, points, _), _) =>
+          // TODO: Verify scribble exists
           storage.update(_ :+ DrawEvent(
             0,
             ScribbleContinued(
@@ -54,9 +55,18 @@ case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Dra
           ))
 
         case DrawCommand(DeleteScribble(id, _), _) =>
+          // TODO: Verify scribble exists
           storage.update(_ :+ DrawEvent(
             0,
             ScribbleDeleted(id),
+            Some(now.toEpochMilli())
+          ))
+
+        case DrawCommand(MoveObject(id, Some(position), _), _) =>
+          // TODO: Verify object exists
+          storage.update(_ :+ DrawEvent(
+            0,
+            ObjectMoved(id, Some(position)),
             Some(now.toEpochMilli())
           ))
 

@@ -15,7 +15,7 @@ import zio.lazagna.dom.{Alternative, Modifier}
 import zio.stream.SubscriptionRef
 import zio.{Clock, Random, Ref, UIO, ZIO, ZLayer}
 
-import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble}
+import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble, MoveObject}
 import draw.data.point.Point
 import org.scalajs.dom
 import zio.lazagna.dom.Element
@@ -67,6 +67,7 @@ object DrawingTools {
       tools = Seq(
         Tool("pencil", "Add pencil strokes", "✏️", pencil(drawing)),
         Tool("pan", "Hand (move drawing)", "🫳", hand(drawing, keyboard)),
+        Tool("move", "Move (move objects)", "✣", moveTool(drawing)),
         Tool("icon", "Add icon", "🚶", iconTool),
         Tool("eraser", "Eraser (delete items)", "🗑️", eraser(drawing))
       )
@@ -154,17 +155,43 @@ object DrawingTools {
   })
 
   def eraser(drawing: Drawing): Modifier = onMouseDown.merge(onMouseMove)
-    .filter { e => (e.buttons & 1) != 0 }
-    .map(_.target)
-    .collect { case elem: dom.Element =>
-      elem }
-    .map(_.parentNode)
-    .collect {
-      case parent:dom.Element if parent.id.startsWith("scribble") =>
-        val id = parent.id.substring("scribble".length)
-        DrawCommand(DeleteScribble(id))
-      }
+    .map(DrawingRenderer.getTargetObject)
+    .collect { case Some(obj) => obj.id }
+    .map(id => DrawCommand(DeleteScribble(id)))
     .mapZIO(drawing.perform _)
+
+  case class MoveState(id: String, current: Point, start: Point)
+  def moveTool(drawing: Drawing): Modifier = Modifier.unwrap(for {
+    state <- Ref.make[Option[MoveState]](None)
+  } yield {
+    SVGHelper { helper =>
+      Modifier.combine(
+        onMouseDown.mapZIO { event =>
+          val pos = helper.getClientPoint(event)
+          (DrawingRenderer.getTargetObject(event)) match {
+            case Some(obj) =>
+              val g = event.target.asInstanceOf[dom.Element].parentNode.asInstanceOf[dom.SVGGElement]
+              val pos = helper.getClientPoint(event)
+              state.set(Some(MoveState(obj.id, obj.position, Point(pos.x, pos.y))))
+            case _ =>
+              ZIO.unit
+          }
+        },
+        onMouseUp.mapZIO { _ => state.set(None) },
+        onMouseMove
+          .filter { e => (e.buttons & 1) != 0 }
+          .mapZIO { e => state.get.map((_, e)) }
+          .collect {
+            case (Some(state), event) => (state, helper.getClientPoint(event))
+          }
+          .mapZIO { (state, pos) =>
+            val x = state.current.x + pos.x - state.start.x
+            val y = state.current.y + pos.y - state.start.y
+            drawing.perform(DrawCommand(MoveObject(state.id, Some(Point(x, y)))))
+          }
+      )
+    }
+  })
 
   def pencil(drawing: Drawing): Modifier = Modifier.unwrap(for {
     currentScribbleId <- Ref.make[Option[String]](None)

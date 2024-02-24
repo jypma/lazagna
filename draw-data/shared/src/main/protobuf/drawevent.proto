@@ -16,6 +16,7 @@ message DrawEventBody {
         ScribbleContinued scribbleContinued = 2;
         ScribbleDeleted scribbleDeleted = 3;
         DrawingCreated drawingCreated = 4;
+        ObjectMoved objectMoved = 5;
     }
 }
 
@@ -35,4 +36,9 @@ message ScribbleContinued {
 
 message ScribbleDeleted {
     required string id = 1;
+}
+
+message ObjectMoved {
+    required string id = 1;
+    optional Point position = 2;
 }
