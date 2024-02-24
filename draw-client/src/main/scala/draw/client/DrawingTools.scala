@@ -67,7 +67,7 @@ object DrawingTools {
       tools = Seq(
         Tool("pencil", "Add pencil strokes", "✏️", pencil(drawing)),
         Tool("pan", "Hand (move drawing)", "🫳", hand(drawing, keyboard)),
-        Tool("move", "Move (move objects)", "✣", moveTool(drawing)),
+        Tool("move", "Move (move objects)", "☈", moveTool(drawing)),
         Tool("icon", "Add icon", "🚶", iconTool),
         Tool("eraser", "Eraser (delete items)", "🗑️", eraser(drawing))
       )

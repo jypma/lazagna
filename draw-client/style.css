@@ -195,6 +195,7 @@ svg.tool-pan:active {
     align-items: center;
     justify-items: center;
 
+    color: black;
     background-color: #9AC3B1;
 }
 
@@ -208,8 +209,6 @@ svg.tool-pan:active {
 
 .tool > div > label {
     display: block;
-    width: 100%;
-    height: 100%;
     text-align: center;
     cursor: pointer;
 }
