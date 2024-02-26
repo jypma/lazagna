@@ -1,17 +1,16 @@
 package draw.client
 
 import zio.lazagna.Consumeable._
-import zio.lazagna.dom.Attribute
 import zio.lazagna.dom.Attribute._
-import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Element.svgtags._
+import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Element.{children, textContent}
 import zio.lazagna.dom.svg.PathData
-import zio.lazagna.dom.{Alternative, Modifier}
-import zio.stream.{SubscriptionRef, ZPipeline}
+import zio.lazagna.dom.{Alternative, Attribute, Modifier}
+import zio.stream.{SubscriptionRef, ZPipeline, ZStream}
 import zio.{Chunk, ZIO, ZLayer}
 
-import draw.data.drawevent.{DrawEvent, ScribbleContinued, ScribbleDeleted, ScribbleStarted, ObjectMoved}
+import draw.data.drawevent.{DrawEvent, IconCreated, ObjectDeleted, ObjectMoved, ScribbleContinued, ScribbleStarted}
 import draw.data.point.Point
 import org.scalajs.dom
 
@@ -21,6 +20,18 @@ trait DrawingRenderer {
 
 object DrawingRenderer {
   case class ObjectTarget(id: String, position: Point)
+  object ObjectTarget {
+    def apply(target: dom.Element): Option[ObjectTarget] = {
+      val id = target.id match {
+        case s if s.startsWith("scribble") => Some(s.substring("scribble".length))
+        case s if s.startsWith("icon") => Some(s.substring("icon".length))
+        case _ => None
+      }
+      id.map(i => ObjectTarget(i, Point(
+        if (target.hasAttribute("data-x")) target.getAttribute("data-x").toDouble else 0,
+        if (target.hasAttribute("data-y")) target.getAttribute("data-y").toDouble else 0)))
+    }
+  }
 
   val dataX = Attribute("data-x")
   val dataY = Attribute("data-y")
@@ -33,12 +44,8 @@ object DrawingRenderer {
       .collect { case elem: dom.Element =>
         elem }
       .map(_.parentNode)
-      .collect {
-        case parent:dom.Element if parent.id.startsWith("scribble") =>
-          ObjectTarget(parent.id.substring("scribble".length), Point(
-            if (parent.hasAttribute("data-x")) parent.getAttribute("data-x").toDouble else 0,
-            if (parent.hasAttribute("data-y")) parent.getAttribute("data-y").toDouble else 0))
-      }
+      .collect { case e:dom.Element => e }
+      .flatMap(ObjectTarget.apply(_))
   }
 
   val live = ZLayer.fromZIO {
@@ -71,7 +78,7 @@ object DrawingRenderer {
                 val ID = scribbleId
                 val furtherEvents = drawing.eventsAfter(sequenceNr)
                   .takeUntil(_ match {
-                    case DrawEvent(_, ScribbleDeleted(ID, _), _, _, _) => true
+                    case DrawEvent(_, ObjectDeleted(ID, _), _, _, _) => true
                     case _ => false
                   })
                 val startData =
@@ -107,11 +114,43 @@ object DrawingRenderer {
                   )
                 ))
 
-              case DrawEvent(_, ScribbleDeleted(id, _), _, _, _) =>
-                dom.document.getElementById(s"scribble${id}") match {
-                  case null => None
-                  case domElmt => Some(children.DeleteDOM(domElmt))
-                }
+              case DrawEvent(_, ObjectDeleted(id, _), _, _, _) =>
+                Option(dom.document.getElementById(s"scribble${id}")).orElse(
+                  Option(dom.document.getElementById(s"icon${id}"))).map(children.DeleteDOM(_))
+
+              case DrawEvent(sequenceNr, IconCreated(iconId, Some(startPos), Some(category), Some(name), _), _, _, _) =>
+                println("Got icon " + iconId)
+                val ID = iconId
+
+                val furtherEvents = drawing.eventsAfter(sequenceNr)
+                  .takeUntil(_ match {
+                    case DrawEvent(_, ObjectDeleted(ID, _), _, _, _) => true
+                    case _ => false
+                  })
+
+                val position = ZStream(startPos) ++ furtherEvents
+                  .collect { case DrawEvent(_, ObjectMoved(ID, Some(position), _), _, _, _) => position}
+
+                val symbol = SymbolRef(category = category, name = name)
+
+                Some(children.Append(
+                  g(
+                    cls := "icon",
+                    id := s"icon${iconId}",
+                    transform <-- position.map(p => s"translate(${p.x},${p.y})"),
+                    dataX <-- position.map(_.x),
+                    dataY <-- position.map(_.y),
+                    use(
+                      svgTitle(textContent := symbol.name),
+                      href := symbol.href,
+                      cls := "icon",
+                      width := 64, // TODO: share iconSize between preview in DrawingTools and actual rendering here. Probably share the rendering code itself.
+                      height := 64,
+                      x := -32,
+                      y := -32
+                    )
+                  )
+                ))
 
               case _ =>
                 None

@@ -3,24 +3,18 @@ package draw.client
 import scala.scalajs.js.typedarray.{ArrayBuffer, Int8Array}
 
 import zio.lazagna.Setup
+import zio.lazagna.dom.Children
 import zio.lazagna.dom.indexeddb.Schema.CreateObjectStore
 import zio.lazagna.dom.indexeddb.{IndexedDB, Schema, ValueCodec}
 import zio.lazagna.dom.weblocks.Lock
 import zio.lazagna.eventstore.{CachedEventStore, EventStore, IndexedDBEventStore, PrunedEventStore}
-import zio.stream.SubscriptionRef
-import zio.{ExitCode, Scope, ZIO, ZIOAppDefault, ZLayer}
+import zio.stream.{SubscriptionRef, ZStream}
+import zio.{Chunk, Exit, ExitCode, Fiber, Schedule, Scope, ZIO, ZIOAppDefault, ZLayer, durationInt}
 
 import draw.data.drawevent.DrawEvent
 import org.scalajs.dom
 
 import scalajs.js.typedarray._
-import zio.lazagna.dom.Children
-import zio.Chunk
-import zio.Fiber
-import zio.Exit
-import zio.stream.ZStream
-import zio.Schedule
-import zio.durationInt
 
 object Main extends ZIOAppDefault {
 

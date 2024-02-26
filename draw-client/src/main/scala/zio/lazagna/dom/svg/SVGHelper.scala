@@ -3,6 +3,7 @@ package zio.lazagna.dom.svg
 import zio.lazagna.dom.{Element, Modifier}
 
 import org.scalajs.dom
+
 import scalajs.js
 
 class SVGHelper(val svg: dom.svg.SVG) {

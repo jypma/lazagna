@@ -3,7 +3,7 @@ package zio.lazagna.dom
 import scala.scalajs.js
 
 import zio.stream.ZStream
-import zio.{Chunk, Hub, Ref, Scope, Unsafe, ZIO, ZLayer, UIO, Runtime}
+import zio.{Chunk, Hub, Ref, Runtime, Scope, UIO, Unsafe, ZIO, ZLayer}
 
 import org.scalajs.dom
 

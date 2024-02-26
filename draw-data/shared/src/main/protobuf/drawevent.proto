@@ -14,9 +14,10 @@ message DrawEventBody {
     oneof sealed_value {
         ScribbleStarted scribbleStarted = 1;
         ScribbleContinued scribbleContinued = 2;
-        ScribbleDeleted scribbleDeleted = 3;
+        ObjectDeleted objectDeleted = 3;
         DrawingCreated drawingCreated = 4;
         ObjectMoved objectMoved = 5;
+        IconCreated iconCreated = 6;
     }
 }
 
@@ -34,11 +35,18 @@ message ScribbleContinued {
     repeated Point points = 2;
 }
 
-message ScribbleDeleted {
+message ObjectDeleted {
     required string id = 1;
 }
 
 message ObjectMoved {
     required string id = 1;
     optional Point position = 2;
+}
+
+message IconCreated {
+    required string id = 1;
+    optional Point position = 2;
+    optional string category = 3;
+    optional string name = 4;
 }

@@ -35,11 +35,15 @@ use.icon {
     opacity: 0.2;
 }
 
-.tool-move path.clickTarget:hover {
+.tool-eraser use.icon:hover, .tool-move use.icon:hover {
+  filter: drop-shadow(0px 0px 10px rgba(255, 255, 255, 0.9));
+}
+
+.tool-move path.clickTarget:hover, .tool-move use.icon:hover {
     cursor: move;
 }
 
-.tool-eraser path.clickTarget:hover {
+.tool-eraser path.clickTarget:hover, .tool-eraser use.icon:hover {
     cursor: crosshair;
 }
 

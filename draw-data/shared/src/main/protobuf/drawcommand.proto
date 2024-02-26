@@ -11,8 +11,9 @@ message DrawCommandBody {
     oneof sealed_value {
         StartScribble startScribble = 1;
         ContinueScribble continueScribble = 2;
-        DeleteScribble deleteScribble = 3;
+        DeleteObject deleteObject = 3;
         MoveObject moveObject = 4;
+        CreateIcon createIcon = 5;
     }
 }
 
@@ -26,11 +27,18 @@ message ContinueScribble {
     repeated Point points = 2;
 }
 
-message DeleteScribble {
+message DeleteObject {
     required string id = 1;
 }
 
 message MoveObject {
     required string id = 1;
     optional Point position = 2;
+}
+
+message CreateIcon {
+    required string id = 1;
+    required Point position = 2;
+    required string category = 3;
+    required string name = 4;
 }

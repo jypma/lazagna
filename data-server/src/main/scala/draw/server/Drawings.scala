@@ -1,15 +1,15 @@
 package draw.server
 
+import scala.collection.Searching.{Found, InsertionPoint}
+
 import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Clock, IO, Ref, ZIO, ZLayer}
 
-import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble, MoveObject}
-import draw.data.drawevent.{DrawEvent,  ScribbleContinued, ScribbleDeleted, ScribbleStarted, DrawingCreated, ObjectMoved}
+import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, MoveObject, StartScribble}
+import draw.data.drawevent.{DrawEvent, DrawingCreated, IconCreated, ObjectDeleted, ObjectMoved, ScribbleContinued, ScribbleStarted}
 import draw.data.point.Point
 
 import Drawings.DrawingError
-import scala.collection.Searching.Found
-import scala.collection.Searching.InsertionPoint
 
 trait Drawing {
   def perform(command: DrawCommand): ZIO[Any, DrawingError, Unit]
@@ -54,19 +54,26 @@ case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Dra
             Some(now.toEpochMilli())
           ))
 
-        case DrawCommand(DeleteScribble(id, _), _) =>
-          // TODO: Verify scribble exists
+        case DrawCommand(DeleteObject(id, _), _) =>
+          // TODO: Verify scribble OR icon exists
           storage.update(_ :+ DrawEvent(
             0,
-            ScribbleDeleted(id),
+            ObjectDeleted(id),
             Some(now.toEpochMilli())
           ))
 
         case DrawCommand(MoveObject(id, Some(position), _), _) =>
-          // TODO: Verify object exists
+          // TODO: Verify scribble OR icon exists
           storage.update(_ :+ DrawEvent(
             0,
             ObjectMoved(id, Some(position)),
+            Some(now.toEpochMilli())
+          ))
+
+        case DrawCommand(CreateIcon(id, position, category, name, _), _) =>
+          storage.update(_ :+ DrawEvent(
+            0,
+            IconCreated(id, Some(position), Some(category), Some(name)),
             Some(now.toEpochMilli())
           ))
 

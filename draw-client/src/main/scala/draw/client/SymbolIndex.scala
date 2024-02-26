@@ -1,10 +1,10 @@
 package draw.client
 
+import scala.scalajs.js
+
 import zio.lazagna.dom.http.Request
 import zio.lazagna.dom.http.Request._
-import scala.scalajs.js
-import zio.UIO
-import zio.ZIO
+import zio.{UIO, ZIO}
 
 trait SymbolIndex {
   def lookup(text: String): UIO[SymbolIndex.Result]

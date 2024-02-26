@@ -6,8 +6,8 @@ import zio.stream.SubscriptionRef
 
 import draw.data.drawcommand.DrawCommand
 import draw.data.drawevent.DrawEvent
-import org.scalajs.dom.SVGRect
 import org.scalajs.dom
+import org.scalajs.dom.SVGRect
 
 trait Drawing {
   def connectionStatus: Consumeable[Drawing.ConnectionStatus]

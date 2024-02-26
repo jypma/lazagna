@@ -6,21 +6,18 @@ import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element._
-import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Element.svgtags._
+import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Events._
 import zio.lazagna.dom.Modifier._
 import zio.lazagna.dom.svg.SVGHelper
-import zio.lazagna.dom.{Alternative, Modifier}
+import zio.lazagna.dom.{Alternative, Children, Element, Modifier}
 import zio.stream.SubscriptionRef
-import zio.{Clock, Random, Ref, UIO, ZIO, ZLayer}
+import zio.{Clock, Hub, Random, Ref, UIO, ZIO, ZLayer}
 
-import draw.data.drawcommand.{ContinueScribble, DeleteScribble, DrawCommand, StartScribble, MoveObject}
+import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, MoveObject, StartScribble}
 import draw.data.point.Point
 import org.scalajs.dom
-import zio.lazagna.dom.Element
-import zio.lazagna.dom.Children
-import zio.Hub
 
 trait DrawingTools {
   def renderKeyboard: Modifier
@@ -157,7 +154,7 @@ object DrawingTools {
   def eraser(drawing: Drawing): Modifier = onMouseDown.merge(onMouseMove)
     .map(DrawingRenderer.getTargetObject)
     .collect { case Some(obj) => obj.id }
-    .map(id => DrawCommand(DeleteScribble(id)))
+    .map(id => DrawCommand(DeleteObject(id)))
     .mapZIO(drawing.perform _)
 
   case class MoveState(id: String, current: Point, start: Point)
@@ -274,6 +271,16 @@ object DrawingTools {
         keyboard.child { _ =>
           keyboardAction("t", "Select icon", selectDialog.create)
         },
+        onMouseDown
+          .filter(_.button == 0)
+          .mapZIO { e =>
+            for {
+              symbol <- selectedIcon.get
+              id <- makeUUID
+              pos = helper.getClientPoint(e)
+              _ <- drawing.perform(DrawCommand(CreateIcon(id, Point(pos.x, pos.y), symbol.category, symbol.name)))
+            } yield {}
+          },
         use(
           x <-- cursorPos.map(p => (p.map(_.x).getOrElse(-100000.0) - iconSize / 2).toString),
           y <-- cursorPos.map(p => (p.map(_.y).getOrElse(-100000.0) - iconSize / 2).toString),

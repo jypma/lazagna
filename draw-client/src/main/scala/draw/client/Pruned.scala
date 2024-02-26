@@ -3,7 +3,7 @@ package draw.client
 import zio.ZIO
 import zio.lazagna.eventstore.EventStore
 
-import draw.data.drawevent.{DrawEvent, ScribbleContinued, ScribbleDeleted, ScribbleStarted, ObjectMoved}
+import draw.data.drawevent.{DrawEvent, IconCreated, ObjectDeleted, ObjectMoved, ScribbleContinued, ScribbleStarted}
 import org.scalajs.dom
 
 object Pruned {
@@ -11,21 +11,34 @@ object Pruned {
   type Err = dom.DOMException | dom.ErrorEvent
   type Backend = EventStore[E, Err]
 
-  case class ScribbleState(started: DrawEvent, moved: Option[DrawEvent]) {
+  case class ScribbleState(started: DrawEvent, moved: Option[DrawEvent])
+  case class IconState(started: DrawEvent, moved: Option[DrawEvent])
 
-  }
-
-  case class State(scribbles: Map[String, ScribbleState] = Map.empty) {
+  case class State(
+    scribbles: Map[String, ScribbleState] = Map.empty,
+    icons: Map[String, IconState] = Map.empty
+  ) {
     private def update(scribbleId: String, state: ScribbleState) = copy(
       scribbles = scribbles + (scribbleId -> state)
+    )
+
+    private def update(iconId: String, state: IconState) = copy(
+      icons = icons + (iconId -> state)
     )
 
     /** Apply an already pruned event from storage */
     def recover(event: DrawEvent): State = {
       event match {
         case e@DrawEvent(_, ScribbleStarted(scribbleId, _, _), _, _, _) =>
-          copy(scribbles = scribbles + (scribbleId -> ScribbleState(e, None)))
-        case _ =>
+          update(scribbleId, ScribbleState(e, None))
+        case e@DrawEvent(_, IconCreated(id, _, _, _, _), _, _, _) =>
+          update(id, IconState(e, None))
+        case e@DrawEvent(_, ObjectMoved(id, _, _), _, _, _) if scribbles.contains(id) =>
+          update(id, scribbles(id).copy(moved = Some(e)))
+        case e@DrawEvent(_, ObjectMoved(id, _, _), _, _, _) if icons.contains(id) =>
+          update(id, icons(id).copy(moved = Some(e)))
+        case other =>
+          println("??? Unexpected recovery event: " + other)
           this
       }
     }
@@ -56,33 +69,51 @@ object Pruned {
               )
           }
 
-        case DrawEvent(_, ScribbleDeleted(scribbleId, _), _, _, _) =>
-          scribbles.get(scribbleId) match {
+        case e@DrawEvent(_, IconCreated(id, _, _, _, _), _, _, _) =>
+          storage.publish(e).as(
+            update(id, IconState(e, None))
+          )
+
+        case DrawEvent(_, ObjectDeleted(id, _), _, _, _) =>
+          scribbles.get(id) match {
             case Some(ScribbleState(DrawEvent(sequenceNr, _, _, _, _), moved)) =>
               // We don't need to keep the Deleted event itself, since we're removing all traces of the scribble.
               val deleteMoved = moved.map(m => storage.delete(m.sequenceNr)).getOrElse(ZIO.unit)
               (storage.delete(sequenceNr) *> deleteMoved).as(copy(
-                scribbles = scribbles - scribbleId
+                scribbles = scribbles - id
               ))
             case _ =>
               ZIO.succeed(this)
           }
 
-        case e@DrawEvent(_, ObjectMoved(scribbleId, Some(position), _), _, _, _) =>
-          scribbles.get(scribbleId) match {
+        case e@DrawEvent(_, ObjectMoved(id, Some(position), _), _, _, _) =>
+          scribbles.get(id) match {
             case Some(ScribbleState(started, Some(DrawEvent(oldSequenceNr, _, _, _, _)))) =>
               storage.publishAndReplace(e, oldSequenceNr).as(
-                update(scribbleId, ScribbleState(started, Some(e)))
+                update(id, ScribbleState(started, Some(e)))
               )
 
             case Some(ScribbleState(started, _)) =>
               storage.publish(e).as(
-                update(scribbleId, ScribbleState(started, Some(e)))
+                update(id, ScribbleState(started, Some(e)))
               )
 
             case _ =>
-              println("??? Moved without started")
-              ZIO.succeed(this)
+              icons.get(id) match {
+                case Some(IconState(started, Some(DrawEvent(oldSequenceNr, _, _, _, _)))) =>
+                  storage.publishAndReplace(e, oldSequenceNr).as(
+                    update(id, IconState(started, Some(e)))
+                  )
+
+                case Some(IconState(started, _)) =>
+                  storage.publish(e).as(
+                    update(id, IconState(started, Some(e)))
+                  )
+
+                case _ =>
+                  println("??? Moved without started")
+                  ZIO.succeed(this)
+              }
           }
 
         case other =>
@@ -92,3 +123,4 @@ object Pruned {
     } yield res
   }
 }
+// ??? Ignoring DrawEvent(165,IconCreated(AY3kIx6Ye/eHRhv2eTAk1g,Some(Point(146.1878662109375,267.2578430175781,UnknownFieldSet(Map()))),Some(elusive),Some(elusive-person),UnknownFieldSet(Map())),Some(1708929523355),None,UnknownFieldSet(Map()))
