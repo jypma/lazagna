@@ -18,6 +18,8 @@ import zio.{Clock, Hub, Random, Ref, UIO, ZIO, ZLayer}
 import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, MoveObject, StartScribble}
 import draw.data.point.Point
 import org.scalajs.dom
+import draw.client.DrawingRenderer.ObjectTarget
+import zio.Scope
 
 trait DrawingTools {
   def renderKeyboard: Modifier
@@ -27,7 +29,7 @@ trait DrawingTools {
 }
 
 object DrawingTools {
-  private def keyboardAction(key: String, description: String, execute: UIO[Unit]): Element[dom.Element] = {
+  private def keyboardAction(key: String, description: String, execute: ZIO[Scope, Nothing, Unit]): Element[dom.Element] = {
     val keyName = key match {
       case "Escape" => "Esc"
       case s => s.toUpperCase()
@@ -115,13 +117,13 @@ object DrawingTools {
     SVGHelper { helper =>
       Modifier.combine(
         onMouseDown.mapZIO { event =>
-          val pos = helper.getClientPoint(event)
+          val pos = helper.screenToLocal(event)
           dragStart.set(Point(pos.x, pos.y))
         },
         onMouseMove
           .filter { e => (e.buttons & 1) != 0 }
           .mapZIO { event =>
-            val pos = helper.getClientPoint(event)
+            val pos = helper.screenToLocal(event)
             for {
               start <- dragStart.get
               _ <- drawing.viewport.update(_.pan(start.x - pos.x, start.y - pos.y))
@@ -134,10 +136,10 @@ object DrawingTools {
               case 1 => (event.deltaY * 0.01) + 1
               case _ => (event.deltaY * 0.01) + 1
             }
-            val pos = helper.getClientPoint(event)
+            val pos = helper.screenToLocal(event)
             drawing.viewport.update(_.zoom(factor, pos.x, pos.y))
           },
-        keyboard.child { _ =>
+        keyboard.addChild { _ =>
           div(
             keyboardAction("f", "Fit into view",
               drawing.viewport.update { _ .fit(helper.svg.getBBox()) }
@@ -164,11 +166,11 @@ object DrawingTools {
     SVGHelper { helper =>
       Modifier.combine(
         onMouseDown.mapZIO { event =>
-          val pos = helper.getClientPoint(event)
+          val pos = helper.screenToLocal(event)
           (DrawingRenderer.getTargetObject(event)) match {
             case Some(obj) =>
               val g = event.target.asInstanceOf[dom.Element].parentNode.asInstanceOf[dom.SVGGElement]
-              val pos = helper.getClientPoint(event)
+              val pos = helper.screenToLocal(event)
               state.set(Some(MoveState(obj.id, obj.position, Point(pos.x, pos.y))))
             case _ =>
               ZIO.unit
@@ -179,7 +181,7 @@ object DrawingTools {
           .filter { e => (e.buttons & 1) != 0 }
           .mapZIO { e => state.get.map((_, e)) }
           .collect {
-            case (Some(state), event) => (state, helper.getClientPoint(event))
+            case (Some(state), event) => (state, helper.screenToLocal(event))
           }
           .mapZIO { (state, pos) =>
             val x = state.current.x + pos.x - state.start.x
@@ -197,7 +199,7 @@ object DrawingTools {
     onMouseDown
       .filter { e => (e.buttons & 1) != 0 }
       .mapZIO(ev => makeUUID.flatMap(id => currentScribbleId.set(Some(id)).as(id)).map { id =>
-        val pos = helper.getClientPoint(ev)
+        val pos = helper.screenToLocal(ev)
         DrawCommand(StartScribble(id, Some(Point(pos.x, pos.y))))
       })
       .merge(
@@ -206,7 +208,7 @@ object DrawingTools {
           .mapZIO(ev => currentScribbleId.get.map((_, ev)))
           .collect { case (Some(id), ev) => (id, ev) }
           .map { (id, ev) =>
-            val pos = helper.getClientPoint(ev)
+            val pos = helper.screenToLocal(ev)
             DrawCommand(ContinueScribble(id, Seq(Point(pos.x, pos.y))))
           }
       ).merge(
@@ -222,7 +224,7 @@ object DrawingTools {
     selectedIcon <- SubscriptionRef.make(SymbolRef.person)
     cursorPos <- SubscriptionRef.make[Option[dom.SVGPoint]](None)
   } yield {
-    val selectDialog = dialogs.prepareChild { close =>
+    val selectDialog = dialogs.child { close =>
       div(
         cls := "dialog icon-dialog",
         div(
@@ -256,7 +258,7 @@ object DrawingTools {
             )
           ),
         ),
-        keyboard.child { _ =>
+        keyboard.addChild { _ =>
           keyboardAction("Escape", "Close dialog", close)
         }
       )
@@ -264,12 +266,11 @@ object DrawingTools {
 
     SVGHelper { helper =>
       Modifier.combine(
-        selectDialog,
         onMouseMove.mapZIO { e =>
-          cursorPos.set(Some(helper.getClientPoint(e)))
+          cursorPos.set(Some(helper.screenToLocal(e)))
         },
-        keyboard.child { _ =>
-          keyboardAction("t", "Select icon", selectDialog.create)
+        keyboard.addChild { _ =>
+          keyboardAction("t", "Select icon", selectDialog)
         },
         onMouseDown
           .filter(_.button == 0)
@@ -277,7 +278,7 @@ object DrawingTools {
             for {
               symbol <- selectedIcon.get
               id <- makeUUID
-              pos = helper.getClientPoint(e)
+              pos = helper.screenToLocal(e)
               _ <- drawing.perform(DrawCommand(CreateIcon(id, Point(pos.x, pos.y), symbol.category, symbol.name)))
             } yield {}
           },

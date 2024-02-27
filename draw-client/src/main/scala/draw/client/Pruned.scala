@@ -75,15 +75,23 @@ object Pruned {
           )
 
         case DrawEvent(_, ObjectDeleted(id, _), _, _, _) =>
+          // We don't need to keep the Deleted event itself, since we're removing all traces of the object.
           scribbles.get(id) match {
             case Some(ScribbleState(DrawEvent(sequenceNr, _, _, _, _), moved)) =>
-              // We don't need to keep the Deleted event itself, since we're removing all traces of the scribble.
               val deleteMoved = moved.map(m => storage.delete(m.sequenceNr)).getOrElse(ZIO.unit)
               (storage.delete(sequenceNr) *> deleteMoved).as(copy(
                 scribbles = scribbles - id
               ))
             case _ =>
-              ZIO.succeed(this)
+              icons.get(id) match {
+                case Some(IconState(DrawEvent(sequenceNr, _, _, _, _), moved)) =>
+                  val deleteMoved = moved.map(m => storage.delete(m.sequenceNr)).getOrElse(ZIO.unit)
+                  (storage.delete(sequenceNr) *> deleteMoved).as(copy(
+                    icons = icons - id
+                  ))
+                case _ =>
+                  ZIO.succeed(this)
+              }
           }
 
         case e@DrawEvent(_, ObjectMoved(id, Some(position), _), _, _, _) =>
@@ -123,4 +131,3 @@ object Pruned {
     } yield res
   }
 }
-// ??? Ignoring DrawEvent(165,IconCreated(AY3kIx6Ye/eHRhv2eTAk1g,Some(Point(146.1878662109375,267.2578430175781,UnknownFieldSet(Map()))),Some(elusive),Some(elusive-person),UnknownFieldSet(Map())),Some(1708929523355),None,UnknownFieldSet(Map()))

@@ -5,16 +5,23 @@ import zio.lazagna.dom.{Element, Modifier}
 import org.scalajs.dom
 
 import scalajs.js
+import draw.data.point.Point
 
 class SVGHelper(val svg: dom.svg.SVG) {
   val pt = svg.createSVGPoint()
 
   /** Converts client mouse coordinates into local SVG coordinates */
-  def getClientPoint(event: dom.MouseEvent): dom.SVGPoint = {
+  def screenToLocal(event: dom.MouseEvent): dom.SVGPoint = {
     pt.x = event.clientX
     pt.y = event.clientY
 
     pt.matrixTransform(svg.getScreenCTM().inverse())
+  }
+
+  def localToScreen(point: Point): dom.SVGPoint = {
+    pt.x = point.x;
+    pt.y = point.y;
+    pt.matrixTransform(svg.getScreenCTM())
   }
 
   def triggerSVGDownload(): Unit = {

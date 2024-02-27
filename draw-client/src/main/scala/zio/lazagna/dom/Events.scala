@@ -3,14 +3,14 @@ package zio.lazagna.dom
 import scala.scalajs.js
 
 import zio.stream.ZStream
-import zio.{Chunk, Hub, Ref, Runtime, Scope, UIO, Unsafe, ZIO, ZLayer}
+import zio.{Chunk, Hub, Ref, Runtime, Scope, Unsafe, ZIO, ZLayer}
 
 import org.scalajs.dom
 
 /** Emits events from DOM objects, in a push-fashion. Operators have the same semantics as ZStream. */
 case class EventsEmitter[-E <: dom.Event, +T](
   eventType: String,
-  fn: E => UIO[Option[T]] = {(e:E) => ZIO.succeed(Some(e)) },
+  fn: E => ZIO[Scope,Nothing,Option[T]] = {(e:E) => ZIO.succeed(Some(e)) },
   overrideTarget: Option[dom.EventTarget] = None,
   others: Seq[EventsEmitter[_,T]] = Seq.empty
 ) {
@@ -84,7 +84,7 @@ case class EventsEmitter[-E <: dom.Event, +T](
     others = others.map(_.filter(p))
   )
 
-  def mapZIO[U](f: T => UIO[U]): EventsEmitter[E, U] = copy(
+  def mapZIO[U](f: T => ZIO[Scope,Nothing,U]): EventsEmitter[E, U] = copy(
     fn = e => fn(e).flatMap {_ match {
       case Some(t) => f(t).map(Some(_))
       case _ => ZIO.succeed(None)
@@ -111,22 +111,24 @@ case class EventsEmitter[-E <: dom.Event, +T](
 
   private def runThis: Modifier = Modifier { parent =>
     val target = overrideTarget.getOrElse(parent)
-    (ZIO.acquireRelease(
-      ZIO.succeed {
-        val listener: js.Function1[dom.Event, Unit] = { (event: dom.Event) =>
-          // TODO: Queue up events and pick them up as a Chunk while we're already running a callback
-          Unsafe.unsafe { implicit unsafe =>
-            Runtime.default.unsafe.runToFuture(fn(event.asInstanceOf[E]))
+    ZIO.scopeWith { scope =>
+      (ZIO.acquireRelease(
+        ZIO.succeed {
+          val listener: js.Function1[dom.Event, Unit] = { (event: dom.Event) =>
+            // TODO: Queue up events and pick them up as a Chunk while we're already running a callback
+            Unsafe.unsafe { implicit unsafe =>
+              Runtime.default.unsafe.runToFuture(fn(event.asInstanceOf[E]).provideLayer(ZLayer.succeed(scope)))
+            }
           }
-        }
-        target.addEventListener(eventType, listener)
-        listener
-      })
-    { (listener: js.Function1[dom.Event, Unit]) =>
-      ZIO.succeed {
-        target.removeEventListener(eventType, listener)
-      }
-    }).unit
+          target.addEventListener(eventType, listener)
+          listener
+        })
+        { (listener: js.Function1[dom.Event, Unit]) =>
+          ZIO.succeed {
+            target.removeEventListener(eventType, listener)
+          }
+        }).unit
+    }
   }
 }
 
