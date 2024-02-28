@@ -62,6 +62,8 @@ object Element {
     val label = CreateFn("label")
     val datalist = CreateFn("datalist")
     val option = CreateFn("option")
+    /** The "style" tag, aliased to not conflict with the "style" attribute */
+    val styleTag = CreateFn("style")
   }
 
   object svgtags {
@@ -79,5 +81,7 @@ object Element {
     val use = CreateFn[dom.svg.Use]("use")
     /** The "title" tag, aliased to not conflict with the "title" attribute */
     val svgTitle = CreateFn[dom.svg.Use]("title")
+    /** The "style" tag, aliased to not conflict with the "style" attribute */
+    val svgStyleTag = CreateFn("style")
   }
 }

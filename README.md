@@ -16,10 +16,12 @@ trait Modifier {
 }
 ```
 
-As you can see, there are two things that are important to a `Modifier`:
+A `Modifier` has the following properties:
 
 - It is mounted into the dom tree having a parent DOM tree `Element`. This need not imply that all modifiers create child elements; they might also be affecting the parent in other ways (or not at all).
 - It returns a ZIO that only has side effects when mounted (`Unit`) and can't fail (`Nothing`).
+- The returned ZIO is allowed to use a `Scope` in its environment. That scope is typically tied to the lifetime of the parent, so that this modifier can clean up resources together with its parent going away.
+
 
 ## Naming
 
@@ -82,3 +84,13 @@ Source: https://github.com/leungwensen/svg-icon
   loss is `d * w_d + da * w_a`
   loss is `sqrt((i1.x - i2.x)^2 + (i1.y - i2.y)^2) * w_d + da * w_a`
   calculate
+
+- Other factors for loss function:
+  * Style: Label: Center, keep lines same width, close to optimal width (of 2x icon?)
+  * Style: Note: Justified, Top-aligned, lines exact width of note,
+
+  * Hyphenation https://github.com/gnieh/hyphen
+  * Stretch of each line (using TeX-like glue structure with badness) Glue: { size, plus, minus }. Do we need infinity  here or is big numbers enough? Or take highest order infinity that has >0.000001
+  * Consider breaking lines from 0.5 stretched to 0.5 shrunk
+  * Characters per line (66 optimal, 45 to 75 maxima). This includes spaces. Set glue such that line line is 33em.
+  * Aspect ratio of the total text?

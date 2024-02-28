@@ -63,11 +63,14 @@ object DrawingTools {
       index <- ZIO.service[SymbolIndex]
       keyboard <- Children.make
       iconTool <- icon(drawing, dialogs, keyboard, index)
+      labelTool <- labelTool(drawing, dialogs, keyboard)
+      handTool <- hand(drawing, keyboard)
       tools = Seq(
         Tool("pencil", "Add pencil strokes", "✏️", pencil(drawing)),
-        Tool("pan", "Hand (move drawing)", "🫳", hand(drawing, keyboard)),
+        Tool("pan", "Hand (move drawing)", "🫳", handTool),
         Tool("move", "Move (move objects)", "☈", moveTool(drawing)),
         Tool("icon", "Add icon", "🚶", iconTool),
+        Tool("label", "Add labels", "T", labelTool),
         Tool("eraser", "Eraser (delete items)", "🗑️", eraser(drawing))
       )
       selectedTool <- SubscriptionRef.make(tools(0))
@@ -111,47 +114,49 @@ object DrawingTools {
     Base64.getEncoder().encodeToString(uuid).take(22) // Remove the trailing ==
   }
 
-  private def hand(drawing: Drawing, keyboard: Children) = Modifier.unwrap(for {
+  private def hand(drawing: Drawing, keyboard: Children) = for {
     dragStart <- Ref.make(Point(0,0))
   } yield {
     SVGHelper { helper =>
-      Modifier.combine(
-        onMouseDown.mapZIO { event =>
-          val pos = helper.screenToLocal(event)
-          dragStart.set(Point(pos.x, pos.y))
-        },
-        onMouseMove
-          .filter { e => (e.buttons & 1) != 0 }
-          .mapZIO { event =>
+      Modifier.unwrap(
+        for {
+          exporter <- Exporter.make(helper.svg).provideLayer(ZLayer.succeed(drawing))
+        } yield Modifier.combine(
+          onMouseDown.mapZIO { event =>
             val pos = helper.screenToLocal(event)
-            for {
-              start <- dragStart.get
-              _ <- drawing.viewport.update(_.pan(start.x - pos.x, start.y - pos.y))
-            } yield ()
+            dragStart.set(Point(pos.x, pos.y))
           },
-        onWheel
-          .mapZIO { event =>
-            val factor = event.deltaMode match {
-              case 0 => (event.deltaY * 0.01) + 1
-              case 1 => (event.deltaY * 0.01) + 1
-              case _ => (event.deltaY * 0.01) + 1
-            }
-            val pos = helper.screenToLocal(event)
-            drawing.viewport.update(_.zoom(factor, pos.x, pos.y))
-          },
-        keyboard.addChild { _ =>
-          div(
-            keyboardAction("f", "Fit into view",
-              drawing.viewport.update { _ .fit(helper.svg.getBBox()) }
-            ),
-            keyboardAction("e", "Export as SVG",
-              ZIO.succeed { helper.triggerSVGDownload() }
+          onMouseMove
+            .filter { e => (e.buttons & 1) != 0 }
+            .mapZIO { event =>
+              val pos = helper.screenToLocal(event)
+              for {
+                start <- dragStart.get
+                _ <- drawing.viewport.update(_.pan(start.x - pos.x, start.y - pos.y))
+              } yield ()
+            },
+          onWheel
+            .mapZIO { event =>
+              val factor = event.deltaMode match {
+                case 0 => (event.deltaY * 0.01) + 1
+                case 1 => (event.deltaY * 0.01) + 1
+                case _ => (event.deltaY * 0.01) + 1
+              }
+              val pos = helper.screenToLocal(event)
+              drawing.viewport.update(_.zoom(factor, pos.x, pos.y))
+            },
+          keyboard.addChild { _ =>
+            div(
+              keyboardAction("f", "Fit into view",
+                drawing.viewport.set(Drawing.Viewport.fit(helper.svg.getBBox()))
+              ),
+              keyboardAction("e", "Export as SVG", exporter.triggerExport.catchAll(ZIO.debug(_)))
             )
-          )
-        }
+          }
+        )
       )
     }
-  })
+  }
 
   def eraser(drawing: Drawing): Modifier = onMouseDown.merge(onMouseMove)
     .map(DrawingRenderer.getTargetObject)
@@ -245,6 +250,7 @@ object DrawingTools {
                   onClick.merge(onKeyDown.filter(_.key == "Enter")).mapZIO { _ =>
                     selectedIcon.set(symbol) *> close
                   }
+                    // TODO: "Enter" on the input itself switches focus to the first icon, and activates letter-overlay shortcuts for the first 36 matches.
                 )
               }
             }
@@ -279,7 +285,7 @@ object DrawingTools {
               symbol <- selectedIcon.get
               id <- makeUUID
               pos = helper.screenToLocal(e)
-              _ <- drawing.perform(DrawCommand(CreateIcon(id, Point(pos.x, pos.y), symbol.category, symbol.name)))
+              _ <- drawing.perform(DrawCommand(CreateIcon(id, Point(pos.x, pos.y), symbol.category.name, symbol.name)))
             } yield {}
           },
         use(
@@ -291,6 +297,42 @@ object DrawingTools {
           href <-- selectedIcon.map(_.href),
         )
       )
+    }
+  }
+
+  private def labelTool(drawing: Drawing, dialogs: Children, keyboard: Children) = for {
+    selected <- SubscriptionRef.make[Option[ObjectTarget]](None)
+  } yield {
+    SVGHelper { helper =>
+      val dialog = dialogs.child { close =>
+        div(
+          Modifier.unwrap {
+            for {
+              target <- selected.get
+            } yield if (target.isEmpty) Modifier.empty else {
+              val localPos = Point(target.get.position.x - iconSize / 2, target.get.position.y + iconSize / 2)
+              val pos = helper.localToScreen(localPos)
+              div(
+                cls := "label-input",
+                style := s"left: ${pos.x}px; top: ${pos.y}px;",
+                input(typ := "text", placeholder := "Enter label...", focusNow),
+                keyboard.addChild { _ =>
+                  keyboardAction("Escape", "Close dialog", close)
+                }
+              )
+            }
+          }
+        )
+      }
+
+      onMouseDown
+        .filter(_.button == 0)
+        .mapZIO { e =>
+          DrawingRenderer.getTargetObject(e) match {
+            case None => ZIO.unit
+            case some => selected.set(some) *> dialog
+          }
+        }
     }
   }
 

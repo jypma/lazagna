@@ -13,7 +13,7 @@ trait SymbolIndex {
 object SymbolIndex {
   case class Result(completions: Seq[String], symbols: Seq[SymbolRef])
 
-  private def toSymbolRef(o: js.Dynamic) = SymbolRef(o.category.asInstanceOf[String], o.icon.asInstanceOf[String])
+  private def toSymbolRef(o: js.Dynamic) = SymbolRef(SymbolCategory(o.category.asInstanceOf[String]), o.icon.asInstanceOf[String])
 
   def make = for {
     data <- Request.GET(JSONAs[js.Object], "/symbol-index.json")

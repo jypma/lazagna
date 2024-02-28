@@ -36,6 +36,22 @@ object DrawingRenderer {
   val dataX = Attribute("data-x")
   val dataY = Attribute("data-y")
 
+  /** Finds the element, or any of its parents, that has an ID, but only if one of those ancestors also has a
+    * CSS "clickTarget" class (indicating that it's a valid selection target) */
+  private def getClickTargetParent(e: dom.Element): Option[dom.Element] = {
+    var elem = e
+    var count = 3
+    var isClickTarget = e.classList.contains("clickTarget")
+    while (elem.id == "" && count > 0) {
+      elem = elem.parentNode.asInstanceOf[dom.Element]
+      if (elem.classList.contains("clickTarget")) {
+        isClickTarget = true
+      }
+      count -= 1
+    }
+    Option.when(isClickTarget)(elem)
+  }
+
   /** Returns information about an object that might have been clicked as an event target */
   def getTargetObject(event: dom.MouseEvent): Option[ObjectTarget] = {
     Some(event)
@@ -43,8 +59,8 @@ object DrawingRenderer {
       .map(_.target)
       .collect { case elem: dom.Element =>
         elem }
-      .map(_.parentNode)
-      .collect { case e:dom.Element => e }
+      .map { getClickTargetParent }
+      .collect { case Some(e:dom.Element) => e }
       .flatMap(ObjectTarget.apply(_))
   }
 
@@ -131,24 +147,33 @@ object DrawingRenderer {
                 val position = ZStream(startPos) ++ furtherEvents
                   .collect { case DrawEvent(_, ObjectMoved(ID, Some(position), _), _, _, _) => position}
 
-                val symbol = SymbolRef(category = category, name = name)
+                val symbol = SymbolRef(category = SymbolCategory(category), name = name)
 
                 Some(children.Append(
                   g(
-                    cls := "icon",
                     id := s"icon${iconId}",
+                    cls := "icon",
                     transform <-- position.map(p => s"translate(${p.x},${p.y})"),
                     dataX <-- position.map(_.x),
                     dataY <-- position.map(_.y),
-                    use(
-                      svgTitle(textContent := symbol.name),
-                      href := symbol.href,
-                      cls := "icon",
-                      width := 64, // TODO: share iconSize between preview in DrawingTools and actual rendering here. Probably share the rendering code itself.
-                      height := 64,
-                      x := -32,
-                      y := -32
-                    )
+                    g(
+                      cls := "clickTarget",
+                      use(
+                        svgTitle(textContent := symbol.name),
+                        href := symbol.href,
+                        cls := "icon",
+                        width := 64, // TODO: share iconSize between preview in DrawingTools and actual rendering here. Probably share the rendering code itself.
+                        height := 64,
+                        x := -32,
+                        y := -32
+                      ),
+                    )/*,
+                    text(
+                      cls := "label",
+                      x := 0,
+                      y := 32,
+                      textContent := "This is a test label."
+                    )*/
                   )
                 ))
 
@@ -170,6 +195,7 @@ object DrawingRenderer {
 
         val svgMain = div(
           svg(
+            svgStyleTag(), // No direct style here, stuff is added here when exporting.
             cls <-- drawingTools.currentToolName.map(t => s"main tool-${t}"),
             viewBox <-- drawing.viewport.map(_.toSvgViewBox),
             overflow := "hidden",
