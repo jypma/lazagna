@@ -40,17 +40,17 @@ object DrawingTools {
       div(
         cls := "key",
         textContent := keyName,
-        onClick.mapZIO(_ => execute)
+        onClick(_.flatMap(_ => execute))
       ),
       div(cls := "description", textContent := description),
-      onKeyDown.forWindow.filter { e =>
+      onKeyDown.forWindow(_.filter { e =>
         // The key is the one we're listening on:
         (e.key == key) &&
         // It's a function key, OR it's a normal key and we're not on an input element:
         (e.key.length() > 1 || !e.target.isInstanceOf[dom.HTMLInputElement])
-      }.mapZIO{_ =>
+      }.flatMap{_ =>
         execute
-      }
+      })
     )
   }
 
@@ -88,7 +88,7 @@ object DrawingTools {
               checked <-- selectedTool.filter(_ == tool).as("true")),
             div(
               label (`for` := s"tool-${tool.name}", title := tool.hint, textContent := tool.icon,
-                onClick.as(tool) --> selectedTool)
+                onClick(_.as(tool)) --> selectedTool)
             )
           )
         }
@@ -122,21 +122,21 @@ object DrawingTools {
         for {
           exporter <- Exporter.make(helper.svg).provideLayer(ZLayer.succeed(drawing))
         } yield Modifier.combine(
-          onMouseDown.mapZIO { event =>
+          onMouseDown(_.flatMap { event =>
             val pos = helper.screenToLocal(event)
             dragStart.set(Point(pos.x, pos.y))
-          },
-          onMouseMove
+          }),
+          onMouseMove(_
             .filter { e => (e.buttons & 1) != 0 }
-            .mapZIO { event =>
+            .flatMap { event =>
               val pos = helper.screenToLocal(event)
               for {
                 start <- dragStart.get
                 _ <- drawing.viewport.update(_.pan(start.x - pos.x, start.y - pos.y))
               } yield ()
-            },
-          onWheel
-            .mapZIO { event =>
+            }),
+          onWheel(_
+            .flatMap { event =>
               val factor = event.deltaMode match {
                 case 0 => (event.deltaY * 0.01) + 1
                 case 1 => (event.deltaY * 0.01) + 1
@@ -144,7 +144,7 @@ object DrawingTools {
               }
               val pos = helper.screenToLocal(event)
               drawing.viewport.update(_.zoom(factor, pos.x, pos.y))
-            },
+            }),
           keyboard.addChild { _ =>
             div(
               keyboardAction("f", "Fit into view",
@@ -158,11 +158,12 @@ object DrawingTools {
     }
   }
 
-  def eraser(drawing: Drawing): Modifier = onMouseDown.merge(onMouseMove)
+  def eraser(drawing: Drawing): Modifier = onMouseDown.merge(onMouseMove)(_
     .map(DrawingRenderer.getTargetObject)
-    .collect { case Some(obj) => obj.id }
+    .collectF { case Some(obj) => obj.id }
     .map(id => DrawCommand(DeleteObject(id)))
-    .mapZIO(drawing.perform _)
+    .flatMap(drawing.perform _)
+  )
 
   case class MoveState(id: String, current: Point, start: Point)
   def moveTool(drawing: Drawing): Modifier = Modifier.unwrap(for {
@@ -170,7 +171,7 @@ object DrawingTools {
   } yield {
     SVGHelper { helper =>
       Modifier.combine(
-        onMouseDown.mapZIO { event =>
+        onMouseDown(_.flatMap { event =>
           val pos = helper.screenToLocal(event)
           (DrawingRenderer.getTargetObject(event)) match {
             case Some(obj) =>
@@ -180,19 +181,20 @@ object DrawingTools {
             case _ =>
               ZIO.unit
           }
-        },
-        onMouseUp.mapZIO { _ => state.set(None) },
-        onMouseMove
+        }),
+        onMouseUp(_.flatMap { _ => state.set(None) }),
+        onMouseMove(_
           .filter { e => (e.buttons & 1) != 0 }
-          .mapZIO { e => state.get.map((_, e)) }
-          .collect {
+          .flatMap { e => state.get.map((_, e)) }
+          .collectF {
             case (Some(state), event) => (state, helper.screenToLocal(event))
           }
-          .mapZIO { (state, pos) =>
+          .flatMap { (state, pos) =>
             val x = state.current.x + pos.x - state.start.x
             val y = state.current.y + pos.y - state.start.y
             drawing.perform(DrawCommand(MoveObject(state.id, Some(Point(x, y)))))
           }
+        )
       )
     }
   })
@@ -201,25 +203,25 @@ object DrawingTools {
     currentScribbleId <- Ref.make[Option[String]](None)
   } yield SVGHelper { helper =>
     // FIXME: Don't emit an event until we've at least moved the mouse once (so there's something to draw and delete)
-    onMouseDown
+    onMouseDown(_
       .filter { e => (e.buttons & 1) != 0 }
-      .mapZIO(ev => makeUUID.flatMap(id => currentScribbleId.set(Some(id)).as(id)).map { id =>
+      .flatMap(ev => makeUUID.flatMap(id => currentScribbleId.set(Some(id)).as(id)).map { id =>
         val pos = helper.screenToLocal(ev)
         DrawCommand(StartScribble(id, Some(Point(pos.x, pos.y))))
       })
-      .merge(
-        onMouseMove
-          .filter { e => (e.buttons & 1) != 0 }
-          .mapZIO(ev => currentScribbleId.get.map((_, ev)))
-          .collect { case (Some(id), ev) => (id, ev) }
-          .map { (id, ev) =>
-            val pos = helper.screenToLocal(ev)
-            DrawCommand(ContinueScribble(id, Seq(Point(pos.x, pos.y))))
-          }
-      ).merge(
-        onMouseUp.mapZIO(ev => currentScribbleId.set(None)).drain
+    ).merge(
+      onMouseMove(_
+        .filter { e => (e.buttons & 1) != 0 }
+        .flatMap(ev => currentScribbleId.get.map((_, ev)))
+        .collectF { case (Some(id), ev) => (id, ev) }
+        .map { (id, ev) =>
+          val pos = helper.screenToLocal(ev)
+          DrawCommand(ContinueScribble(id, Seq(Point(pos.x, pos.y))))
+        }
       )
-      .mapZIO(drawing.perform _)
+    ).merge(
+      onMouseUp(_.flatMap(ev => currentScribbleId.set(None)).drain)
+    )(_.flatMap(drawing.perform _))
   })
 
   private val iconSize = 64
@@ -247,18 +249,18 @@ object DrawingTools {
                     width := 24,
                     height := 24
                   ),
-                  onClick.merge(onKeyDown.filter(_.key == "Enter")).mapZIO { _ =>
+                  onClick.merge(onKeyDown(_.filter(_.key == "Enter")))(_.flatMap { _ =>
                     selectedIcon.set(symbol) *> close
-                  }
+                  })
                     // TODO: "Enter" on the input itself switches focus to the first icon, and activates letter-overlay shortcuts for the first 36 matches.
                 )
               }
             }
           ),
           div(
-            input(typ := "text", placeholder := "Search icon...", list := "icon-dialog-list", focusNow, onInput.asTargetValue.mapZIO { text =>
+            input(typ := "text", placeholder := "Search icon...", list := "icon-dialog-list", focusNow, onInput.asTargetValue(_.flatMap { text =>
               index.lookup(text).flatMap(searchResult.publish)
-            }),
+            })),
             datalist(id := "icon-dialog-list",
               Alternative.mountOne(searchResult) { _.completions.map { s => option(value := s) } }
             )
@@ -272,22 +274,22 @@ object DrawingTools {
 
     SVGHelper { helper =>
       Modifier.combine(
-        onMouseMove.mapZIO { e =>
+        onMouseMove(_.flatMap { e =>
           cursorPos.set(Some(helper.screenToLocal(e)))
-        },
+        }),
         keyboard.addChild { _ =>
           keyboardAction("t", "Select icon", selectDialog)
         },
-        onMouseDown
+        onMouseDown(_
           .filter(_.button == 0)
-          .mapZIO { e =>
+          .flatMap { e =>
             for {
               symbol <- selectedIcon.get
               id <- makeUUID
               pos = helper.screenToLocal(e)
               _ <- drawing.perform(DrawCommand(CreateIcon(id, Point(pos.x, pos.y), symbol.category.name, symbol.name)))
             } yield {}
-          },
+          }),
         use(
           x <-- cursorPos.map(p => (p.map(_.x).getOrElse(-100000.0) - iconSize / 2).toString),
           y <-- cursorPos.map(p => (p.map(_.y).getOrElse(-100000.0) - iconSize / 2).toString),
@@ -325,14 +327,15 @@ object DrawingTools {
         )
       }
 
-      onMouseDown
+      onMouseDown(_
         .filter(_.button == 0)
-        .mapZIO { e =>
+        .flatMap { e =>
           DrawingRenderer.getTargetObject(e) match {
             case None => ZIO.unit
             case some => selected.set(some) *> dialog
           }
         }
+      )
     }
   }
 
