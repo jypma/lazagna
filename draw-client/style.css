@@ -61,6 +61,10 @@ g.icon text.label {
     cursor: crosshair;
 }
 
+.tool-label use.icon:hover {
+    cursor: text;
+}
+
 .tool-icon.main {
     cursor: crosshair;
 }

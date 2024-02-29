@@ -98,7 +98,7 @@ object DrawingClient {
             ZIO.unit
            }
         }
-        override def initialVersion = version
+        override def initialVersion = version // FIXME doesn't render if we've last deleted something
         override def viewport = drawViewport
         override def connectionStatus = connStatus
         override def objectState(id: String): Consumeable[ObjectState[_]] = ZStream.unwrapScoped {

@@ -5,6 +5,7 @@ import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.tags._
+import zio.lazagna.dom.Element._
 import zio.lazagna.dom.Element.{textContent}
 import zio.lazagna.dom.svg.PathData
 import zio.lazagna.dom.{Alternative, Attribute, Modifier}
@@ -192,6 +193,7 @@ object DrawingRenderer {
             viewBox <-- drawing.viewport.map(_.toSvgViewBox),
             overflow := "hidden",
             tabindex := 0, // To enable keyboard events
+            focusNow, // To allow dragging immediately
             g(
               renderedObjects
             ),

@@ -56,7 +56,7 @@ object DrawingTools {
     )
   }
 
-  private case class Tool(name: String, hint: String, icon: String, render: Modifier)
+  private case class Tool(key: String, name: String, hint: String, icon: String, render: Modifier)
 
   val live = ZLayer.scoped {
     for {
@@ -66,20 +66,19 @@ object DrawingTools {
       keyboard <- Children.make
       iconTool <- icon(drawing, dialogs, keyboard, index)
       labelTool <- labelTool(drawing, dialogs, keyboard)
-      handTool <- hand(drawing, keyboard)
       tools = Seq(
-        Tool("pencil", "Add pencil strokes", "✏️", pencil(drawing)),
-        Tool("pan", "Hand (move drawing)", "🫳", handTool),
-        Tool("move", "Move (move objects)", "☈", moveTool(drawing)),
-        Tool("icon", "Add icon", "🚶", iconTool),
-        Tool("label", "Add labels", "T", labelTool),
-        Tool("eraser", "Eraser (delete items)", "🗑️", eraser(drawing))
+        Tool("p", "pencil", "Add pencil strokes", "✏️", pencil(drawing)),
+        Tool("m", "move", "Move (move objects)", "☈", moveTool(drawing)),
+        Tool("i", "icon", "Add icon", "🚶", iconTool),
+        Tool("l", "label", "Add labels", "T", labelTool),
+        Tool("d", "eraser", "Eraser (delete items)", "🗑️", eraser(drawing))
       )
       selectedTool <- SubscriptionRef.make(tools(0))
+      common <- commonTools(drawing, keyboard, selectedTool, tools)
     } yield new DrawingTools {
       override def currentToolName = selectedTool.map(_.name)
 
-      override val renderHandlers = Alternative.mountOne(selectedTool)(_.render)
+      override val renderHandlers = Alternative.mountOne(selectedTool) { t => Modifier.combine(t.render, common) }
 
       override val renderToolbox = div(
         cls := "toolbox",
@@ -117,7 +116,7 @@ object DrawingTools {
     Base64.getEncoder().encodeToString(uuid).take(22) // Remove the trailing ==
   }
 
-  private def hand(drawing: Drawing, keyboard: Children) = for {
+  private def commonTools(drawing: Drawing, keyboard: Children, selectedTool: SubscriptionRef[Tool], tools:Seq[Tool]) = for {
     dragStart <- Ref.make(Point(0,0))
   } yield {
     SVGHelper { helper =>
@@ -125,12 +124,15 @@ object DrawingTools {
         for {
           exporter <- Exporter.make(helper.svg).provideLayer(ZLayer.succeed(drawing))
         } yield Modifier.combine(
-          onMouseDown(_.flatMap { event =>
-            val pos = helper.screenToLocal(event)
-            dragStart.set(Point(pos.x, pos.y))
-          }),
+          onMouseDown(_
+            .filter { e => (e.buttons & 4) != 0 }
+            .flatMap { event =>
+              val pos = helper.screenToLocal(event)
+              dragStart.set(Point(pos.x, pos.y))
+            }
+          ),
           onMouseMove(_
-            .filter { e => (e.buttons & 1) != 0 }
+            .filter { e => (e.buttons & 4) != 0 }
             .flatMap { event =>
               val pos = helper.screenToLocal(event)
               for {
@@ -153,7 +155,10 @@ object DrawingTools {
               keyboardAction("f", "Fit into view",
                 drawing.viewport.set(Drawing.Viewport.fit(helper.svg.getBBox()))
               ),
-              keyboardAction("e", "Export as SVG", exporter.triggerExport.catchAll(ZIO.debug(_)))
+              keyboardAction("v", "Export as SVG", exporter.triggerExport.catchAll(ZIO.debug(_))),
+              tools.map { tool =>
+                keyboardAction(tool.key, tool.hint, selectedTool.set(tool))
+              }
             )
           }
         )
