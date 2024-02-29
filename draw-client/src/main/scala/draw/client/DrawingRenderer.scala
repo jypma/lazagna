@@ -39,29 +39,38 @@ object DrawingRenderer {
   val dataY = Attribute("data-y")
 
   /** Finds the element, or any of its parents, that has an ID, but only if one of those ancestors also has a
-    * CSS "clickTarget" class (indicating that it's a valid selection target) */
-  private def getClickTargetParent(e: dom.Element): Option[dom.Element] = {
+    * CSS class (indicating that it's a valid selection target) */
+  private def getTargetParent(e: dom.Element, className: String): Option[dom.Element] = {
     var elem = e
     var count = 3
-    var isClickTarget = e.classList.contains("clickTarget")
+    var isselectTarget = e.classList.contains(className)
     while (elem.id == "" && count > 0) {
       elem = elem.parentNode.asInstanceOf[dom.Element]
-      if (elem.classList.contains("clickTarget")) {
-        isClickTarget = true
+      if (elem.classList.contains(className)) {
+        isselectTarget = true
       }
       count -= 1
     }
-    Option.when(isClickTarget)(elem)
+    Option.when(isselectTarget)(elem)
   }
 
-  /** Returns information about an object that might have been clicked as an event target */
-  def getTargetObject(event: dom.MouseEvent): Option[ObjectTarget] = {
+  /** Returns information about an object that might have been clicked to select it */
+  def getSelectTargetObject(event: dom.MouseEvent): Option[ObjectTarget] = {
+    getTargetObject(event, "selectTarget")
+  }
+
+  /** Returns information about an object that might have been clicked to edit it */
+  def getEditTargetObject(event: dom.MouseEvent): Option[ObjectTarget] = {
+    getTargetObject(event, "editTarget")
+  }
+
+  private def getTargetObject(event: dom.MouseEvent, className: String): Option[ObjectTarget] = {
     Some(event)
       .filter { e => (e.buttons & 1) != 0 }
       .map(_.target)
       .collect { case elem: dom.Element =>
         elem }
-      .map { getClickTargetParent }
+      .map { e => getTargetParent(e, className) }
       .collect { case Some(e:dom.Element) => e }
       .flatMap(ObjectTarget.apply(_))
   }
@@ -120,7 +129,7 @@ object DrawingRenderer {
                         points
                       ),
                       path(
-                        cls := "clickTarget",
+                        cls := "selectTarget editTarget",
                         points
                       )
                     )
@@ -132,12 +141,12 @@ object DrawingRenderer {
 
                     g(
                       id := s"icon${initial.id}",
-                      cls := "icon",
+                      cls := "icon editTarget",
                       transform <-- position.map(p => s"translate(${p.x},${p.y})"),
                       dataX <-- position.map(_.x),
                       dataY <-- position.map(_.y),
                       g(
-                        cls := "clickTarget",
+                        cls := "selectTarget",
                         use(
                           svgTitle(textContent := symbol.name),
                           href := symbol.href,

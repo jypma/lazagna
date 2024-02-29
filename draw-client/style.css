@@ -32,31 +32,32 @@ g.scribble path {
     stroke-width: 2px;
 }
 
-g.scribble path.clickTarget {
+g.scribble path.selectTarget {
     stroke-width: 10px;
     opacity: 0;
 }
 
 g.icon text.label {
+    fill: rgba(var(--fg-color-main));
     text-anchor: middle;
     dominant-baseline: hanging;
-    font-family: indie_flowerregular;
+    font-size: 16px;
 }
 
-.tool-eraser path.clickTarget:hover, .tool-move path.clickTarget:hover {
+.tool-eraser path.editTarget:hover, .tool-move path.selectTarget:hover {
     stroke: rgba(var(--fg-color-highlight));
     opacity: 0.2;
 }
 
-.tool-eraser use.icon:hover, .tool-move use.icon:hover {
+.tool-eraser g.icon:hover, .tool-move use.icon:hover {
     filter: drop-shadow(0px 0px 10px rgba(var(--fg-color-highlight), 0.9));
 }
 
-.tool-move path.clickTarget:hover, .tool-move use.icon:hover {
+.tool-move path.selectTarget:hover, .tool-move use.icon:hover {
     cursor: move;
 }
 
-.tool-eraser path.clickTarget:hover, .tool-eraser use.icon:hover {
+.tool-eraser path.editTarget:hover, .tool-eraser use.icon:hover {
     cursor: crosshair;
 }
 
@@ -183,6 +184,13 @@ div.label-input {
 
 div.label-input input {
     text-align: center;
+    background-color: var(--fg-color-dialog);
+    border: 1px solid rgba(var(--fg-color-main));
+    outline: none;
+}
+
+div.label-input input:focus {
+    outline: none;
 }
 
 .toolbox {

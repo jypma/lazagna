@@ -162,7 +162,7 @@ object DrawingTools {
   }
 
   def eraser(drawing: Drawing): Modifier = onMouseDown.merge(onMouseMove)(_
-    .map(DrawingRenderer.getTargetObject)
+    .map(DrawingRenderer.getEditTargetObject)
     .collectF { case Some(obj) => obj.id }
     .map(id => DrawCommand(DeleteObject(id)))
     .flatMap(drawing.perform _)
@@ -176,7 +176,7 @@ object DrawingTools {
       Modifier.combine(
         onMouseDown(_.flatMap { event =>
           val pos = helper.screenToLocal(event)
-          (DrawingRenderer.getTargetObject(event)) match {
+          (DrawingRenderer.getSelectTargetObject(event)) match {
             case Some(obj) =>
               val g = event.target.asInstanceOf[dom.Element].parentNode.asInstanceOf[dom.SVGGElement]
               val pos = helper.screenToLocal(event)
@@ -311,22 +311,26 @@ object DrawingTools {
     selected <- SubscriptionRef.make[Option[ObjectTarget]](None)
   } yield {
     SVGHelper { helper =>
-      val dialog = dialogs.child { close =>
-        div(
-          Modifier.unwrap {
-            for {
-              target <- selected.get
-            } yield if (target.isEmpty) Modifier.empty else {
-              val pos = helper.localToScreen(Point(target.get.position.x - iconSize / 2, target.get.position.y + iconSize / 2))
-              val bounds = helper.localToScreen(Point(target.get.position.x + iconSize / 2, target.get.position.y - iconSize / 2))
+      Modifier.combine(
+        Alternative.mountOne(selected) {
+          case None => Modifier.empty
+          case Some(target) =>
+            dialogs.addChild { _ =>
+              val pos = helper.localToScreen(Point(target.position.x - iconSize / 2, target.position.y + iconSize * 0.45))
+              val bounds = helper.localToScreen(Point(target.position.x + iconSize / 2, target.position.y - iconSize / 2))
               val width = bounds.x - pos.x
+              val close = selected.set(None)
               div(
                 cls := "label-input",
-                style := s"left: ${pos.x}px; top: ${pos.y}px;",
-                input(typ := "text", placeholder := "Enter label...", focusNow,
-                  value <-- drawing.objectState(target.get.id).map(_.body).collect { case IconState(_,_,label) => label },
+                style := s"left: ${pos.x - width * 1}px; top: ${pos.y}px;",
+                input(
+                  style := s"width: ${width * 3}px; font-size:${width * 45 / 178}px",
+                  typ := "text",
+                  placeholder := "Enter label...",
+                  focusNow,
+                  value <-- drawing.objectState(target.id).map(_.body).collect { case IconState(_,_,label) => label },
                   onInput.asTargetValue(_.flatMap { text =>
-                    drawing.perform(DrawCommand(LabelObject(target.get.id, text)))
+                    drawing.perform(DrawCommand(LabelObject(target.id, text)))
                   })
                 ),
                 keyboard.addChild { _ =>
@@ -337,18 +341,13 @@ object DrawingTools {
                 }
               )
             }
+        },
+        onMouseDown(_
+          .filter(_.button == 0)
+          .flatMap { e =>
+            selected.set(DrawingRenderer.getEditTargetObject(e))
           }
         )
-      }
-
-      onMouseDown(_
-        .filter(_.button == 0)
-        .flatMap { e =>
-          DrawingRenderer.getTargetObject(e) match {
-            case None => ZIO.unit
-            case some => selected.set(some) *> dialog
-          }
-        }
       )
     }
   }
