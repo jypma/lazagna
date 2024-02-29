@@ -30,7 +30,7 @@ trait DrawingTools {
 }
 
 object DrawingTools {
-  private def keyboardAction(key: String, description: String, execute: ZIO[Scope, Nothing, Unit]): Element[dom.Element] = {
+  private def keyboardAction(key: String, description: String, execute: => ZIO[Scope, Nothing, Unit]): Element[dom.Element] = {
     val keyName = key match {
       case "Escape" => "Esc"
       case "Enter" => "↵"
@@ -210,22 +210,30 @@ object DrawingTools {
 
   def pencil(drawing: Drawing): Modifier = Modifier.unwrap(for {
     currentScribbleId <- Ref.make[Option[String]](None)
+    startPoint <- Ref.make[Option[Point]](None)
   } yield SVGHelper { helper =>
-    // FIXME: Don't emit an event until we've at least moved the mouse once (so there's something to draw and delete)
     onMouseDown(_
       .filter { e => (e.buttons & 1) != 0 }
-      .flatMap(ev => makeUUID.flatMap(id => currentScribbleId.set(Some(id)).as(id)).map { id =>
+      .flatMap { ev =>
         val pos = helper.screenToLocal(ev)
-        DrawCommand(StartScribble(id, Some(Point(pos.x, pos.y))))
-      })
+        startPoint.set(Some(Point(pos.x, pos.y)))
+      }
+      .flatMap(_ => makeUUID.flatMap(id => currentScribbleId.set(Some(id)))).drain
     ).merge(
       onMouseMove(_
         .filter { e => (e.buttons & 1) != 0 }
         .flatMap(ev => currentScribbleId.get.map((_, ev)))
         .collectF { case (Some(id), ev) => (id, ev) }
-        .map { (id, ev) =>
-          val pos = helper.screenToLocal(ev)
-          DrawCommand(ContinueScribble(id, Seq(Point(pos.x, pos.y))))
+        .flatMap((id, ev) => startPoint.get.map((id, _, ev)))
+        .flatMap { (id, start, event) =>
+          val pos = helper.screenToLocal(event)
+          val point = Point(pos.x, pos.y)
+
+          if (start.isDefined) {
+            startPoint.set(None).as(DrawCommand(StartScribble(id, Seq(start.get, point))))
+          } else {
+            ZIO.succeed(DrawCommand(ContinueScribble(id, Seq(point))))
+          }
         }
       )
     ).merge(

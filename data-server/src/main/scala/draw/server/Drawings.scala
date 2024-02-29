@@ -35,11 +35,11 @@ case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Dra
       now <- Clock.instant
       _ <- storage.get.filterOrFail(_.size < 10000)(DrawingError("Too many events"))
       _ <- command match {
-        case DrawCommand(StartScribble(id, Some(start), _), _) =>
+        case DrawCommand(StartScribble(id, points, _), _) =>
           storage.update(_ :+ DrawEvent(
             0,
             ScribbleStarted(
-              id, Seq(Point(start.x, start.y))
+              id, points.map(p => Point(p.x, p.y))
             ),
             Some(now.toEpochMilli())
           ))
