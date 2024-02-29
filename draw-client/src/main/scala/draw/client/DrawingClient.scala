@@ -52,8 +52,8 @@ object DrawingClient {
       state <- Ref.make(DrawingState(Map.empty)) // TODO investigate Ref.Synchronized to close over state
       stateSemaphore <- Semaphore.make(1)
       lastEventNr <- SubscriptionRef.make(0L)
-      stateChanges <- Hub.bounded[ObjectState](16)
-      newObjects <- Hub.bounded[ObjectState](16)
+      stateChanges <- Hub.bounded[ObjectState[_]](16)
+      newObjects <- Hub.bounded[ObjectState[_]](16)
     } yield new DrawingClient {
       override def login(user: String, password: String, drawingName: String) = Setup.start(for {
         // FIXME: We really need a little path DSL to prevent injection here.
@@ -82,7 +82,7 @@ object DrawingClient {
         }, onClose = connStatus.set(Drawing.Disconnected))
         _ <- store.events.mapZIO { event =>
           stateSemaphore.withPermit {
-            state.modify(_.update(event.body)).flatMap {
+            state.modify(_.update(event)).flatMap {
               case (Some(objectState), isNew) =>
                 newObjects.publish(objectState).when(isNew) *> stateChanges.publish(objectState)
               case _ =>
@@ -101,14 +101,14 @@ object DrawingClient {
         override def initialVersion = version
         override def viewport = drawViewport
         override def connectionStatus = connStatus
-        override def objectState(id: String): Consumeable[ObjectState] = ZStream.unwrapScoped {
+        override def objectState(id: String): Consumeable[ObjectState[_]] = ZStream.unwrapScoped {
           stateSemaphore.withPermit {
             state.get
               .map(_.objects.get(id).toSeq)
               .map(ZStream.fromIterable(_) ++ stateChanges.filter(_.id == id))
           }
         }
-        override def initialObjectStates: Consumeable[ObjectState] = ZStream.unwrapScoped {
+        override def initialObjectStates: Consumeable[ObjectState[_]] = ZStream.unwrapScoped {
           stateSemaphore.withPermit {
             state.get.map(_.objects.values).flatMap { initial =>
               ZStream.fromHubScoped(newObjects).map { stream =>

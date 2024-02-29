@@ -20,7 +20,7 @@ import draw.data.point.Point
 import org.scalajs.dom
 import draw.client.DrawingRenderer.ObjectTarget
 import zio.Scope
-import Drawing.IconState
+import Drawing._
 
 trait DrawingTools {
   def renderKeyboard: Modifier
@@ -324,7 +324,7 @@ object DrawingTools {
                 cls := "label-input",
                 style := s"left: ${pos.x}px; top: ${pos.y}px;",
                 input(typ := "text", placeholder := "Enter label...", focusNow,
-                  value <-- drawing.objectState(target.get.id).collect { case IconState(_,_,_,_,label) => label },
+                  value <-- drawing.objectState(target.get.id).map(_.body).collect { case IconState(_,_,label) => label },
                   onInput.asTargetValue(_.flatMap { text =>
                     drawing.perform(DrawCommand(LabelObject(target.get.id, text)))
                   })

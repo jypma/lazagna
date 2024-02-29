@@ -75,37 +75,34 @@ object DrawingRenderer {
     } yield new DrawingRenderer {
       val start = System.currentTimeMillis()
       var eventCountDebug = 0
+      var switchedReady = false
+
+      def switchWhenReady(state: ObjectState[_]) = {
+        if (switchedReady || (state.sequenceNr < drawing.initialVersion)) ZIO.unit else {
+          switchedReady = true
+          val time = System.currentTimeMillis() - start
+          println(s"Processed ${eventCountDebug} events, until sequence nr ${drawing.initialVersion}, in ${time}ms")
+          currentView.set(1)
+        }
+      }
 
       val renderedObjects = Modifier.unwrap {
         for {
           children <- Children.make
-
-          // TODO: Actually take the version of the last actually rendered state here
-          _ <- drawing.currentVersion.filter(_ >= drawing.initialVersion).mapZIO { _ =>
-            // Local: 0.5ms per event
-            // LAN: 0.8ms per event
-            // With IndexedDB (cursor), plus read from remote websocket: 3ms per event
-            // With IndexedDB (cursor), plus read from local websocket: 2ms per event
-            // With IndexedDB (cursor), from DB: 0.8ms per event
-            val time = System.currentTimeMillis() - start
-            println(s"Processed ${eventCountDebug} events, until sequence nr ${drawing.initialVersion}, in ${time}ms")
-            currentView.set(1)
-          }.take(1).consume
-
           _ <- drawing.initialObjectStates.mapZIO { initial =>
             eventCountDebug += 1
-            val furtherEvents = drawing.objectState(initial.id).takeUntil(_.deleted)
+            val furtherEvents = drawing.objectState(initial.id).tap(switchWhenReady).takeUntil(_.deleted).map(_.body)
             children.child { destroy =>
               g(
                 Modifier.run(drawing.objectState(initial.id).filter(_.deleted).mapZIO(_ => destroy).take(1).consume),
-                initial match {
+                initial.body match {
                   case _:ScribbleState =>
                     val position = furtherEvents
-                      .collect { case ScribbleState(_, _, pos, _) => pos }
+                      .collect { case ScribbleState(pos, _) => pos }
                       .changes
 
                     val points = d <-- furtherEvents
-                      .collect { case ScribbleState(_, _, _, p) => p }
+                      .collect { case ScribbleState(_, p) => p }
                       .map { p =>
                         p.headOption.map(start => PathData.MoveTo(start.x, start.y)) ++
                         p.tail.map(pos => PathData.LineTo(pos.x, pos.y))
@@ -128,9 +125,9 @@ object DrawingRenderer {
                       )
                     )
 
-                  case IconState(_,_,_,symbol,_) =>
+                  case IconState(_,symbol,_) =>
                     val position = furtherEvents
-                      .collect { case IconState(_, _, pos, _, _) => pos }
+                      .collect { case IconState(pos, _, _) => pos }
                       .changes
 
                     g(
@@ -156,7 +153,7 @@ object DrawingRenderer {
                         x := 0,
                         y := 32,
                         textContent <-- furtherEvents
-                          .collect { case IconState(_,_,_,_,label) => label }
+                          .collect { case IconState(_,_,label) => label }
                       )
                     )
                 }
