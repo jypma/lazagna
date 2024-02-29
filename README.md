@@ -95,6 +95,8 @@ package zio.lazagna
 type Consumeable[T] = ZStream[Scope & Setup, Nothing, T]
 ```
 
+The `Setup` type is similar to ZIO's built-in `Scope`, but where `Scope` allows one to register cleanup actions, `Setup` registers startup actions (executed after the ZIO itself resolves its `T`). These are typically background fibers that must be started before the rest of the flow continues (e.g. registering a subscription on a `Hub` or `SubscriptionRef`).
+
 Implicit conversions exist from `Hub` and `SubscriptionRef` to `Consumeable`. This way, you can set an attribute that automatically follows a value:
 
 ```scala
@@ -201,6 +203,7 @@ The framework is called "Lazagna" because of the Z in ZIO, and of course because
 - The initial `EventsEmitter` class just created a `ZStream` for the events. This required a `Fiber` for every event handler. They turned out to be fast to create, but relatively slow to stop (about 1 second to stop 1000 fibers, on a fast desktop machine). If you have 1000 small icons to select from, that's too slow. Hence, a push-based model was introduced.
 - ZIO could perhaps do with a `Filtered` class of its own, instead of or in addition to the generic `filter` error variants.
 - ZStream could perhaps add a push-based stream variant, which maintains stream operation in a scope, executing a ZIO for every element. We'd have to define more precise semantics though (return type of the ZIO would have to be `Chunk[U]`, and we need a way to early close the stream to yield a value, since `EventEmitter` doesn't need that).
+- Should `Setup` be part of `Scope`? Or is it not necessary here at all?
 
 # "Draw" demo application
 
