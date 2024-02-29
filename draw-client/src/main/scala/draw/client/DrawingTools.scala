@@ -15,11 +15,12 @@ import zio.lazagna.dom.{Alternative, Children, Element, Modifier}
 import zio.stream.SubscriptionRef
 import zio.{Clock, Hub, Random, Ref, UIO, ZIO, ZLayer}
 
-import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, MoveObject, StartScribble}
+import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, MoveObject, StartScribble, LabelObject}
 import draw.data.point.Point
 import org.scalajs.dom
 import draw.client.DrawingRenderer.ObjectTarget
 import zio.Scope
+import Drawing.IconState
 
 trait DrawingTools {
   def renderKeyboard: Modifier
@@ -32,6 +33,7 @@ object DrawingTools {
   private def keyboardAction(key: String, description: String, execute: ZIO[Scope, Nothing, Unit]): Element[dom.Element] = {
     val keyName = key match {
       case "Escape" => "Esc"
+      case "Enter" => "↵"
       case s => s.toUpperCase()
     }
 
@@ -85,10 +87,11 @@ object DrawingTools {
           div(
             cls := "tool",
             input(`type` := "radio", name := "tool", id := s"tool-${tool.name}",
-              checked <-- selectedTool.filter(_ == tool).as("true")),
+              checked <-- selectedTool.map { _ == tool }
+            ),
             div(
-              label (`for` := s"tool-${tool.name}", title := tool.hint, textContent := tool.icon,
-                onClick(_.as(tool)) --> selectedTool)
+              label (`for` := s"tool-${tool.name}", title := tool.hint, textContent := tool.icon),
+              onClick(_.as(tool)) --> selectedTool
             )
           )
         }
@@ -258,9 +261,11 @@ object DrawingTools {
             }
           ),
           div(
-            input(typ := "text", placeholder := "Search icon...", list := "icon-dialog-list", focusNow, onInput.asTargetValue(_.flatMap { text =>
-              index.lookup(text).flatMap(searchResult.publish)
-            })),
+            input(typ := "text", placeholder := "Search icon...", list := "icon-dialog-list", focusNow,
+              onInput.asTargetValue(_.flatMap { text =>
+                index.lookup(text).flatMap(searchResult.publish)
+              })
+            ),
             datalist(id := "icon-dialog-list",
               Alternative.mountOne(searchResult) { _.completions.map { s => option(value := s) } }
             )
@@ -312,14 +317,23 @@ object DrawingTools {
             for {
               target <- selected.get
             } yield if (target.isEmpty) Modifier.empty else {
-              val localPos = Point(target.get.position.x - iconSize / 2, target.get.position.y + iconSize / 2)
-              val pos = helper.localToScreen(localPos)
+              val pos = helper.localToScreen(Point(target.get.position.x - iconSize / 2, target.get.position.y + iconSize / 2))
+              val bounds = helper.localToScreen(Point(target.get.position.x + iconSize / 2, target.get.position.y - iconSize / 2))
+              val width = bounds.x - pos.x
               div(
                 cls := "label-input",
                 style := s"left: ${pos.x}px; top: ${pos.y}px;",
-                input(typ := "text", placeholder := "Enter label...", focusNow),
+                input(typ := "text", placeholder := "Enter label...", focusNow,
+                  value <-- drawing.objectState(target.get.id).collect { case IconState(_,_,_,label) => label },
+                  onInput.asTargetValue(_.flatMap { text =>
+                    drawing.perform(DrawCommand(LabelObject(target.get.id, text)))
+                  })
+                ),
                 keyboard.addChild { _ =>
                   keyboardAction("Escape", "Close dialog", close)
+                },
+                keyboard.addChild { _ =>
+                  keyboardAction("Enter", "Close dialog", close)
                 }
               )
             }

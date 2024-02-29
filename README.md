@@ -11,6 +11,8 @@ Lazagna does not use a virtual DOM. Instead, its HTML element DSL creates DOM el
 The most basic building block in Lazagna is a `Modifier`. This is defined as a trait with a single method:
 
 ```scala
+package zio.lazagna.dom
+
 trait Modifier {
   def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit]
 }
@@ -22,75 +24,184 @@ A `Modifier` has the following properties:
 - It returns a ZIO that only has side effects when mounted (`Unit`) and can't fail (`Nothing`).
 - The returned ZIO is allowed to use a `Scope` in its environment. That scope is typically tied to the lifetime of the parent, so that this modifier can clean up resources together with its parent going away.
 
+### Applying (mounting) a modifier to the DOM tree
+
+In your application entry point, you should mount your main modifier to a DOM tree node. This involves just calling its `mount` method directly. Typically, you only have one or few of these invocations.
+
+```scala
+import org.scalajs.dom
+import zio.ZIOAppDefault
+import zio.lazagna.dom.Modifier
+
+object Main extends ZIOAppDefault {
+  val main: Modifier = ???
+
+  override def run = {
+    for {
+      _ <- main.mount(dom.document.querySelector("#app"))
+      _ <- ZIO.never // We don't want to exit main, since our background fibers do the real work.
+    } yield ExitCode.success
+  }
+}
+```
+
+One special thing is that you don't want your main method to exit: that would remove its `Scope` and stop all of your application.
+
+### Elements and attributes
+
+The `Element` class is a  `Modifier` which create elements, and allow arguments to create children. The `Attribute` class is a `Modifier` that sets attributes on its parent element. They combine as follows:
+
+```scala
+import zio.lazagna.dom.Element._
+import zio.lazagna.dom.Attribute._
+
+val tree = div(
+  div(
+    `class` := "dialog",
+    input(
+      `type` := "text"
+    )
+  )
+)
+```
+
+See the respective classes for which elements and attributes are currently available.
+
+### Event handlers
+
+In order to respond to events from any DOM `EventTarget`, the `EventListener` class can be used. A ZIO will be invoked whenever an event occurs, in order to execute side effects. Events can also be directly sent to a `Hub` or `Ref`. An implicit conversion will turn the `EventListener` into a `Modifier` that registers and unregisters the event handler as needed.
+
+```scala
+import zio.lazagna.dom.Events._
+
+val mouseHub: Hub[dom.MouseEvent]
+
+input(
+  `type` := "test",
+  onClick(_.map(event => println(event))),
+  onMouseMove --> hub
+)
+```
+
+Alternatively, the events can be viewed as a `ZStream` by invoking e.g. `onClick.stream.mapZIO(...)`. An implicit conversion will turn the stream into a `Modifier`. However, the above push model is recommended as it doesn't require a background fiber for each running stream.
+
+### Setting attribute values dynamically
+
+An attribute can take the value from a `Hub`, `SubscriptionRef`, or directly from a `ZStream` with the correct type, using the `<--` method, and the `Consumeable` type alias.
+
+```scala
+package zio.lazagna
+
+type Consumeable[T] = ZStream[Scope & Setup, Nothing, T]
+```
+
+Implicit conversions exist from `Hub` and `SubscriptionRef` to `Consumeable`. This way, you can set an attribute that automatically follows a value:
+
+```scala
+import zio.lazagna.Consumeable.given
+
+case class Tool(name: String)
+def currentTool: Consumeable[Tool]
+
+div(
+  `class` <-- currentTool.map(t => s"main tool-${t.name}"),
+)
+```
+
+Under the hood, a stream is created that updates the attribute on every value. The stream is forked into a background fiber that's tied to the `Scope` of the modifier. That way, the stream automatically stops with that scope.
+
+### Setting element children dynamically
+
+Various methods exist to dynamically vary the children of a parent element.
+
+#### Changing all children at once
+
+For instances where you want to replace all children whenever a value changes, use `Alternative.mountOne`. It completely replaces the modifier whenever `T` changes (by closing its scope).
+```scala
+package zio.lazagna.dom
+
+object Alternative {
+  def mountOne[T](source: Consumeable[T])(render: T => Modifier): Modifier
+}
+```
+
+#### Switching between multiple mounted children
+
+If you want to keep several alternatives mounted in the DOM tree, but only show one, use `Alternative.showOne`. This version will create all possible children up front, and use CSS to only show one at a time.
+```scala
+def showOne[T](source: Consumeable[T], alternatives: Map[T, Element[_]], initial: Option[T] = None): Modifier
+```
+
+#### Safely adding a child explicitly
+
+If you want to add a child to an element explicitly at some point in time, use the `Children` class. This allows you to designate a place where these children are rendered, and then later on "inject" children there. The injected children are still tied to a `Scope`, so they will automatically disappear when that scope goes away.
+```scala
+package zio.lazagna.dom
+
+trait Children {
+  /** Renders the children into their actual location. This must be invoked before .child() has any effect. */
+  def render: Modifier
+
+  def child[E <: dom.Element](creator: UIO[Unit] => Element[E]): ZIO[Scope, Nothing, Unit]
+}
+
+object Children {
+  def make: UIO[Children]
+}
+```
+
+You use this as follows. First, make sure you create a `Children` instance using `Children.make` in central spot. Then, render that instance into your DOM tree:
+```scala
+div(
+  childrenInstance.render
+)
+```
+
+Now, you can add children at will from any other place in your code where you have a scope available. For example, an event handler:
+```scala
+div(
+  cls := "child-client"
+  onClick(_.flatMap(_ => children.child { close =>
+    div(
+      cls := "dialog"
+      div(
+        cls := "button"
+        onClick(_.flatMap(_ => close))
+      )
+    )
+  }))
+)
+```
+
+The `child` function's `creator` argument receives a `UIO[Unit]` (called `close` in our example), which can be invoked to destroy the created child. The child will also automatically be destroyed when its `Scope` goes away (in our example, that's the `div` with `child-client` as CSS class).
+
+#### Manually managing children
+
+As a final, lowest-level approach, you can manually manage the children of an `Element` using the `children <~~ ` operator:
+```scala
+val operations: Consumeable[Children.ChildOp]
+
+div(
+  children <~~ operations
+)
+```
+
+A selection of  `ChildOp` subclasses exist to add and remove children at specific spots, and/or rearrange them.
 
 ## Naming
 
 The framework is called "Lazagna" because of the Z in ZIO, and of course because Lasagna, being made with layers, is a [laminar](https://laminar.dev/).
 
-# Not quite ready
+# TODO
 
 - Clean up the use of implicit and given, and align on having a nice one-line import for library users
 
-# Running the "draw" example
+# Discussion points for ZIO itself
 
-At the moment, this repository contains a simple drawing application that demonstrates how to write a command pattern-based rendering pipeline. If you want to run it, then in one console run:
+- The initial `EventsEmitter` class just created a `ZStream` for the events. This required a `Fiber` for every event handler. They turned out to be fast to create, but relatively slow to stop (about 1 second to stop 1000 fibers, on a fast desktop machine). If you have 1000 small icons to select from, that's too slow. Hence, a push-based model was introduced.
+- ZIO could perhaps do with a `Filtered` class of its own, instead of or in addition to the generic `filter` error variants.
+- ZStream could perhaps add a push-based stream variant, which maintains stream operation in a scope, executing a ZIO for every element. We'd have to define more precise semantics though (return type of the ZIO would have to be `Chunk[U]`, and we need a way to early close the stream to yield a value, since `EventEmitter` doesn't need that).
 
-```sh
-sbt
-project client
-~fastLinkJS
-```
+# "Draw" demo application
 
-and in another console run:
-
-```sh
-cd draw-client
-npm run dev
-```
-
-and in a third console run:
-```sh
-sbt
-project server
-~reStart
-```
-
-The latter will open the example at `http://localhost:5173/`, which you can open in your web browser. The example is currently fully offline, but a multi-user version with a small server backend is being planned and developed.
-
-## Icons
-
-Source: https://github.com/leungwensen/svg-icon
--`npm install`
-- Copy packaged SVG icon symbol collections from `dist/sprite/symbol` to `public/symbols`
-
-## Notes
-
-### Manual layout
-- Widget has padding
-- Icon (or any widget, e.g. note), moveable at will (but keep padding in tact)
-  -> Push and shove moving?
-- Arrows between widgets
-
-### Automatic layout
-- Band
-  -> weight on distance
-  -> preferred angle
-  -> weight on preferred angle
-- Circular layout: bands to center (first element) and between each other
-- Horizontal and Vertical layout
-
-- Band from i1 to i2. Distance between i1 and i2 is `d` distance weight `w_d`, angle weight `w_a`, and abs deviation from preferred angle `da`
-  Distance d is `d = sqrt((i1.x - i2.x)^2 + (i1.y - i2.y)^2)`
-  loss is `d * w_d + da * w_a`
-  loss is `sqrt((i1.x - i2.x)^2 + (i1.y - i2.y)^2) * w_d + da * w_a`
-  calculate
-
-- Other factors for loss function:
-  * Style: Label: Center, keep lines same width, close to optimal width (of 2x icon?)
-  * Style: Note: Justified, Top-aligned, lines exact width of note,
-
-  * Hyphenation https://github.com/gnieh/hyphen
-  * Stretch of each line (using TeX-like glue structure with badness) Glue: { size, plus, minus }. Do we need infinity  here or is big numbers enough? Or take highest order infinity that has >0.000001
-  * Consider breaking lines from 0.5 stretched to 0.5 shrunk
-  * Characters per line (66 optimal, 45 to 75 maxima). This includes spaces. Set glue such that line line is 33em.
-  * Aspect ratio of the total text?
+Read about the demo application [here](DRAW.md)

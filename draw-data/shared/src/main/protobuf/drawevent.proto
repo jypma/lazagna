@@ -18,6 +18,7 @@ message DrawEventBody {
         DrawingCreated drawingCreated = 4;
         ObjectMoved objectMoved = 5;
         IconCreated iconCreated = 6;
+        ObjectLabelled objectLabelled = 7;
     }
 }
 
@@ -49,4 +50,9 @@ message IconCreated {
     optional Point position = 2;
     optional string category = 3;
     optional string name = 4;
+}
+
+message ObjectLabelled {
+    required string id = 1;
+    required string label = 2;
 }

@@ -21,24 +21,45 @@ case class Attribute(name: String) {
     }
   }
 
-  def <--[T](content: Consumeable[T])(implicit ev: SafeToString[T]) = new Modifier {
+  def <--[T](content: Consumeable[T])(implicit ev: AttributeType[T]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       content.map { value =>
-        parent.setAttribute(name, value.toString)
+        ev.setTo(parent, name, value)
       }.consume
     }
   }
 }
 
 object Attribute {
-  /** Marker trait that indicates values of these types can be set as attributes (by calling toString on them) */
-  sealed trait SafeToString[T]
-  object SafeToString {
-    implicit case object string extends SafeToString[String]
-    implicit case object int extends SafeToString[Int]
-    implicit case object long extends SafeToString[Long]
-    implicit case object float extends SafeToString[Float]
-    implicit case object double extends SafeToString[Double]
+  /** Marker trait that indicates values that can be handled directly on an attribute  */
+  sealed trait AttributeType[T] {
+    def setTo(parent: dom.Element, name: String, value: T): Unit
+  }
+  private def toStringAttribute[T] = new AttributeType[T] {
+    override def setTo(parent: dom.Element, name: String, value: T): Unit = {
+      parent.setAttribute(name, value.toString)
+    }
+  }
+  object AttributeType {
+    implicit val string: AttributeType[String] = toStringAttribute
+    implicit val int: AttributeType[Int] = toStringAttribute
+    implicit val long: AttributeType[Long] = toStringAttribute
+    implicit val float: AttributeType[Float] = toStringAttribute
+    implicit val double: AttributeType[Double] = toStringAttribute
+    implicit val boolean: AttributeType[Boolean] = new AttributeType[Boolean] {
+      override def setTo(parent: dom.Element, name: String, value: Boolean): Unit = {
+        (name, parent) match {
+          // TODO: See if there's a nicer, more generic way to do this
+          case ("checked", e:dom.HTMLInputElement) => e.checked = value
+          case _ =>
+            if (value) {
+              parent.setAttribute(name, "true")
+            } else {
+              parent.removeAttribute(name)
+            }
+        }
+      }
+    }
   }
 
   val id = Attribute("id")

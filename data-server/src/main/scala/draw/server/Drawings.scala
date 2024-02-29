@@ -5,8 +5,8 @@ import scala.collection.Searching.{Found, InsertionPoint}
 import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Clock, IO, Ref, ZIO, ZLayer}
 
-import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, MoveObject, StartScribble}
-import draw.data.drawevent.{DrawEvent, DrawingCreated, IconCreated, ObjectDeleted, ObjectMoved, ScribbleContinued, ScribbleStarted}
+import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, MoveObject, StartScribble, LabelObject}
+import draw.data.drawevent.{DrawEvent, DrawingCreated, IconCreated, ObjectDeleted, ObjectMoved, ScribbleContinued, ScribbleStarted, ObjectLabelled}
 import draw.data.point.Point
 
 import Drawings.DrawingError
@@ -74,6 +74,13 @@ case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Dra
           storage.update(_ :+ DrawEvent(
             0,
             IconCreated(id, Some(position), Some(category), Some(name)),
+            Some(now.toEpochMilli())
+          ))
+
+        case DrawCommand(LabelObject(id, label, _), _) =>
+          storage.update(_ :+ DrawEvent(
+            0,
+            ObjectLabelled(id, label),
             Some(now.toEpochMilli())
           ))
 

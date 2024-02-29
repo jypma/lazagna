@@ -181,6 +181,10 @@ div.label-input {
     z-index: 3;
 }
 
+div.label-input input {
+    text-align: center;
+}
+
 .toolbox {
     position: fixed;
     z-index: 3;
@@ -217,6 +221,7 @@ div.label-input {
 
     color: rgba(var(--fg-color-main));
     background-color: var(--fg-color-dialog);
+    cursor: pointer;
 }
 
 .tool > input {

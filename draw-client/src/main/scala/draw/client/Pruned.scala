@@ -3,7 +3,7 @@ package draw.client
 import zio.ZIO
 import zio.lazagna.eventstore.EventStore
 
-import draw.data.drawevent.{DrawEvent, IconCreated, ObjectDeleted, ObjectMoved, ScribbleContinued, ScribbleStarted}
+import draw.data.drawevent.{DrawEvent, IconCreated, ObjectDeleted, ObjectMoved, ScribbleContinued, ScribbleStarted, ObjectLabelled}
 import org.scalajs.dom
 
 object Pruned {
@@ -12,7 +12,7 @@ object Pruned {
   type Backend = EventStore[E, Err]
 
   case class ScribbleState(started: DrawEvent, moved: Option[DrawEvent])
-  case class IconState(started: DrawEvent, moved: Option[DrawEvent])
+  case class IconState(started: DrawEvent, moved: Option[DrawEvent], labelled: Option[DrawEvent])
 
   case class State(
     scribbles: Map[String, ScribbleState] = Map.empty,
@@ -32,11 +32,13 @@ object Pruned {
         case e@DrawEvent(_, ScribbleStarted(scribbleId, _, _), _, _, _) =>
           update(scribbleId, ScribbleState(e, None))
         case e@DrawEvent(_, IconCreated(id, _, _, _, _), _, _, _) =>
-          update(id, IconState(e, None))
+          update(id, IconState(e, None, None))
         case e@DrawEvent(_, ObjectMoved(id, _, _), _, _, _) if scribbles.contains(id) =>
           update(id, scribbles(id).copy(moved = Some(e)))
         case e@DrawEvent(_, ObjectMoved(id, _, _), _, _, _) if icons.contains(id) =>
           update(id, icons(id).copy(moved = Some(e)))
+        case e@DrawEvent(_, ObjectLabelled(id, _, _), _, _, _) if icons.contains(id) =>
+          update(id, icons(id).copy(labelled = Some(e)))
         case other =>
           println("??? Unexpected recovery event: " + other)
           this
@@ -71,7 +73,7 @@ object Pruned {
 
         case e@DrawEvent(_, IconCreated(id, _, _, _, _), _, _, _) =>
           storage.publish(e).as(
-            update(id, IconState(e, None))
+            update(id, IconState(e, None, None))
           )
 
         case DrawEvent(_, ObjectDeleted(id, _), _, _, _) =>
@@ -84,9 +86,10 @@ object Pruned {
               ))
             case _ =>
               icons.get(id) match {
-                case Some(IconState(DrawEvent(sequenceNr, _, _, _, _), moved)) =>
+                case Some(IconState(DrawEvent(sequenceNr, _, _, _, _), moved, labelled)) =>
                   val deleteMoved = moved.map(m => storage.delete(m.sequenceNr)).getOrElse(ZIO.unit)
-                  (storage.delete(sequenceNr) *> deleteMoved).as(copy(
+                  val deleteLabelled = labelled.map(m => storage.delete(m.sequenceNr)).getOrElse(ZIO.unit)
+                  (storage.delete(sequenceNr) *> deleteMoved *> deleteLabelled).as(copy(
                     icons = icons - id
                   ))
                 case _ =>
@@ -108,20 +111,34 @@ object Pruned {
 
             case _ =>
               icons.get(id) match {
-                case Some(IconState(started, Some(DrawEvent(oldSequenceNr, _, _, _, _)))) =>
+                case Some(state@IconState(_, Some(DrawEvent(oldSequenceNr, _, _, _, _)), _)) =>
+                  // TODO: Remove publishAndReplace, it will clean this up as well.
                   storage.publishAndReplace(e, oldSequenceNr).as(
-                    update(id, IconState(started, Some(e)))
+                    update(id, state.copy(moved = Some(e)))
                   )
 
-                case Some(IconState(started, _)) =>
+                case Some(state) =>
                   storage.publish(e).as(
-                    update(id, IconState(started, Some(e)))
+                    update(id, state.copy(moved = Some(e)))
                   )
 
                 case _ =>
                   println("??? Moved without started")
                   ZIO.succeed(this)
               }
+          }
+
+        case e@DrawEvent(_, ObjectLabelled(id, _, _), _, _, _) =>
+          icons.get(id) match {
+            case Some(state) =>
+              val deleteOld = state.labelled.map(m => storage.delete(m.sequenceNr)).getOrElse(ZIO.unit)
+              (deleteOld *> storage.publish(e)).as(
+                update(id, state.copy(labelled = Some(e)))
+              )
+
+            case _ =>
+              println("??? Labelled without started")
+              ZIO.succeed(this)
           }
 
         case other =>

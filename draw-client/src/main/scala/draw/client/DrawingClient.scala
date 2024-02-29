@@ -2,7 +2,6 @@ package draw.client
 
 import scala.scalajs.js.typedarray.{ArrayBuffer, Int8Array}
 
-import zio.lazagna.Consumeable._
 import zio.lazagna.dom.http.Request.{AsDynamicJSON, HEAD, POST, RequestError}
 import zio.lazagna.dom.http.WebSocket
 import zio.lazagna.eventstore.EventStore
@@ -16,12 +15,21 @@ import org.scalajs.dom
 import scalajs.js.typedarray._
 import scalajs.js
 import DrawingClient._
+import zio.Ref
+import zio.Hub
+import zio.lazagna.Consumeable
+import zio.lazagna.Consumeable.given
+import zio.stream.ZStream
+import zio.lazagna.Setup
+import zio.Semaphore
 
 trait DrawingClient {
   def login(user: String, password: String, drawingName: String): ZIO[Scope, ClientError | RequestError, Drawing]
 }
 
 object DrawingClient {
+  import Drawing._
+
   case class ClientError(message: String)
 
   case class Config(server: String, port: Int, tls: Boolean, path: String) {
@@ -39,10 +47,14 @@ object DrawingClient {
     for {
       config <- ZIO.service[Config]
       store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
-      drawViewport <- SubscriptionRef.make(Drawing.Viewport())
-      connStatus <- SubscriptionRef.make[Drawing.ConnectionStatus](Drawing.Connected)
+      drawViewport <- SubscriptionRef.make(Viewport())
+      connStatus <- SubscriptionRef.make[ConnectionStatus](Connected)
+      state <- Ref.make(DrawingState(Map.empty)) // TODO investigate Ref.Synchronized to close over state
+      stateSemaphore <- Semaphore.make(1)
+      stateChanges <- Hub.bounded[ObjectState](16)
+      newObjectIDs <- Hub.bounded[String](16)
     } yield new DrawingClient {
-      override def login(user: String, password: String, drawingName: String) = (for {
+      override def login(user: String, password: String, drawingName: String) = Setup.start(for {
         // FIXME: We really need a little path DSL to prevent injection here.
         loginResp <- POST(AsDynamicJSON, s"${config.baseUrl}/users/${user}/login?password=${password}")
         token <- loginResp.token.asInstanceOf[String] match {
@@ -67,6 +79,16 @@ object DrawingClient {
             case _ => ZIO.unit
           }
         }, onClose = connStatus.set(Drawing.Disconnected))
+        _ <- store.events.mapZIO { event =>
+          stateSemaphore.withPermit {
+            state.modify(_.update(event.body)).flatMap {
+              case (Some(objectState), isNew) =>
+                newObjectIDs.publish(objectState.id).when(isNew) *> stateChanges.publish(objectState)
+              case _ =>
+                ZIO.unit
+            }
+          }
+        }.runDrain.forkScoped
       } yield new Drawing {
         override def perform(command: DrawCommand): ZIO[Any, Nothing, Unit] = {
           socket.send(command.toByteArray).catchAll { err =>
@@ -80,6 +102,20 @@ object DrawingClient {
         override def initialVersion = version
         override def viewport = drawViewport
         override def connectionStatus = connStatus
+        override def objectState(id: String): Consumeable[ObjectState] = ZStream.unwrapScoped {
+          stateSemaphore.withPermit {
+            state.get
+              .map(_.objects.get(id).toSeq)
+              .map(ZStream.fromIterable(_) ++ stateChanges.filter(_.id == id))
+          }
+        }
+        override def objectIDs: Consumeable[String] = ZStream.unwrapScoped {
+          stateSemaphore.withPermit {
+            state.get
+              .map(_.objects.keySet)
+              .map(ZStream.fromIterable(_) ++ newObjectIDs)
+          }
+        }
       }).mapError { err => ClientError(err.toString) }
     }
   }

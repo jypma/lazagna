@@ -10,7 +10,7 @@ import zio.lazagna.dom.{Alternative, Attribute, Modifier}
 import zio.stream.{SubscriptionRef, ZPipeline, ZStream}
 import zio.{Chunk, ZIO, ZLayer}
 
-import draw.data.drawevent.{DrawEvent, IconCreated, ObjectDeleted, ObjectMoved, ScribbleContinued, ScribbleStarted}
+import draw.data.drawevent.{DrawEvent, IconCreated, ObjectDeleted, ObjectMoved, ScribbleContinued, ScribbleStarted, ObjectLabelled}
 import draw.data.point.Point
 import org.scalajs.dom
 
@@ -167,13 +167,14 @@ object DrawingRenderer {
                         x := -32,
                         y := -32
                       ),
-                    )/*,
+                    ),
                     text(
                       cls := "label",
                       x := 0,
                       y := 32,
-                      textContent := "This is a test label."
-                    )*/
+                      textContent <-- furtherEvents
+                        .collect { case DrawEvent(_, ObjectLabelled(ID, label, _), _, _, _) => label }
+                    )
                   )
                 ))
 

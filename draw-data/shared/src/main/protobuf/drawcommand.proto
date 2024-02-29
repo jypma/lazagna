@@ -14,6 +14,7 @@ message DrawCommandBody {
         DeleteObject deleteObject = 3;
         MoveObject moveObject = 4;
         CreateIcon createIcon = 5;
+        LabelObject labelObject = 6;
     }
 }
 
@@ -41,4 +42,9 @@ message CreateIcon {
     required Point position = 2;
     required string category = 3;
     required string name = 4;
+}
+
+message LabelObject {
+    required string id = 1;
+    required string label = 2;
 }
