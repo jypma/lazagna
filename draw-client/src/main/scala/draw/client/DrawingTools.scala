@@ -152,6 +152,7 @@ object DrawingTools {
             }),
           keyboard.addChild { _ =>
             div(
+              keyboardAction("☸", "Use middle button to pan, mouse wheel to zoom", ZIO.unit),
               keyboardAction("f", "Fit into view",
                 drawing.viewport.set(Drawing.Viewport.fit(helper.svg.getBBox()))
               ),

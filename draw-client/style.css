@@ -111,13 +111,6 @@ svg.main {
     height: calc(100vh - 5px); /* no idea why the 5px is needed to get rid of vertical scrollbar in firefox... */
 }
 
-svg.tool-pan {
-    cursor: grab;
-}
-svg.tool-pan:active {
-    cursor: grabbing;
-}
-
 .dialog {
     z-index: 3;
     position: fixed;
