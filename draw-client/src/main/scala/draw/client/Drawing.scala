@@ -5,7 +5,6 @@ import zio.lazagna.Consumeable
 import zio.stream.SubscriptionRef
 
 import draw.data.drawcommand.DrawCommand
-import draw.data.drawevent.DrawEvent
 import org.scalajs.dom
 import org.scalajs.dom.SVGRect
 import draw.data.point.Point
@@ -22,11 +21,10 @@ trait Drawing {
 
   def connectionStatus: Consumeable[Drawing.ConnectionStatus]
   def perform(command: DrawCommand): ZIO[Any, Nothing, Unit]
-  def events: Consumeable[DrawEvent]
-  def eventsAfter(lastSeenSequenceNr: Long): Consumeable[DrawEvent]
   def initialVersion: Long
+  def currentVersion: Consumeable[Long]
   def viewport: SubscriptionRef[Drawing.Viewport]
-  def objectIDs: Consumeable[String] // Returns all object IDs
+  def initialObjectStates: Consumeable[ObjectState] // Returns initial object state for each object
   def objectState(id: String): Consumeable[ObjectState] // Returns state for that object
 }
 
@@ -37,28 +35,32 @@ object Drawing {
 
   sealed trait ObjectState {
     def id: String
+    def deleted: Boolean
     def update(event: DrawEventBody): ObjectState = this
   }
-  case class ScribbleState(id: String, position: Point, points: Seq[Point]) extends ObjectState {
+  case class ScribbleState(id: String, deleted: Boolean, position: Point, points: Seq[Point]) extends ObjectState {
     override def update(event: DrawEventBody) = event match {
       case ScribbleContinued(_, addedPoints, _) =>
         copy(points = points ++ addedPoints)
       case ObjectMoved(_, Some(newPosition), _) =>
         copy(position = newPosition)
+      case _:ObjectDeleted =>
+        copy(deleted = true)
       case _ => this
     }
 
   }
-  case class IconState(id: String, position: Point, symbol: SymbolRef, label: String) extends ObjectState {
+  case class IconState(id: String, deleted: Boolean, position: Point, symbol: SymbolRef, label: String) extends ObjectState {
     override def update(event: DrawEventBody) = event match {
       case ObjectMoved(_, Some(newPosition), _) =>
         copy(position = newPosition)
       case ObjectLabelled(_, newLabel, _) =>
         copy(label = newLabel)
+      case _:ObjectDeleted =>
+        copy(deleted = true)
       case _ => this
     }
   }
-  case class DeletedState(id: String) extends ObjectState
 
   case class DrawingState(objects: Map[String, ObjectState]) {
     private def set(id: String, state: ObjectState, isNew: Boolean) =
@@ -69,27 +71,20 @@ object Drawing {
       }.getOrElse(((None, false), this))
     }
 
-    private def remove(id: String) = {
-      if (objects.contains(id))
-        ((Some(DeletedState(id)), false), copy(objects = objects - id))
-      else
-        ((None, false), this)
-    }
-
     /** Returns the new drawing state, new object state, and whether that object is new */
     def update(event: DrawEventBody): ((Option[ObjectState], Boolean), DrawingState) = event match {
       case ScribbleStarted(id, points, _) =>
-        set(id, ScribbleState(id, Point(0,0), points), true)
+        set(id, ScribbleState(id, false, Point(0,0), points), true)
+      case IconCreated(id, optPos, Some(category), Some(name), _) =>
+        set(id, IconState(id, false, optPos.getOrElse(Point(0,0)), SymbolRef(SymbolCategory(category), name), ""), true)
       case e@ScribbleContinued(id, _, _) =>
         update(id, e)
       case e@ObjectMoved(id, _, _) =>
         update(id, e)
       case e@ObjectLabelled(id, _, _) =>
         update(id, e)
-      case IconCreated(id, optPos, Some(category), Some(name), _) =>
-        set(id, IconState(id, optPos.getOrElse(Point(0,0)), SymbolRef(SymbolCategory(category), name), ""), true)
-      case ObjectDeleted(id, _) =>
-        remove(id)
+      case e@ObjectDeleted(id, _) =>
+        update(id, e)
 
       case _ =>
         ((None, false), this)

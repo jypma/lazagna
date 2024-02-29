@@ -6,6 +6,7 @@ import zio.lazagna.Consumeable.given
 import zio.{Exit, Hub, Ref, Scope, UIO, ZIO}
 
 import org.scalajs.dom
+import zio.Queue
 
 /** Tracks a set of children of differing owner scopes, and renders them into a single parent. Children can be
   * rendered into here while being owned from other places. */
@@ -121,19 +122,19 @@ object Children {
   /** Makes a receiver for child elements, which can be rendered into a different owner scope than the owner
     * scope of the actual children. */
   def make: UIO[Children] = for {
-    hub <- Hub.bounded[ChildOp](1)
+    queue <- Queue.bounded[ChildOp](100)
   } yield new Children {
-    def render: Modifier = Children <~~ hub
+    def render: Modifier = Children <~~ queue
 
     def child[E <: dom.Element](creator: UIO[Unit] => Element[E]): ZIO[Scope, Nothing, Unit] = {
       var element: Element[E] = null
 
       val destroy = ZIO.unless(element == null)(
-        hub.publish(Children.Delete(element)) *>
+        queue.offer(Children.Delete(element)) *>
           ZIO.succeed{element = null}
       ).unit
 
-      val create = ZIO.unless(element != null)(hub.publish {
+      val create = ZIO.unless(element != null)(queue.offer {
         element = creator(destroy)
         Children.Append(element)
       }).unit

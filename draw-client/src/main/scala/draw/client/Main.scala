@@ -54,7 +54,7 @@ object Main extends ZIOAppDefault {
   )))
 
   var knownDone = Set.empty[Fiber.Runtime[_,_]]
-  def logFibers(fibers: Chunk[Fiber.Runtime[_,_]]): ZIO[Any,Nothing,Unit] = for {
+  def logFibers(fibers: Chunk[Fiber.Runtime[_,_]]): ZIO[Any,Nothing,String] = for {
     fibersWithStatus <- ZIO.collectAll(fibers.map{f => f.status.map((f, _))})
     newlyDone = fibersWithStatus.filter(_._2 == Fiber.Status.Done).map(_._1).toSet -- knownDone
     runningCount = fibersWithStatus.count(_._2 != Fiber.Status.Done)
@@ -68,10 +68,10 @@ object Main extends ZIOAppDefault {
     })
   } yield {
     knownDone = knownDone ++ newlyDone
-    println(s"Now ${runningCount} fibers.")
+    s"Now ${runningCount} fibers."
   }
 
-  val dump = ZStream.repeatZIOWithSchedule(Fiber.roots, Schedule.spaced(2.seconds)).changes.mapZIO(logFibers).runDrain
+  val dump = ZStream.repeatZIOWithSchedule(Fiber.roots, Schedule.spaced(1.second)).mapZIO(logFibers).changes.debug.runDrain
 
   override def run = {
     for {

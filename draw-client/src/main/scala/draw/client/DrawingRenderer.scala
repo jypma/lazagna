@@ -1,18 +1,20 @@
 package draw.client
 
 import zio.lazagna.Consumeable._
+import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.tags._
-import zio.lazagna.dom.Element.{children, textContent}
+import zio.lazagna.dom.Element.{textContent}
 import zio.lazagna.dom.svg.PathData
 import zio.lazagna.dom.{Alternative, Attribute, Modifier}
-import zio.stream.{SubscriptionRef, ZPipeline, ZStream}
-import zio.{Chunk, ZIO, ZLayer}
+import zio.stream.{SubscriptionRef}
+import zio.{ZIO, ZLayer}
 
-import draw.data.drawevent.{DrawEvent, IconCreated, ObjectDeleted, ObjectMoved, ScribbleContinued, ScribbleStarted, ObjectLabelled}
 import draw.data.point.Point
 import org.scalajs.dom
+import zio.lazagna.dom.Children
+import Drawing._
 
 trait DrawingRenderer {
   def render: Modifier
@@ -72,118 +74,101 @@ object DrawingRenderer {
       currentView <- SubscriptionRef.make(initialView)
     } yield new DrawingRenderer {
       val start = System.currentTimeMillis()
+      var eventCountDebug = 0
 
-      override val render = {
-        var eventCountDebug = 0
-        val svgBody = g(
-          children <~~ drawing.events
-            .tap { event =>
-              eventCountDebug += 1
-              ZIO.when(event.sequenceNr == drawing.initialVersion)(currentView.set(1).tap(_ => ZIO.succeed{
-                // Local: 0.5ms per event
-                // LAN: 0.8ms per event
-                // With IndexedDB (cursor), plus read from remote websocket: 3ms per event
-                // With IndexedDB (cursor), plus read from local websocket: 2ms per event
-                // With IndexedDB (cursor), from DB: 0.8ms per event
-                val time = System.currentTimeMillis() - start
-                println(s"Loaded ${eventCountDebug} events, until sequence nr ${drawing.initialVersion}, in ${time}ms")
-              }))
-            }
-            .map {
-              case DrawEvent(sequenceNr, ScribbleStarted(scribbleId, startPoints, _), _, _, _) =>
-                val ID = scribbleId
-                val furtherEvents = drawing.eventsAfter(sequenceNr)
-                  .takeUntil(_ match {
-                    case DrawEvent(_, ObjectDeleted(ID, _), _, _, _) => true
-                    case _ => false
-                  })
-                val startData =
-                  startPoints.headOption.map(start => PathData.MoveTo(start.x, start.y)) ++
-                  startPoints.tail.map(pos => PathData.LineTo(pos.x, pos.y))
-                val points = d <-- furtherEvents
-                  .collect { case DrawEvent(_, ScribbleContinued(ID, points, _), _, _, _) => points }
-                  .map(_.map { pos => PathData.LineTo(pos.x, pos.y) })
-                  .via(ZPipeline.prepend(Chunk(Chunk.empty))) // in order to also trigger render on the initial starting points
-                  .mapAccum(startData) { (seq, events) =>
-                    val res = seq ++ events
-                    (res, res)
-                  }
-                  .map(PathData.render)
+      val renderedObjects = Modifier.unwrap {
+        for {
+          children <- Children.make
 
-                val position = furtherEvents
-                  .collect { case DrawEvent(_, ObjectMoved(ID, Some(position), _), _, _, _) => position}
+          // TODO: Actually take the version of the last actually rendered state here
+          _ <- drawing.currentVersion.filter(_ >= drawing.initialVersion).mapZIO { _ =>
+            // Local: 0.5ms per event
+            // LAN: 0.8ms per event
+            // With IndexedDB (cursor), plus read from remote websocket: 3ms per event
+            // With IndexedDB (cursor), plus read from local websocket: 2ms per event
+            // With IndexedDB (cursor), from DB: 0.8ms per event
+            val time = System.currentTimeMillis() - start
+            println(s"Processed ${eventCountDebug} events, until sequence nr ${drawing.initialVersion}, in ${time}ms")
+            currentView.set(1)
+          }.take(1).consume
 
-                Some(children.Append(
-                  g(
-                    cls := "scribble",
-                    id := s"scribble${scribbleId}",
-                    transform <-- position.map(p => s"translate(${p.x},${p.y})"),
-                    dataX <-- position.map(_.x),
-                    dataY <-- position.map(_.y),
-                    path(
-                      points
-                    ),
-                    path(
-                      cls := "clickTarget",
-                      points
-                    )
-                  )
-                ))
+          _ <- drawing.initialObjectStates.mapZIO { initial =>
+            eventCountDebug += 1
+            val furtherEvents = drawing.objectState(initial.id).takeUntil(_.deleted)
+            children.child { destroy =>
+              g(
+                Modifier.run(drawing.objectState(initial.id).filter(_.deleted).mapZIO(_ => destroy).take(1).consume),
+                initial match {
+                  case _:ScribbleState =>
+                    val position = furtherEvents
+                      .collect { case ScribbleState(_, _, pos, _) => pos }
+                      .changes
 
-              case DrawEvent(_, ObjectDeleted(id, _), _, _, _) =>
-                Option(dom.document.getElementById(s"scribble${id}")).orElse(
-                  Option(dom.document.getElementById(s"icon${id}"))).map(children.DeleteDOM(_))
+                    val points = d <-- furtherEvents
+                      .collect { case ScribbleState(_, _, _, p) => p }
+                      .map { p =>
+                        p.headOption.map(start => PathData.MoveTo(start.x, start.y)) ++
+                        p.tail.map(pos => PathData.LineTo(pos.x, pos.y))
+                      }
+                      .map(PathData.render)
+                      .changes
 
-              case DrawEvent(sequenceNr, IconCreated(iconId, Some(startPos), Some(category), Some(name), _), _, _, _) =>
-                println("Got icon " + iconId)
-                val ID = iconId
-
-                val furtherEvents = drawing.eventsAfter(sequenceNr)
-                  .takeUntil(_ match {
-                    case DrawEvent(_, ObjectDeleted(ID, _), _, _, _) => true
-                    case _ => false
-                  })
-
-                val position = ZStream(startPos) ++ furtherEvents
-                  .collect { case DrawEvent(_, ObjectMoved(ID, Some(position), _), _, _, _) => position}
-
-                val symbol = SymbolRef(category = SymbolCategory(category), name = name)
-
-                Some(children.Append(
-                  g(
-                    id := s"icon${iconId}",
-                    cls := "icon",
-                    transform <-- position.map(p => s"translate(${p.x},${p.y})"),
-                    dataX <-- position.map(_.x),
-                    dataY <-- position.map(_.y),
                     g(
-                      cls := "clickTarget",
-                      use(
-                        svgTitle(textContent := symbol.name),
-                        href := symbol.href,
-                        cls := "icon",
-                        width := 64, // TODO: share iconSize between preview in DrawingTools and actual rendering here. Probably share the rendering code itself.
-                        height := 64,
-                        x := -32,
-                        y := -32
+                      cls := "scribble",
+                      id := s"scribble${initial.id}",
+                      transform <-- position.map(p => s"translate(${p.x},${p.y})"),
+                      dataX <-- position.map(_.x),
+                      dataY <-- position.map(_.y),
+                      path(
+                        points
                       ),
-                    ),
-                    text(
-                      cls := "label",
-                      x := 0,
-                      y := 32,
-                      textContent <-- furtherEvents
-                        .collect { case DrawEvent(_, ObjectLabelled(ID, label, _), _, _, _) => label }
+                      path(
+                        cls := "clickTarget",
+                        points
+                      )
                     )
-                  )
-                ))
 
-              case _ =>
-                None
+                  case IconState(_,_,_,symbol,_) =>
+                    val position = furtherEvents
+                      .collect { case IconState(_, _, pos, _, _) => pos }
+                      .changes
+
+                    g(
+                      id := s"icon${initial.id}",
+                      cls := "icon",
+                      transform <-- position.map(p => s"translate(${p.x},${p.y})"),
+                      dataX <-- position.map(_.x),
+                      dataY <-- position.map(_.y),
+                      g(
+                        cls := "clickTarget",
+                        use(
+                          svgTitle(textContent := symbol.name),
+                          href := symbol.href,
+                          cls := "icon",
+                          width := 64, // TODO: share iconSize between preview in DrawingTools and actual rendering here. Probably share the rendering code itself.
+                          height := 64,
+                          x := -32,
+                          y := -32
+                        ),
+                      ),
+                      text(
+                        cls := "label",
+                        x := 0,
+                        y := 32,
+                        textContent <-- furtherEvents
+                          .collect { case IconState(_,_,_,_,label) => label }
+                      )
+                    )
+                }
+              )
             }
-            .collect { case Some(op) => op }
+          }.consume
+        } yield Modifier.combine (
+          children.render
         )
+      }
 
+      val render = {
         val svgLoading = div(
           cls := "loading",
           textContent := "Loading..."
@@ -201,7 +186,9 @@ object DrawingRenderer {
             viewBox <-- drawing.viewport.map(_.toSvgViewBox),
             overflow := "hidden",
             tabindex := 0, // To enable keyboard events
-            svgBody,
+            g(
+              renderedObjects
+            ),
             drawingTools.renderHandlers
           )
         )

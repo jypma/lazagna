@@ -2,6 +2,7 @@ package zio.lazagna
 
 import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Hub, Promise, Scope, ZIO}
+import zio.Dequeue
 
 // TODO: Reconsider if Consumeable is allowed to have an error E, which we ignore when calling consume.
 
@@ -24,6 +25,8 @@ object Consumeable {
   } yield ref.changes.tap(_ => subscribed.succeed(())))
 
   implicit def subscriptionRef2consumable[T](ref: SubscriptionRef[T]): Consumeable[T] = fromSubscriptionRef[T](ref)
+
+  implicit def queue2consumeable[T](queue: Dequeue[T]): Consumeable[T] = ZStream.fromQueue(queue)
 
   extension(consumeable: Consumeable[_]) {
     /** Consumes everything of the given consumeable for its side effects only. */

@@ -51,8 +51,9 @@ object DrawingClient {
       connStatus <- SubscriptionRef.make[ConnectionStatus](Connected)
       state <- Ref.make(DrawingState(Map.empty)) // TODO investigate Ref.Synchronized to close over state
       stateSemaphore <- Semaphore.make(1)
+      lastEventNr <- SubscriptionRef.make(0L)
       stateChanges <- Hub.bounded[ObjectState](16)
-      newObjectIDs <- Hub.bounded[String](16)
+      newObjects <- Hub.bounded[ObjectState](16)
     } yield new DrawingClient {
       override def login(user: String, password: String, drawingName: String) = Setup.start(for {
         // FIXME: We really need a little path DSL to prevent injection here.
@@ -83,10 +84,10 @@ object DrawingClient {
           stateSemaphore.withPermit {
             state.modify(_.update(event.body)).flatMap {
               case (Some(objectState), isNew) =>
-                newObjectIDs.publish(objectState.id).when(isNew) *> stateChanges.publish(objectState)
+                newObjects.publish(objectState).when(isNew) *> stateChanges.publish(objectState)
               case _ =>
                 ZIO.unit
-            }
+            } *> lastEventNr.set(event.sequenceNr)
           }
         }.runDrain.forkScoped
       } yield new Drawing {
@@ -97,8 +98,6 @@ object DrawingClient {
             ZIO.unit
            }
         }
-        override def events  = store.events
-        override def eventsAfter(lastSeenSequenceNr: Long) = store.eventsAfter(lastSeenSequenceNr)
         override def initialVersion = version
         override def viewport = drawViewport
         override def connectionStatus = connStatus
@@ -109,13 +108,16 @@ object DrawingClient {
               .map(ZStream.fromIterable(_) ++ stateChanges.filter(_.id == id))
           }
         }
-        override def objectIDs: Consumeable[String] = ZStream.unwrapScoped {
+        override def initialObjectStates: Consumeable[ObjectState] = ZStream.unwrapScoped {
           stateSemaphore.withPermit {
-            state.get
-              .map(_.objects.keySet)
-              .map(ZStream.fromIterable(_) ++ newObjectIDs)
+            state.get.map(_.objects.values).flatMap { initial =>
+              ZStream.fromHubScoped(newObjects).map { stream =>
+                ZStream.fromIterable(initial) ++ stream
+              }
+            }
           }
         }
+        override def currentVersion: Consumeable[Long] = lastEventNr
       }).mapError { err => ClientError(err.toString) }
     }
   }
