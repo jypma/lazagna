@@ -32,6 +32,13 @@ Source: https://github.com/leungwensen/svg-icon
 
 ## Notes
 
+### Timeline
+- Full re-render from underlying non-pruned event store
+- Snapshot the DrawingState every 1000 events
+- Present a compressed actual time line (with a play button!)
+- Render from snapshot and subsequent events
+- Read-only view, but we can allow specific objects (or a selection) to be "rescued" back into the live editor
+
 ### Manual layout
 - Widget has padding
 - Icon (or any widget, e.g. note), moveable at will (but keep padding in tact)

@@ -15,6 +15,7 @@ object TextContent {
     }
   }
 
+  // TODO: Allow other types than String through implicits
   def <--(content: Consumeable[String]) = new Modifier {
     override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
       content.map { value =>

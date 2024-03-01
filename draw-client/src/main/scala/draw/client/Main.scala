@@ -7,6 +7,8 @@ import zio.lazagna.dom.Children
 import zio.lazagna.dom.indexeddb.Schema.CreateObjectStore
 import zio.lazagna.dom.indexeddb.{IndexedDB, Schema, ValueCodec}
 import zio.lazagna.dom.weblocks.Lock
+import zio.lazagna.dom.Element.tags._
+import zio.lazagna.dom.Element._
 import zio.lazagna.eventstore.{CachedEventStore, EventStore, IndexedDBEventStore, PrunedEventStore}
 import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Chunk, Exit, ExitCode, Fiber, Schedule, Scope, ZIO, ZIOAppDefault, ZLayer, durationInt}
@@ -15,8 +17,13 @@ import draw.data.drawevent.DrawEvent
 import org.scalajs.dom
 
 import scalajs.js.typedarray._
+import zio.lazagna.dom.Modifier
 
 object Main extends ZIOAppDefault {
+
+  def debugView(drawing: Drawing): Modifier = div(
+    textContent <-- drawing.latency.sliding(10).map(c => s"Latency: ${(c.sum / 10)}ms")
+  )
 
   def main = for {
     renderer <- ZIO.service[DrawingRenderer]
@@ -27,6 +34,8 @@ object Main extends ZIOAppDefault {
     _ <- renderer.render.mount(dom.document.querySelector("#app"))
     _ <- tools.renderToolbox.mount(dom.document.querySelector("#toolboxApp"))
     _ <- tools.renderKeyboard.mount(dom.document.querySelector("#keyboardApp"))
+    _ <- debugView(drawing).mount(dom.document.querySelector("#debugApp"))
+
   } yield ()
 
   implicit val drawEventCodec: ValueCodec[DrawEvent, ArrayBuffer] = new ValueCodec[DrawEvent, ArrayBuffer] {

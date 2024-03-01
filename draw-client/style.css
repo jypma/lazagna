@@ -151,6 +151,13 @@ svg.main {
     left: 10px;
 }
 
+#debugApp {
+    position: fixed;
+    z-index: 3;
+    bottom: 10px;
+    right: 10px;
+}
+
 .keyboard-hints .key {
     width: 2em;
     border: 1px solid rgba(var(--fg-color-main));

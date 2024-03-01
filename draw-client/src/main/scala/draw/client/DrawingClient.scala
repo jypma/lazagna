@@ -54,7 +54,10 @@ object DrawingClient {
       lastEventNr <- SubscriptionRef.make(0L)
       stateChanges <- Hub.bounded[ObjectState[_]](16)
       newObjects <- Hub.bounded[ObjectState[_]](16)
+      latencyHub <- Hub.bounded[Long](1)
     } yield new DrawingClient {
+      var lastCommandTime: Long = 0
+
       override def login(user: String, password: String, drawingName: String) = Setup.start(for {
         // FIXME: We really need a little path DSL to prevent injection here.
         loginResp <- POST(AsDynamicJSON, s"${config.baseUrl}/users/${user}/login?password=${password}")
@@ -82,16 +85,21 @@ object DrawingClient {
         }, onClose = connStatus.set(Drawing.Disconnected))
         _ <- store.events.mapZIO { event =>
           stateSemaphore.withPermit {
+            val publishLatency = if (lastCommandTime != 0) {
+              latencyHub.publish(System.currentTimeMillis - lastCommandTime) *> ZIO.succeed { lastCommandTime = 0 }
+            } else ZIO.unit
+
             state.modify(_.update(event)).flatMap {
               case (Some(objectState), isNew) =>
                 newObjects.publish(objectState).when(isNew) *> stateChanges.publish(objectState)
               case _ =>
                 ZIO.unit
-            } *> lastEventNr.set(event.sequenceNr)
+            } *> lastEventNr.set(event.sequenceNr) *> publishLatency
           }
         }.runDrain.forkScoped
       } yield new Drawing {
         override def perform(command: DrawCommand): ZIO[Any, Nothing, Unit] = {
+          lastCommandTime = System.currentTimeMillis
           socket.send(command.toByteArray).catchAll { err =>
             // TODO: Reconnect or reload here
             dom.console.log(err)
@@ -118,6 +126,7 @@ object DrawingClient {
           }
         }
         override def currentVersion: Consumeable[Long] = lastEventNr
+        override def latency: Consumeable[Long] = latencyHub
       }).mapError { err => ClientError(err.toString) }
     }
   }

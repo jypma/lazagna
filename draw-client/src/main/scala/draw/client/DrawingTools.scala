@@ -32,8 +32,9 @@ trait DrawingTools {
 object DrawingTools {
   private def keyboardAction(key: String, description: String, execute: => ZIO[Scope, Nothing, Unit]): Element[dom.Element] = {
     val keyName = key match {
-      case "Escape" => "Esc"
+      case "Escape" => "⎋"
       case "Enter" => "↵"
+      case "Delete" => "⌦"
       case s => s.toUpperCase()
     }
 
@@ -42,6 +43,7 @@ object DrawingTools {
       div(
         cls := "key",
         textContent := keyName,
+        title := key,
         onClick(_.flatMap(_ => execute))
       ),
       div(cls := "description", textContent := description),
@@ -57,6 +59,15 @@ object DrawingTools {
   }
 
   private case class Tool(key: String, name: String, hint: String, icon: String, render: Modifier)
+
+  // Selection tool, ⛶ -> Select one object (on mouse UP when not dragged), add shortcuts depending on object
+  //   Drag anywhere -> move currently selected object
+  //   All: Delete (delete key)
+  //   Icon: (L)abel, (P)icture
+  //   Scribble: nothing
+  //   Later: drag selection, (+) add to selection, (-) remove from selection
+  //     Multiple selection -> Display all shortcuts for group of types
+  // Remove move and eraser tool
 
   val live = ZLayer.scoped {
     for {
@@ -152,7 +163,7 @@ object DrawingTools {
             }),
           keyboard.addChild { _ =>
             div(
-              keyboardAction("☸", "Use middle button to pan, mouse wheel to zoom", ZIO.unit),
+              keyboardAction("?", "Tutorial (MMB to pan, wheel to zoom)", ZIO.unit),
               keyboardAction("f", "Fit into view",
                 drawing.viewport.set(Drawing.Viewport.fit(helper.svg.getBBox()))
               ),
@@ -211,19 +222,24 @@ object DrawingTools {
   def pencil(drawing: Drawing): Modifier = Modifier.unwrap(for {
     currentScribbleId <- Ref.make[Option[String]](None)
     startPoint <- Ref.make[Option[Point]](None)
+    count <- Ref.make(0)
   } yield SVGHelper { helper =>
     onMouseDown(_
       .filter { e => (e.buttons & 1) != 0 }
       .flatMap { ev =>
         val pos = helper.screenToLocal(ev)
-        startPoint.set(Some(Point(pos.x, pos.y)))
+        startPoint.set(Some(Point(pos.x, pos.y))) *>
+          count.set(0) *>
+          makeUUID.flatMap(id => currentScribbleId.set(Some(id)))
       }
-      .flatMap(_ => makeUUID.flatMap(id => currentScribbleId.set(Some(id)))).drain
+      .drain
     ).merge(
       onMouseMove(_
         .filter { e => (e.buttons & 1) != 0 }
         .flatMap(ev => currentScribbleId.get.map((_, ev)))
         .collectF { case (Some(id), ev) => (id, ev) }
+        .zip(count.updateAndGet(_ + 1))
+        .collectF { case (id, ev, count) if count < 200 => (id, ev) }
         .flatMap((id, ev) => startPoint.get.map((id, _, ev)))
         .flatMap { (id, start, event) =>
           val pos = helper.screenToLocal(event)

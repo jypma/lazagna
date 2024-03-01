@@ -27,6 +27,7 @@ trait Drawing {
   def viewport: SubscriptionRef[Drawing.Viewport]
   def initialObjectStates: Consumeable[ObjectState[_]] // Returns initial object state for each object
   def objectState(id: String): Consumeable[ObjectState[_]] // Returns state for that object
+  def latency: Consumeable[Long]
 }
 
 object Drawing {
@@ -101,10 +102,14 @@ object Drawing {
     def pan(dx: Double, dy: Double) = copy(left = left + dx, top = top + dy)
 
     def zoom(f: Double, mx: Double, my: Double) = {
-      copy(
-        factor = factor * f,
-        left = left - ((mx - left) * (f - 1)),
-        top = top - ((my - top)) * (f - 1))
+      if (f < 1 && factor < 0.01 || f > 1 && factor > 100) {
+        this
+      } else {
+        copy(
+          factor = factor * f,
+          left = left - ((mx - left) * (f - 1)),
+          top = top - ((my - top)) * (f - 1))
+      }
     }
 
     def toSvgViewBox: String = {
