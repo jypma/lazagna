@@ -1,6 +1,7 @@
 package draw.server
 
 import java.net.InetAddress
+import java.util.UUID
 
 import zio._
 import zio.http.ChannelEvent.Read
@@ -13,10 +14,9 @@ import zio.http.endpoint.Endpoint
 
 import draw.data.drawcommand.DrawCommand
 import draw.server.Users.User
-import java.util.UUID
+import draw.server.drawing.{CassandraDrawings, Drawing, Drawings}
 import palanga.zio.cassandra.CassandraException.SessionOpenException
-import palanga.zio.cassandra.ZCqlSession
-import palanga.zio.cassandra.session
+import palanga.zio.cassandra.{ZCqlSession, session}
 
 object DrawServer extends ZIOAppDefault {
   // Create CORS configuration

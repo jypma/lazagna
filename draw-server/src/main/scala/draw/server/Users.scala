@@ -3,7 +3,7 @@ package draw.server
 import java.security.MessageDigest
 
 import zio.schema.{DeriveSchema, Schema}
-import zio.{IO, Ref, UIO, ZIO, ZLayer}
+import zio.{IO, Ref, ZIO, ZLayer}
 
 import Users._
 
