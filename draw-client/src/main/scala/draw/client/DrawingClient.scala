@@ -22,9 +22,10 @@ import zio.lazagna.Consumeable.given
 import zio.stream.ZStream
 import zio.lazagna.Setup
 import zio.Semaphore
+import java.util.UUID
 
 trait DrawingClient {
-  def login(user: String, password: String, drawingName: String): ZIO[Scope, ClientError | RequestError, Drawing]
+  def login(user: String, password: String, drawingId: UUID): ZIO[Scope, ClientError | RequestError, Drawing]
 }
 
 object DrawingClient {
@@ -58,26 +59,29 @@ object DrawingClient {
     } yield new DrawingClient {
       var lastCommandTime: Long = 0
 
-      override def login(user: String, password: String, drawingName: String) = Setup.start(for {
+      override def login(user: String, password: String, drawingId: UUID) = Setup.start(for {
         // FIXME: We really need a little path DSL to prevent injection here.
         loginResp <- POST(AsDynamicJSON, s"${config.baseUrl}/users/${user}/login?password=${password}")
         token <- loginResp.token.asInstanceOf[String] match {
           case s if s != null && !js.isUndefined(s) => ZIO.succeed(s)
           case _ => ZIO.fail(ClientError("Could not get token"))
         }
-        version <- HEAD(s"${config.baseUrl}/drawings/${drawingName}?token=${token}").map(_.header("ETag").map(_.drop(1).dropRight(1).toLong).getOrElse(0L))
+        version <- HEAD(s"${config.baseUrl}/drawings/${drawingId}?token=${token}").map(_.header("ETag").map(_.drop(1).dropRight(1).toLong).getOrElse(0L))
         after <- store.latestSequenceNr
         _ <- if (after > version) {
           dom.console.log(s"Resetting client event store, since we've seen event ${after} but server only has ${version}")
           store.reset
         } else ZIO.unit
-        socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingName}/socket?token=${token}&afterSequenceNr=${after}")({ msg =>
+        socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingId}/socket?token=${token}&afterSequenceNr=${after}")({ msg =>
           msg match {
             case m if m.data.isInstanceOf[ArrayBuffer] =>
               // TODO: Catch parse errors and fail accordingly
               val event = DrawEvent.parseFrom(new Int8Array(m.data.asInstanceOf[ArrayBuffer]).toArray)
+              if (event.sequenceNr <= after) {
+                println(s"WARN: Event not later than requested sequencrNr $after: $event")
+              }
               store.publish(event).catchAll { err => ZIO.succeed {
-                dom.console.log("Error publishing event:")
+                dom.console.log("Error publishing " + event)
                 dom.console.log(err)
               }}
             case _ => ZIO.unit

@@ -10,16 +10,17 @@ import draw.data.drawevent.{DrawEvent, DrawingCreated, IconCreated, ObjectDelete
 import draw.data.point.Point
 
 import Drawings.DrawingError
+import java.util.UUID
 
 trait Drawing {
   def perform(command: DrawCommand): ZIO[Any, DrawingError, Unit]
-  def events: ZStream[Any,Nothing,DrawEvent]
-  def eventsAfter(sequenceNr: Long): ZStream[Any,Nothing,DrawEvent]
-  def version: ZIO[Any, Nothing, Long]
+  def events: ZStream[Any, DrawingError, DrawEvent]
+  def eventsAfter(sequenceNr: Long): ZStream[Any, DrawingError, DrawEvent]
+  def version: ZIO[Any, DrawingError, Long]
 }
 
 trait Drawings {
-  def getDrawing(name: String): IO[DrawingError, Drawing]
+  def getDrawing(id: UUID): IO[DrawingError, Drawing]
 }
 
 case class DrawingStorage(events: Seq[DrawEvent] = Seq.empty) {
@@ -115,18 +116,18 @@ case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Dra
   override def version = storage.get.map(_.events.size)
 }
 
-case class DrawingsInMemory(storage: Ref.Synchronized[Map[String,Drawing]]) extends Drawings {
+case class DrawingsInMemory(storage: Ref.Synchronized[Map[UUID,Drawing]]) extends Drawings {
   // TODO: Remove drawing from memory
-  override def getDrawing(name: String) = {
+  override def getDrawing(id: UUID) = {
     storage.updateSomeAndGetZIO {
       case map if map.size > 100 =>
         ZIO.fail(DrawingError("Too many drawings"))
-      case map if !map.contains(name) => for {
+      case map if !map.contains(id) => for {
         drawStorage <- SubscriptionRef.make(DrawingStorage())
         _ <- drawStorage.update(_ :+ DrawEvent(0, DrawingCreated()))
         drawing = DrawingInMemory(drawStorage)
-      } yield map + (name -> drawing)
-    }.map(_(name))
+      } yield map + (id -> drawing)
+    }.map(_(id))
   }
 }
 
@@ -135,7 +136,7 @@ object Drawings {
 
   val inMemory = ZLayer.scoped {
     for {
-      storage <- Ref.Synchronized.make[Map[String,Drawing]](Map.empty)
+      storage <- Ref.Synchronized.make[Map[UUID,Drawing]](Map.empty)
     } yield DrawingsInMemory(storage)
   }
 }

@@ -18,6 +18,7 @@ import org.scalajs.dom
 
 import scalajs.js.typedarray._
 import zio.lazagna.dom.Modifier
+import java.util.UUID
 
 object Main extends ZIOAppDefault {
 
@@ -43,7 +44,7 @@ object Main extends ZIOAppDefault {
     override def decode(b: ArrayBuffer): DrawEvent = DrawEvent.parseFrom(new Int8Array(b).toArray)
   }
 
-  val drawingName = "test"
+  val drawingId = UUID.fromString("0314aaab-684c-49c6-bd29-0921a3897ce5") // TODO: Drawing selector
 
   val eventStore = ZLayer.fromZIO {
     Setup.start {
@@ -57,7 +58,7 @@ object Main extends ZIOAppDefault {
     }
   }
 
-  val database = ZLayer.fromZIO(IndexedDB.open(s"drawing-${drawingName}", Schema(
+  val database = ZLayer.fromZIO(IndexedDB.open(s"drawing-${drawingId}", Schema(
     CreateObjectStore("events"),
     CreateObjectStore("events-pruned")
   )))
@@ -85,11 +86,11 @@ object Main extends ZIOAppDefault {
   override def run = {
     for {
       _ <- dump.fork
-      writeLock <- ZLayer.fromZIO(Lock.makeAndLockExclusively(s"${drawingName}-writeLock")).memoize
+      writeLock <- ZLayer.fromZIO(Lock.makeAndLockExclusively(s"${drawingId}-writeLock")).memoize
       _ <- (for {
         client <- ZIO.service[DrawingClient]
         dialogs <- Children.make
-        drawing <- client.login("jan", "jan", drawingName)
+        drawing <- client.login("jan", "jan", drawingId)
         _ <- main.provideSome[Scope](ZLayer.succeed(drawing), DrawingTools.live, DrawingRenderer.live, ZLayer.succeed(dialogs), ZLayer.fromZIO(SymbolIndex.make))
         store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
         _ = dom.console.log("Main is ready.")

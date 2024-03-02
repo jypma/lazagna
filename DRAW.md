@@ -68,3 +68,13 @@ Source: https://github.com/leungwensen/svg-icon
   * Consider breaking lines from 0.5 stretched to 0.5 shrunk
   * Characters per line (66 optimal, 45 to 75 maxima). This includes spaces. Set glue such that line line is 33em.
   * Aspect ratio of the total text?
+
+# Cassandra
+
+Storage is provided by Cassandra. During development, start cassandra locally using
+
+```sh
+docker-compose up -d
+```
+
+This can take up to a minute to fully start.

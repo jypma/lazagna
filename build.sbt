@@ -70,16 +70,23 @@ lazy val client = project.in(file("draw-client"))
     ),
   )
 
-lazy val server = project.in(file("data-server"))
+val log4jVersion = "2.23.0"
+lazy val server = project.in(file("draw-server"))
   .settings(commonSettings)
   .dependsOn(data.jvm)
   .settings(
+    resolvers += "Sonatype OSS Snapshots" at "https://s01.oss.sonatype.org/content/repositories/snapshots",
     libraryDependencies ++= Seq(
       "dev.zio" %%% "zio" % zioVersion,
       "dev.zio" %%% "zio-streams" % zioVersion,
       "dev.zio" %%% "zio-test"          % zioVersion % Test,
       "dev.zio" %%% "zio-test-sbt"      % zioVersion % Test,
       "dev.zio" %%% "zio-test-magnolia" % zioVersion % Test,
-      "dev.zio" %% "zio-http" % "3.0.0-RC4"
+      "dev.zio" %% "zio-http" % "3.0.0-RC4",
+
+      "io.github.palanga" %% "zio-cassandra" % "0.10.0+48-99339c35-SNAPSHOT",
+      "org.apache.logging.log4j" % "log4j-api" % log4jVersion,
+      "org.apache.logging.log4j" % "log4j-core" % log4jVersion,
+      "org.apache.logging.log4j" % "log4j-slf4j-impl" % log4jVersion
     ),
   )

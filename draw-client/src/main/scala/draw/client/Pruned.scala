@@ -5,6 +5,7 @@ import zio.lazagna.eventstore.EventStore
 
 import draw.data.drawevent.{DrawEvent, IconCreated, ObjectDeleted, ObjectMoved, ScribbleContinued, ScribbleStarted, ObjectLabelled}
 import org.scalajs.dom
+import draw.data.drawevent.DrawingCreated
 
 object Pruned {
   type E = DrawEvent
@@ -29,6 +30,8 @@ object Pruned {
     /** Apply an already pruned event from storage */
     def recover(event: DrawEvent): State = {
       event match {
+        case DrawEvent(_, _:DrawingCreated, _, _, _) =>
+          this
         case e@DrawEvent(_, ScribbleStarted(scribbleId, _, _), _, _, _) =>
           update(scribbleId, ScribbleState(e, None))
         case e@DrawEvent(_, IconCreated(id, _, _, _, _), _, _, _) =>
@@ -50,6 +53,9 @@ object Pruned {
     def prune(event: DrawEvent): ZIO[Backend, Err, State] = for {
       storage <- ZIO.service[Backend]
       res <- event match {
+        case e@DrawEvent(_, _:DrawingCreated, _, _, _) =>
+          storage.publish(e).as(this)
+
         case e@DrawEvent(_, ScribbleStarted(scribbleId, startPoints, _), _, _, _) =>
           storage.publish(e).as(
             update(scribbleId, ScribbleState(e, None))

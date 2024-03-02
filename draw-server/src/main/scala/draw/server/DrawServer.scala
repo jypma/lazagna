@@ -13,6 +13,10 @@ import zio.http.endpoint.Endpoint
 
 import draw.data.drawcommand.DrawCommand
 import draw.server.Users.User
+import java.util.UUID
+import palanga.zio.cassandra.CassandraException.SessionOpenException
+import palanga.zio.cassandra.ZCqlSession
+import palanga.zio.cassandra.session
 
 object DrawServer extends ZIOAppDefault {
   // Create CORS configuration
@@ -54,6 +58,14 @@ object DrawServer extends ZIOAppDefault {
       }
     }
 
+  val cassandraSession = ZLayer.scoped(
+    session.auto.open(
+      "127.0.0.1",
+      9042,
+      keyspace = "draw",
+    )
+  )
+
   val app = for {
     users <- ZIO.service[Users]
     drawings <- ZIO.service[Drawings]
@@ -65,7 +77,7 @@ object DrawServer extends ZIOAppDefault {
       .implement(Handler.fromFunctionZIO((username: String, password: String) =>
           users.login(username, password)
       )),
-    Method.HEAD / "drawings" / string("drawing") -> handler { (drawing: String, request: Request) =>
+    Method.HEAD / "drawings" / uuid("drawing") -> handler { (drawing: UUID, request: Request) =>
       for {
         token <- request.url.queryParams.getAsZIO[String]("token")
         user <- users.authenticate(token)
@@ -73,7 +85,7 @@ object DrawServer extends ZIOAppDefault {
         version <- drawing.version
       } yield Response.ok.addHeader(Header.ETag.Strong(version.toString))
     },
-    Method.GET / "drawings" / string("drawing") / "socket" -> handler { (drawing: String, request: Request) =>
+    Method.GET / "drawings" / uuid("drawing") / "socket" -> handler { (drawing: UUID, request: Request) =>
       for {
         token <- request.url.queryParams.getAsZIO[String]("token")
         after = request.url.queryParams.get("afterSequenceNr").map(_.toLong).getOrElse(-1L)
@@ -91,6 +103,7 @@ object DrawServer extends ZIOAppDefault {
     ZLayer.succeed(Server.Config.default.binding(InetAddress.getByName("0.0.0.0"), 8080)),
     Server.live,
     Users.inMemory,
-    Drawings.inMemory
+    ZLayer.fromZIO(CassandraDrawings.make),
+    cassandraSession
   )
 }
