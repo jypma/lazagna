@@ -8,7 +8,7 @@
 
 @media print
 {
-    #dialogApp, #keyboardApp, #toolboxApp {
+    #dialogApp, #keyboardApp, #toolboxApp, #debugApp {
         display: none !important;
     }
 }
