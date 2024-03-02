@@ -69,7 +69,24 @@ See the respective classes for which elements and attributes are currently avail
 
 ### Event handlers
 
-In order to respond to events from any DOM `EventTarget`, the `EventListener` class can be used. A ZIO will be invoked whenever an event occurs, in order to execute side effects. Events can also be directly sent to a `Hub` or `Ref`. An implicit conversion will turn the `EventListener` into a `Modifier` that registers and unregisters the event handler as needed.
+In order to respond to events from any DOM `EventTarget`, the `EventsEmitter` class can be used. A ZIO will be invoked whenever an event occurs, in order to execute side effects. Events can also be directly sent to a `Hub` or `Ref`.
+
+`EventsEmitter` is defined as follows (simplified version shown here):
+```scala
+package zio.scala.dom
+
+trait EventsEmitter[+T] {
+  def stream: ZStream[Scope with dom.EventTarget, Nothing, T]
+
+  def apply[U](op: ZIO[Scope, Filtered, T] => ZIO[Scope, Filtered, U]): EventsEmitter[U]
+
+  def -->(target: Hub[T]): Modifier
+
+  implicit def run: Modifier
+}
+```
+
+An implicit conversion will turn the `EventListener` into a `Modifier` that registers and unregisters the event handler as needed, executing any transformations and side effects chained up using `apply`.
 
 ```scala
 import zio.lazagna.dom.Events._
@@ -84,6 +101,27 @@ input(
 ```
 
 Alternatively, the events can be viewed as a `ZStream` by invoking e.g. `onClick.stream.mapZIO(...)`. An implicit conversion will turn the stream into a `Modifier`. However, the above push model is recommended as it doesn't require a background fiber for each running stream.
+
+### Filtered
+
+You may have noticed the `Filtered` error type above. This is a convenience filter that allows a few stream-like operations (e.g. `filter` or `drain`) on a plain ZIO that is intended for side effects only. It allows a ZIO to decide not to handle an element by emitting `Filtered` as an error (although obviously not a failure). A simplified version is defined like this:
+
+```scala
+package zio.lazagna
+
+sealed trait Filtered {}
+
+object Filtered {
+  implicit class zioOps[R,E,T](zio: ZIO[R,E,T]) {
+    /** Runs the underlying zio, but after that always fails with Filtered */
+    def drain: ZIO[R, E | Filtered, Nothing]
+    /** Filters the zio with the given predicate, failing with Filtered if it doesn't match */
+    def filter(p: T => Boolean): ZIO[R, E | Filtered, T]
+    /** Renamed from collect(), since .collect() is defined in ZIO has taking the error value as first argument. */
+    def collectF[U](pf: PartialFunction[T,U]): ZIO[R, E | Filtered, U]
+  }
+}
+```
 
 ### Setting attribute values dynamically
 
