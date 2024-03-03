@@ -2,6 +2,8 @@
 
 Lazagna is a UI framework for developing asynchronous, event-driven browser user interfaces in the Scala language, using [ScalaJS](https://www.scala-js.org/) and [ZIO](https://zio.dev/).
 
+The framework is called "Lazagna" because of the Z in ZIO, and of course because Lasagna, being made with layers, is a [laminar](https://laminar.dev/).
+
 ## Architecture
 
 Lazagna does not use a virtual DOM. Instead, its HTML element DSL creates DOM elements directly, and relies on streams and events to perform differential updates directly. This is heavily inspired from the awesome [laminar](https://laminar.dev/) framework. However, where Laminar has its own streaming framework, Lazagna uses ZIO for its streams and concurrency.
@@ -123,6 +125,8 @@ object Filtered {
 }
 ```
 
+## Usage
+
 ### Setting attribute values dynamically
 
 An attribute can take the value from a `Hub`, `SubscriptionRef`, or directly from a `ZStream` with the correct type, using the `<--` method, and the `Consumeable` type alias.
@@ -228,13 +232,93 @@ div(
 
 A selection of  `ChildOp` subclasses exist to add and remove children at specific spots, and/or rearrange them.
 
-## Naming
+## Batteries included
 
-The framework is called "Lazagna" because of the Z in ZIO, and of course because Lasagna, being made with layers, is a [laminar](https://laminar.dev/).
+Various DOM abstractions are included, so applications can communicate in ZIO-style.
+
+### HTTP requests
+
+Making an AJAX `XMLHttpRequest` request can be done through the `zio.lazagna.dom.http.Request` abstraction. For example, sending a POST request and parsing the response as JSON:
+
+```scala
+for {
+  loginResp <- POST(AsDynamicJSON, s"${config.baseUrl}/users/${user}/login?password=${password}")
+  token = loginResp.token.asInstanceOf[String]
+} yield ???
+```
+
+Various return types exist for `Document` (XML), `Blob`, `ArrayBuffer` and `String` (see `AsXXXX` inside `Request.scala`), and you can write your own by extending `ResponseHandler[T]`.
+
+### Web sockets
+
+You can make websocket requests through a ZIO abstraction using the `zio.lazagna.dom.http.WebSocket` abstraction. The main entry point is defined as follows:
+
+```scala
+package zio.lazagna.dom.http.WebSocket
+
+trait WebSocket {
+  def send(text: String): IO[WebSocketError, Unit]
+  def send(bytes: Array[Byte]): IO[WebSocketError, Unit]
+}
+
+object WebSocket {
+  def handle(url: String)(onMessage: dom.MessageEvent => ZIO[Any, Nothing, Any], onClose: => ZIO[Any, Nothing, Any] = ZIO.unit): ZIO[Scope, Nothing, WebSocket]
+}
+```
+
+This allows both sending and receiving.
+
+### IndexedDB
+
+There are many ways to store data client-side, but the modern variant with least size restrictions is IndexedDB. Lazagna's abstraction on this is as follows.
+
+```scala
+package zio.lazagna.dom.indexeddb
+
+trait Database {
+  def version: Version
+  def objectStoreNames: Seq[String]
+  def objectStore[T, TV <: js.Any, K](name: String)(using keyCodec: KeyCodec[K], valueCodec: ValueCodec[T,TV]): ObjectStore[T,K]
+}
+
+trait ObjectStore[T, K] {
+  def getRange(range: Range[K], direction: IDBCursorDirection = IDBCursorDirection.next): ZStream[Any, dom.ErrorEvent, T]
+  def getAll(direction: IDBCursorDirection = IDBCursorDirection.next): ZStream[Any, dom.ErrorEvent, T]
+
+  def add(value: T, key: K): Request[Unit]
+  def clear: Request[Unit]
+  def delete(key: K): Request[Unit]
+}
+
+object IndexedDB {
+  def open(name: String, schema: Schema): ZIO[Scope, Blocked | dom.ErrorEvent, Database]
+}
+```
+
+For an example on how to interact with indexed DB, see `IndexedDBEventStore`.
+
+### Web Locks
+
+Since an IndexedDB instance is shared between browser tabs, it can be necessary to collaborate between tabs to decide who can write to the database. The Web Locks API can help with this, for which Lazagna provides an abstraction.
+
+```scala
+package zio.lazagna.dom.weblocks
+
+trait Lock {
+  def withExclusiveLock[R,E,A](zio: =>ZIO[R,E,A]): ZIO[R,E,A]
+  def withExclusiveLockIfAvailable[R,E,A](zio: =>ZIO[R,E,A]): ZIO[R, E | LockUnavailable.type, A]
+}
+
+object Lock {
+  def make(name: String): UIO[Lock]
+}
+
+```
 
 # TODO
 
 - Clean up the use of implicit and given, and align on having a nice one-line import for library users
+- Write unit tests to anchor functionality (once ZIO abstractions are confirmed, which they are not)
 
 # Discussion points for ZIO itself
 
