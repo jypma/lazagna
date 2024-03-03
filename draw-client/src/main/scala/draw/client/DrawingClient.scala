@@ -67,18 +67,18 @@ object DrawingClient {
           case _ => ZIO.fail(ClientError("Could not get token"))
         }
         version <- HEAD(s"${config.baseUrl}/drawings/${drawingId}?token=${token}").map(_.header("ETag").map(_.drop(1).dropRight(1).toLong).getOrElse(0L))
-        after <- store.latestSequenceNr
-        _ <- if (after > version) {
-          dom.console.log(s"Resetting client event store, since we've seen event ${after} but server only has ${version}")
+        latestSeen <- store.latestSequenceNr
+        _ <- if (latestSeen > version) {
+          dom.console.log(s"Resetting client event store, since we've seen event ${latestSeen} but server only has ${version}")
           store.reset
         } else ZIO.unit
-        socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingId}/socket?token=${token}&afterSequenceNr=${after}")({ msg =>
+        socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingId}/socket?token=${token}&afterSequenceNr=${latestSeen}")({ msg =>
           msg match {
             case m if m.data.isInstanceOf[ArrayBuffer] =>
               // TODO: Catch parse errors and fail accordingly
               val event = DrawEvent.parseFrom(new Int8Array(m.data.asInstanceOf[ArrayBuffer]).toArray)
-              if (event.sequenceNr <= after) {
-                println(s"WARN: Event not later than requested sequencrNr $after: $event")
+              if (event.sequenceNr <= latestSeen) {
+                println(s"WARN: Event not later than requested sequencrNr $latestSeen: $event")
               }
               store.publish(event).catchAll { err => ZIO.succeed {
                 dom.console.log("Error publishing " + event)
@@ -110,7 +110,7 @@ object DrawingClient {
             ZIO.unit
            }
         }
-        override def initialVersion = version // FIXME doesn't render if we've last deleted something
+        override def initialVersion = latestSeen
         override def viewport = drawViewport
         override def connectionStatus = connStatus
         override def objectState(id: String): Consumeable[ObjectState[_]] = ZStream.unwrapScoped {

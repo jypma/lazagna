@@ -85,7 +85,9 @@ object PrunedEventStore {
         storage.delete(sequenceNr) *> source.delete(sequenceNr)
       }
 
-      def latestSequenceNr: IO[Err, Long] = source.latestSequenceNr  // just forward
+      // TEST: Don't show event numbers for deleted events that are most recent.
+      // We read this from the pruned events store, since those are the only events the client is going to see.
+      def latestSequenceNr: IO[Err, Long] = storage.latestSequenceNr
 
       def reset: IO[Err, Unit] = storage.reset *> source.reset  // reset both
 
