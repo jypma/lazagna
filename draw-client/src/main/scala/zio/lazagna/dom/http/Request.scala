@@ -24,10 +24,8 @@ object Request {
     ZIO.async { cb =>
       val blob = new dom.Blob(js.Array(buf))
       val reader = new dom.FileReader
-      println("Reading...")
       reader.onload = { event =>
         val res = reader.result.asInstanceOf[String]
-        println(res)
         val pos = res.indexOf(",")
         cb(ZIO.succeed(res.substring(pos + 1)))
       }
