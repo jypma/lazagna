@@ -2,8 +2,7 @@ package zio.lazagna.dom
 
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable._
-import zio.lazagna.Consumeable.given
-import zio.{Exit, Hub, Ref, Scope, UIO, ZIO}
+import zio.{Exit, Ref, Scope, UIO, ZIO}
 
 import org.scalajs.dom
 import zio.Queue

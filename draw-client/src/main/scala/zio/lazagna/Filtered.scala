@@ -1,7 +1,6 @@
 package zio.lazagna
 
 import zio.ZIO
-import zio.Chunk
 
 /** Indicates that a ZIO didn't yield a value, because its operation was cancelled by a .filter() call. */
 sealed trait Filtered {}

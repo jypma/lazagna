@@ -1,6 +1,37 @@
 # Running the "draw" example
 
-At the moment, this repository contains a simple drawing application that demonstrates how to write a command pattern-based rendering pipeline. If you want to run it, then in one console run:
+At the moment, this repository contains a simple real-time multi-user drawing application that demonstrates how to write a command pattern-based rendering pipeline. If you want to run it, you'll need to start several services.
+
+## Prerequisites
+
+You'll need `sbt` and `docker`.
+
+## Cassandra
+Storage is provided by Cassandra. During development, start cassandra locally using
+
+```sh
+pushd draw-server
+docker-compose up -d
+popd
+```
+
+This can take up to two minutes to fully start initially. You can leave Cassandra running in the background.
+
+Cassandra will store its data under `draw-server/target/cassandra-data` so your precious drawings will survive restarts. Docker will make them owned by user and group `999`, though (since that's what Cassandra runs as).
+
+## Server
+
+In one console run:
+
+```sh
+sbt
+project server
+~reStart
+```
+
+## Client (sbt)
+
+In another console run:
 
 ```sh
 sbt
@@ -8,29 +39,25 @@ project client
 ~fastLinkJS
 ```
 
-and in another console run:
+## Client (npm, vite)
+
+In a third console run:
 
 ```sh
 cd draw-client
+npm install # you only need this once.
 npm run dev
 ```
 
-and in a third console run:
-```sh
-sbt
-project server
-~reStart
-```
+The latter will open the example at `http://localhost:5173/`, which you can open in your web browser. Multiple users (web browsers) can edit the drawing simultaneously.
 
-The latter will open the example at `http://localhost:5173/`, which you can open in your web browser. The example is currently fully offline, but a multi-user version with a small server backend is being planned and developed.
-
-## Icons
+# Icons
 
 Source: https://github.com/leungwensen/svg-icon
 -`npm install`
 - Copy packaged SVG icon symbol collections from `dist/sprite/symbol` to `public/symbols`
 
-## Notes
+# Random notes (please ignore this section)
 
 ### Timeline
 - Full re-render from underlying non-pruned event store
@@ -71,10 +98,3 @@ Source: https://github.com/leungwensen/svg-icon
 
 # Cassandra
 
-Storage is provided by Cassandra. During development, start cassandra locally using
-
-```sh
-docker-compose up -d
-```
-
-This can take up to a minute to fully start.

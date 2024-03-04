@@ -47,7 +47,7 @@ object Drawing {
   }
 
   /** An object that can be moved around, and hence has a position. */
-  trait Moveable extends ObjectStateBody {
+  sealed trait Moveable extends ObjectStateBody {
     def position: Point
   }
   case class ObjectState[+T <: ObjectStateBody](id: String, sequenceNr: Long, deleted: Boolean, body: T) {

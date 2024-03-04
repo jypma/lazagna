@@ -3,7 +3,7 @@ package zio.lazagna.dom.weblocks
 import scala.scalajs.js
 
 import zio.stream.SubscriptionRef
-import zio.{Promise, Ref, Scope, UIO, ZIO, durationInt}
+import zio.{Promise, Scope, UIO, ZIO, durationInt}
 
 import org.scalajs.dom
 
