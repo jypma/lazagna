@@ -56,6 +56,7 @@ object DrawingClient {
       stateChanges <- Hub.bounded[ObjectState[_]](16)
       newObjects <- Hub.bounded[ObjectState[_]](16)
       latencyHub <- Hub.bounded[Long](1)
+      selectionRef <- SubscriptionRef.make(Set.empty[String])
     } yield new DrawingClient {
       var lastCommandTime: Long = 0
 
@@ -131,6 +132,7 @@ object DrawingClient {
         }
         override def currentVersion: Consumeable[Long] = lastEventNr
         override def latency: Consumeable[Long] = latencyHub
+        override def selection = selectionRef
       }).mapError { err => ClientError(err.toString) }
     }
   }

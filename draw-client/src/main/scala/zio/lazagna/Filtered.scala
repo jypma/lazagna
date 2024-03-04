@@ -14,6 +14,13 @@ object Filtered {
     def drain: ZIO[R, E | Filtered, Nothing] = zio.flatMap(_ => ZIO.fail(instance))
     /** Filters the zio with the given predicate, failing with Filtered if it doesn't match */
     def filter(p: T => Boolean): ZIO[R, E | Filtered, T] = zio.filterOrFail(p)(instance)
+    /** Filters the zio with the given predicate, failing with Filtered if it doesn't match */
+    def filterZIO(p: T => ZIO[Any, Nothing, Boolean]): ZIO[R, E | Filtered, T] = zio.flatMap { value =>
+      p(value).flatMap {
+        case true => ZIO.succeed(value)
+        case false => ZIO.fail(instance)
+      }
+    }
     /** Renamed from collect(), since .collect() is defined in ZIO has taking the error value as first argument. */
     def collectF[U](pf: PartialFunction[T,U]): ZIO[R, E | Filtered, U] = zio.collect(instance)(pf)
   }

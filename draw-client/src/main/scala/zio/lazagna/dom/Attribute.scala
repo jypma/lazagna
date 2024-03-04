@@ -5,6 +5,9 @@ import zio.lazagna.Consumeable._
 import zio.{Scope, ZIO}
 
 import org.scalajs.dom
+import zio.stream.ZStream
+import zio.Chunk
+import zio.stream.ZPipeline
 
 case class Attribute(name: String) {
   import Attribute._
@@ -62,6 +65,22 @@ object Attribute {
     }
   }
 
+  /** Combines the given consumeables by concatenating the last-emitted elements, separated by a space. Useful
+    * for CSS. */
+  def combineSpaced(fixed: String, first: Consumeable[String], others: Consumeable[String]*): Consumeable[String] = {
+    def startWithEmpty = ZPipeline.prepend(Chunk(""))
+    val streams = (first +: others.toSeq).map(_.via(startWithEmpty))
+    combine(ZStream(fixed), streams: _*).map(_.mkString(" "))
+  }
+
+  /** Combines the given consumeables by concatenating the last-emitted elements. Only emits once all involved
+    * consumeables have emitted their first element. To enforce a first element, use
+    * .via(ZPipeline.prepend(value)). */
+  def combine[T](first: Consumeable[T], others: Consumeable[T]*): Consumeable[Chunk[T]] = {
+    val all = first.map(Chunk(_)) +: others.toSeq.map(_.map(Chunk(_)))
+    all.reduce((a,b) => a.zipLatestWith(b)(_ ++ _))
+  }
+
   val id = Attribute("id")
   val title = Attribute("title")
   val width = Attribute("width")
@@ -76,8 +95,7 @@ object Attribute {
   val list = Attribute("list")
   val value = Attribute("value")
 
-  // TODO: Allow combining of multiple Consumeable[_,String] to set className from several sources, using ZStream.zipLatestWith
-  // Syntax would be a function Attribute.combine(Consumeable[_,String]*)
+  /** The CSS class(es) to set. Use Attribute.combine() if you have multiple sources. */
   val `class` = Attribute("class")
   /** Alias for `class` */
   val className = `class`

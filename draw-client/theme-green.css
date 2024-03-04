@@ -4,7 +4,8 @@
     --fg-color-dialog: #ADD7CD;
 
     --fg-color-main: 0, 0, 0;
-    --fg-color-highlight: 255, 255, 255;
+    --fg-color-highlight: 0, 255, 0;
+    --fg-color-selected: 255, 255, 255;
 }
 
 g.icon text.label, div.label-input input {

@@ -16,6 +16,8 @@ import draw.data.drawevent.ObjectDeleted
 import draw.data.drawevent.ScribbleContinued
 import draw.data.drawevent.ObjectMoved
 import draw.data.drawevent.ObjectLabelled
+import zio.Scope
+import zio.lazagna.Setup
 
 trait Drawing {
   import Drawing._
@@ -28,6 +30,11 @@ trait Drawing {
   def initialObjectStates: Consumeable[ObjectState[_]] // Returns initial object state for each object
   def objectState(id: String): Consumeable[ObjectState[_]] // Returns state for that object
   def latency: Consumeable[Long]
+  /** The set of currently selected objects */
+  def selection: SubscriptionRef[Set[String]]
+
+  def currentSelectionState: ZIO[Scope & Setup, Nothing, Set[ObjectState[_]]] =
+    selection.get.flatMap(s => ZIO.collectAll(s.map(id => objectState(id).runHead))).map(_.flatten)
 }
 
 object Drawing {
@@ -39,7 +46,11 @@ object Drawing {
     def update(event: DrawEventBody) = this
   }
 
-  case class ObjectState[T <: ObjectStateBody](id: String, sequenceNr: Long, deleted: Boolean, body: T) {
+  /** An object that can be moved around, and hence has a position. */
+  trait Moveable extends ObjectStateBody {
+    def position: Point
+  }
+  case class ObjectState[+T <: ObjectStateBody](id: String, sequenceNr: Long, deleted: Boolean, body: T) {
     def update(event: DrawEvent): ObjectState[T] = copy(
       sequenceNr = event.sequenceNr,
       deleted = event.body.isInstanceOf[ObjectDeleted],
@@ -47,7 +58,7 @@ object Drawing {
     )
   }
 
-  case class ScribbleState(position: Point, points: Seq[Point]) extends ObjectStateBody {
+  case class ScribbleState(position: Point, points: Seq[Point]) extends ObjectStateBody with Moveable {
     override def update(event: DrawEventBody) = event match {
       case ScribbleContinued(_, addedPoints, _) =>
         copy(points = points ++ addedPoints)
@@ -57,7 +68,7 @@ object Drawing {
     }
 
   }
-  case class IconState(position: Point, symbol: SymbolRef, label: String) extends ObjectStateBody {
+  case class IconState(position: Point, symbol: SymbolRef, label: String) extends ObjectStateBody with Moveable {
     override def update(event: DrawEventBody) = event match {
       case ObjectMoved(_, Some(newPosition), _) =>
         copy(position = newPosition)

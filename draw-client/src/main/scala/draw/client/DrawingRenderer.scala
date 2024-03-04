@@ -67,7 +67,6 @@ object DrawingRenderer {
 
   private def getTargetObject(event: dom.MouseEvent, className: String): Option[ObjectTarget] = {
     Some(event)
-      .filter { e => (e.buttons & 1) != 0 }
       .map(_.target)
       .collect { case elem: dom.Element =>
         elem }
@@ -104,6 +103,7 @@ object DrawingRenderer {
             val furtherEvents = drawing.objectState(initial.id).tap(switchWhenReady).takeUntil(_.deleted).map(_.body)
             children.child { destroy =>
               g(
+                cls <-- drawing.selection.map { s => if (s.contains(initial.id)) "selected" else "" },
                 Modifier.run(drawing.objectState(initial.id).filter(_.deleted).mapZIO(_ => destroy).take(1).consume),
                 initial.body match {
                   case _:ScribbleState =>

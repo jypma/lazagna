@@ -30,7 +30,8 @@ trait DrawingTools {
 }
 
 object DrawingTools {
-  private def keyboardAction(key: String, description: String, execute: => ZIO[Scope, Nothing, Unit]): Element[dom.Element] = {
+  private def keyboardAction(key: String, description: String, execute: => ZIO[Scope, Nothing, Unit],
+    extraCSS: Option[Consumeable[String]] = None): Element[dom.Element] = {
     val keyName = key match {
       case "Escape" => "⎋"
       case "Enter" => "↵"
@@ -38,8 +39,10 @@ object DrawingTools {
       case s => s.toUpperCase()
     }
 
+    val css = extraCSS.map(css => cls <-- combineSpaced("hint", css)).getOrElse(cls := "hint")
+
     div(
-      cls := "hint",
+      css,
       div(
         cls := "key",
         textContent := keyName,
@@ -58,16 +61,12 @@ object DrawingTools {
     )
   }
 
-  private case class Tool(key: String, name: String, hint: String, icon: String, render: Modifier)
+  private def keyboardToggle(key: String, description: String, target: SubscriptionRef[Boolean],
+    onChange: Boolean => UIO[Any] = {_ => ZIO.unit}): Element[dom.Element] = {
+    keyboardAction(key, description, target.update(toB => !toB), Some(target.tap(onChange).map(a => if (a) "active" else "")))
+  }
 
-  // Selection tool, ⛶ -> Select one object (on mouse UP when not dragged), add shortcuts depending on object
-  //   Drag anywhere -> move currently selected object
-  //   All: Delete (delete key)
-  //   Icon: (L)abel, (P)icture
-  //   Scribble: nothing
-  //   Later: drag selection, (+) add to selection, (-) remove from selection
-  //     Multiple selection -> Display all shortcuts for group of types
-  // Remove move and eraser tool
+  private case class Tool(key: String, name: String, hint: String, icon: String, render: Modifier)
 
   val live = ZLayer.scoped {
     for {
@@ -77,19 +76,19 @@ object DrawingTools {
       keyboard <- Children.make
       iconTool <- icon(drawing, dialogs, keyboard, index)
       labelTool <- labelTool(drawing, dialogs, keyboard)
+      selectTool <- selectTool(drawing, keyboard)
       tools = Seq(
+        Tool("s", "select", "Select and adjust existing objects", "⛶", selectTool),
         Tool("p", "pencil", "Add pencil strokes", "✏️", pencil(drawing)),
-        Tool("m", "move", "Move (move objects)", "☈", moveTool(drawing)),
         Tool("i", "icon", "Add icon", "🚶", iconTool),
         Tool("l", "label", "Add labels", "T", labelTool),
-        Tool("d", "eraser", "Eraser (delete items)", "🗑️", eraser(drawing))
       )
       selectedTool <- SubscriptionRef.make(tools(0))
       common <- commonTools(drawing, keyboard, selectedTool, tools)
     } yield new DrawingTools {
       override def currentToolName = selectedTool.map(_.name)
 
-      override val renderHandlers = Alternative.mountOne(selectedTool) { t => Modifier.combine(t.render, common) }
+      override val renderHandlers = Alternative.mountOne(selectedTool) { t => Modifier.combine(common, t.render) }
 
       override val renderToolbox = div(
         cls := "toolbox",
@@ -178,46 +177,80 @@ object DrawingTools {
     }
   }
 
-  def eraser(drawing: Drawing): Modifier = onMouseDown.merge(onMouseMove)(_
-    .map(DrawingRenderer.getEditTargetObject)
-    .collectF { case Some(obj) => obj.id }
-    .map(id => DrawCommand(DeleteObject(id)))
-    .flatMap(drawing.perform _)
-  )
 
-  case class MoveState(id: String, current: Point, start: Point)
-  def moveTool(drawing: Drawing): Modifier = Modifier.unwrap(for {
-    state <- Ref.make[Option[MoveState]](None)
+  //   Icon: (L)abel, (P)icture
+  //     Multiple selection -> Display all shortcuts for group of types
+
+  case class MoveState(selection: Set[ObjectState[Moveable]], start: Point)
+  def selectTool(drawing: Drawing, keyboard: Children) = for {
+    moveState <- Ref.make[Option[MoveState]](None)
+    addToSelection <- SubscriptionRef.make(false)
+    removeFromSelection <- SubscriptionRef.make(false)
   } yield {
     SVGHelper { helper =>
-      Modifier.combine(
-        onMouseDown(_.flatMap { event =>
-          val pos = helper.screenToLocal(event)
-          (DrawingRenderer.getSelectTargetObject(event)) match {
-            case Some(obj) =>
-              val g = event.target.asInstanceOf[dom.Element].parentNode.asInstanceOf[dom.SVGGElement]
-              val pos = helper.screenToLocal(event)
-              state.set(Some(MoveState(obj.id, obj.position, Point(pos.x, pos.y))))
-            case _ =>
-              ZIO.unit
+      def doSelect(event: dom.MouseEvent) = {
+        val pos = helper.screenToLocal(event)
+        val target = DrawingRenderer.getSelectTargetObject(event).map(_.id).toSet
+        addToSelection.get.zip(removeFromSelection.get).flatMap { (adding, removing) =>
+          if (adding) {
+            drawing.selection.update(_ ++ target)
+          } else if (removing) {
+            drawing.selection.update(_ -- target)
+          } else {
+            drawing.selection.set(target)
           }
-        }),
-        onMouseUp(_.flatMap { _ => state.set(None) }),
-        onMouseMove(_
+        }
+      }
+
+      Modifier.combine(
+        onMouseDown(_
           .filter { e => (e.buttons & 1) != 0 }
-          .flatMap { e => state.get.map((_, e)) }
+          .tap(doSelect)
+          .zip(drawing.currentSelectionState.map { _.collect {
+            case s@ObjectState(_,_,_,_: Moveable) => s.asInstanceOf[ObjectState[Moveable]]
+          }})
           .collectF {
-            case (Some(state), event) => (state, helper.screenToLocal(event))
+            case (event, selection) if !selection.isEmpty =>
+              println("Preparing to move.")
+              val pos = helper.screenToLocal(event)
+              Some(MoveState(selection, Point(pos.x, pos.y)))
+          }
+          .flatMap(moveState.set)
+        ),
+        onMouseUp(_.flatMap { _ => moveState.set(None) }),
+        onMouseMove(_
+          .zip(moveState.get)
+          .collectF {
+            case (event, Some(state)) => (state, helper.screenToLocal(event))
           }
           .flatMap { (state, pos) =>
-            val x = state.current.x + pos.x - state.start.x
-            val y = state.current.y + pos.y - state.start.y
-            drawing.perform(DrawCommand(MoveObject(state.id, Some(Point(x, y)))))
+            ZIO.collectAll(state.selection.map { obj =>
+              val x = obj.body.position.x + pos.x - state.start.x
+              val y = obj.body.position.y + pos.y - state.start.y
+              drawing.perform(DrawCommand(MoveObject(obj.id, Some(Point(x, y)))))
+            })
           }
-        )
+        ),
+        keyboard.addChild { _ =>
+          keyboardToggle("a", "Add to sticky selection", addToSelection, b => removeFromSelection.set(false).when(b))
+        },
+        keyboard.addChild { _ =>
+          keyboardToggle("r", "Remove from sticky selection", removeFromSelection, b => addToSelection.set(false).when(b))
+        },
+        Alternative.mountOne(drawing.selection) { selection =>
+          if (selection.isEmpty) Modifier.empty else {
+            keyboard.addChild { _ =>
+              keyboardAction("Delete", "Delete items",
+                ZIO.collectAll(selection.map { id =>
+                  drawing.perform(DrawCommand(DeleteObject(id)))
+                }).unit
+              )
+            }
+          }
+        }
       )
     }
-  })
+  }
 
   def pencil(drawing: Drawing): Modifier = Modifier.unwrap(for {
     currentScribbleId <- Ref.make[Option[String]](None)

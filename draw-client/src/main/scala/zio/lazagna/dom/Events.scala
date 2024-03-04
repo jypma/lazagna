@@ -3,17 +3,18 @@ package zio.lazagna.dom
 import scala.scalajs.js
 
 import zio.stream.ZStream
-import zio.{Chunk, Hub, Ref, Runtime, Scope, Unsafe, ZIO, ZLayer, IO}
+import zio.{Chunk, Hub, Ref, Runtime, Scope, Unsafe, ZIO, ZLayer}
 
 import org.scalajs.dom
 
 import zio.lazagna.Filtered
 import zio.lazagna.Filtered._
+import zio.lazagna.Setup
 
 /** Emits events from DOM objects, in a push-fashion. Operators have the same semantics as ZStream. */
 case class EventsEmitter[-E <: dom.Event, +T](
   eventType: String,
-  fn: E => ZIO[Scope, Filtered, T] = { (e:E) => ZIO.succeed(e) },
+  fn: E => ZIO[Scope & Setup, Filtered, T] = { (e:E) => ZIO.succeed(e) },
   overrideTarget: Option[dom.EventTarget] = None,
   others: Seq[EventsEmitter[_,T]] = Seq.empty
 ) {
@@ -33,7 +34,7 @@ case class EventsEmitter[-E <: dom.Event, +T](
             _ <- (ZIO.acquireRelease {
               ZIO.succeed {
                 val listener: js.Function1[dom.Event, Unit] = { (event: dom.Event) =>
-                  cb(fn(event.asInstanceOf[E]).map(o => Chunk(o)).catchAll {
+                  cb(Setup.start(fn(event.asInstanceOf[E])).map(o => Chunk(o)).catchAll {
                     case _:Filtered => ZIO.succeed(Chunk.empty)
                   })
                 }
@@ -62,7 +63,7 @@ case class EventsEmitter[-E <: dom.Event, +T](
   def forDocument: EventsEmitter[E,T] = copy(overrideTarget = Some(dom.document))
 
   /** Performs the given operation on the events handled by this events emitter. */
-  def apply[U](op: ZIO[Scope, Filtered,T] => ZIO[Scope, Filtered, U]): EventsEmitter[E,U] = copy(
+  def apply[U](op: ZIO[Scope & Setup, Filtered,T] => ZIO[Scope & Setup, Filtered, U]): EventsEmitter[E,U] = copy(
     fn = e => op(fn(e)),
     others = others.map(_(op))
   )
@@ -84,7 +85,7 @@ case class EventsEmitter[-E <: dom.Event, +T](
           val listener: js.Function1[dom.Event, Unit] = { (event: dom.Event) =>
             // TODO: Queue up events and pick them up as a Chunk while we're already running a callback
             Unsafe.unsafe { implicit unsafe =>
-              Runtime.default.unsafe.runToFuture(fn(event.asInstanceOf[E]).provideLayer(ZLayer.succeed(scope)).catchAll {
+              Runtime.default.unsafe.runToFuture(Setup.start(fn(event.asInstanceOf[E])).provideLayer(ZLayer.succeed(scope)).catchAll {
                 case _:Filtered => ZIO.unit
               })
             }

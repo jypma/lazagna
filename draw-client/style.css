@@ -44,21 +44,32 @@ g.icon text.label {
     font-size: 16px;
 }
 
-.tool-eraser path.editTarget:hover, .tool-move path.selectTarget:hover {
+.tool-select path.selectTarget:hover {
     stroke: rgba(var(--fg-color-highlight));
+    opacity: 0.4;
+}
+
+.tool-select g.selected path.editTarget {
+    stroke: rgba(var(--fg-color-selected));
     opacity: 0.2;
 }
 
-.tool-eraser g.icon:hover, .tool-move use.icon:hover {
-    filter: drop-shadow(0px 0px 10px rgba(var(--fg-color-highlight), 0.9));
+.tool-select g.selected path.selectTarget:hover {
+    stroke: rgba(var(--fg-color-highlight));
+    opacity: 0.5;
 }
 
-.tool-move path.selectTarget:hover, .tool-move use.icon:hover {
-    cursor: move;
+
+.tool-select use.icon:hover {
+    filter: drop-shadow(0px 0px 10px rgba(var(--fg-color-highlight), 0.8));
 }
 
-.tool-eraser path.editTarget:hover, .tool-eraser use.icon:hover {
-    cursor: crosshair;
+.tool-select g.selected use.icon {
+    filter: drop-shadow(0px 0px 10px rgba(var(--fg-color-selected), 0.7));
+}
+
+.tool-select g.selected use.icon:hover {
+    filter: drop-shadow(0px 0px 8px rgba(var(--fg-color-highlight), 1.0));
 }
 
 .tool-label use.icon:hover {
@@ -149,6 +160,9 @@ svg.main {
     z-index: 3;
     bottom: 10px;
     left: 10px;
+    display: flex;
+    justify-content: flex-end;
+    flex-direction: column-reverse; /* We want later-added keyboard shortcuts to appear above older ones */
 }
 
 #debugApp {
@@ -171,10 +185,14 @@ svg.main {
     cursor: pointer;
 }
 
+.keyboard-hints .active .key {
+    background-color: rgba(var(--fg-color-selected));
+}
+
 .keyboard-hints .description {
     display: inline;
     text-shadow: 2px 2px 2px rgba(var(--fg-color-main), 0.5);
-    color: rgba(var(--fg-color-highlight));
+    color: rgba(var(--fg-color-selected));
 }
 
 .icon-preview {
@@ -241,7 +259,7 @@ div.label-input input:focus {
 }
 
 .tool > input:checked + div {
-    background-color: rgba(var(--fg-color-highlight));
+    background-color: rgba(var(--fg-color-selected));
 }
 
 .tool > div > label {
