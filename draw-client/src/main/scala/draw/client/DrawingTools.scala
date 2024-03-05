@@ -21,6 +21,10 @@ import org.scalajs.dom
 import draw.client.DrawingRenderer.ObjectTarget
 import zio.Scope
 import Drawing._
+import draw.data.ObjectState
+import draw.data.Moveable
+import draw.data.SymbolRef
+import draw.data.IconState
 
 trait DrawingTools {
   def renderKeyboard: Modifier

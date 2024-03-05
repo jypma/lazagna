@@ -1,4 +1,4 @@
-package draw.client
+package draw.data
 
 import SymbolRef._
 

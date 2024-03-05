@@ -16,6 +16,7 @@ import draw.data.drawevent.ObjectDeleted
 import draw.data.drawevent.ScribbleContinued
 import draw.data.drawevent.ObjectMoved
 import draw.data.drawevent.ObjectLabelled
+import draw.data.ObjectState
 import zio.Scope
 import zio.lazagna.Setup
 
@@ -41,71 +42,6 @@ object Drawing {
   sealed trait ConnectionStatus
   case object Connected extends ConnectionStatus
   case object Disconnected extends ConnectionStatus
-
-  sealed trait ObjectStateBody {
-    def update(event: DrawEventBody) = this
-  }
-
-  /** An object that can be moved around, and hence has a position. */
-  sealed trait Moveable extends ObjectStateBody {
-    def position: Point
-  }
-  case class ObjectState[+T <: ObjectStateBody](id: String, sequenceNr: Long, deleted: Boolean, body: T) {
-    def update(event: DrawEvent): ObjectState[T] = copy(
-      sequenceNr = event.sequenceNr,
-      deleted = event.body.isInstanceOf[ObjectDeleted],
-      body = body.update(event.body).asInstanceOf[T]
-    )
-  }
-
-  case class ScribbleState(position: Point, points: Seq[Point]) extends ObjectStateBody with Moveable {
-    override def update(event: DrawEventBody) = event match {
-      case ScribbleContinued(_, addedPoints, _) =>
-        copy(points = points ++ addedPoints)
-      case ObjectMoved(_, Some(newPosition), _) =>
-        copy(position = newPosition)
-      case _ => this
-    }
-
-  }
-  case class IconState(position: Point, symbol: SymbolRef, label: String) extends ObjectStateBody with Moveable {
-    override def update(event: DrawEventBody) = event match {
-      case ObjectMoved(_, Some(newPosition), _) =>
-        copy(position = newPosition)
-      case ObjectLabelled(_, newLabel, _) =>
-        copy(label = newLabel)
-      case _ => this
-    }
-  }
-
-  case class DrawingState(objects: Map[String, ObjectState[_]]) {
-    private def set(id: String, state: ObjectState[_], isNew: Boolean) =
-      ((Some(state), isNew), copy(objects = objects + (id -> state)))
-    private def update(id: String, event: DrawEvent) = {
-      objects.get(id).map { state =>
-        set(id, state.update(event), false)
-      }.getOrElse(((None, false), this))
-    }
-
-    /** Returns the new drawing state, new object state, and whether that object is new */
-    def update(event: DrawEvent): ((Option[ObjectState[_]], Boolean), DrawingState) = event match {
-      case DrawEvent(sequenceNr, ScribbleStarted(id, points, _), _, _, _) =>
-        set(id, ObjectState(id, sequenceNr, false, ScribbleState(Point(0,0), points)), true)
-      case DrawEvent(sequenceNr, IconCreated(id, optPos, Some(category), Some(name), _), _, _, _) =>
-        set(id, ObjectState(id, sequenceNr, false, IconState(optPos.getOrElse(Point(0,0)), SymbolRef(SymbolCategory(category), name), "")), true)
-      case DrawEvent(_, ScribbleContinued(id, _, _), _, _, _) =>
-        update(id, event)
-      case DrawEvent(_, ObjectMoved(id, _, _), _, _, _) =>
-        update(id, event)
-      case DrawEvent(_, ObjectLabelled(id, _, _), _, _, _) =>
-        update(id, event)
-      case DrawEvent(_, ObjectDeleted(id, _), _, _, _) =>
-        update(id, event)
-
-      case _ =>
-        ((None, false), this)
-    }
-  }
 
   case class Viewport(left: Double = 0, top: Double = 0, factor: Double = 1.0) {
     import Viewport._

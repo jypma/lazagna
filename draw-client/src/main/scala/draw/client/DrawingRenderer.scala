@@ -16,6 +16,9 @@ import draw.data.point.Point
 import org.scalajs.dom
 import zio.lazagna.dom.Children
 import Drawing._
+import draw.data.ObjectState
+import draw.data.ScribbleState
+import draw.data.IconState
 
 trait DrawingRenderer {
   def render: Modifier

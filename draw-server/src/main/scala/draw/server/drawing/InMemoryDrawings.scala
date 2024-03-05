@@ -12,6 +12,7 @@ import draw.data.drawcommand.DrawCommand
 import draw.data.drawevent.DrawEvent
 
 import Drawings.DrawingError
+import draw.data.DrawingState
 
 case class DrawingStorage(state: DrawingState = DrawingState(), events: Seq[DrawEvent] = Seq.empty) {
   def size = events.size
@@ -19,7 +20,7 @@ case class DrawingStorage(state: DrawingState = DrawingState(), events: Seq[Draw
   def handle(now: Instant, command: DrawCommand): (Option[DrawEvent], DrawingStorage) = {
     val event = state.handle(now, command)
     (event, DrawingStorage(
-      state = event.map(state.update).getOrElse(state),
+      state = event.map(state.update).map(_._2).getOrElse(state),
       events = events ++ event.toSeq
     ))
   }
@@ -27,7 +28,7 @@ case class DrawingStorage(state: DrawingState = DrawingState(), events: Seq[Draw
   def handleCreate(now: Instant) = {
     val event = state.handleCreate(now)
     copy(
-      state = state.update(event),
+      state = state.update(event)._2,
       events = events :+ event
     )
   }

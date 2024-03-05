@@ -23,6 +23,8 @@ import zio.stream.ZStream
 import zio.lazagna.Setup
 import zio.Semaphore
 import java.util.UUID
+import draw.data.DrawingState
+import draw.data.ObjectState
 
 trait DrawingClient {
   def login(user: String, password: String, drawingId: UUID): ZIO[Scope, ClientError | RequestError, Drawing]
@@ -50,7 +52,7 @@ object DrawingClient {
       store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
       drawViewport <- SubscriptionRef.make(Viewport())
       connStatus <- SubscriptionRef.make[ConnectionStatus](Connected)
-      state <- Ref.make(DrawingState(Map.empty)) // TODO investigate Ref.Synchronized to close over state
+      state <- Ref.make(DrawingState())
       stateSemaphore <- Semaphore.make(1)
       lastEventNr <- SubscriptionRef.make(0L)
       stateChanges <- Hub.bounded[ObjectState[_]](16)

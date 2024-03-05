@@ -5,6 +5,8 @@ import scala.scalajs.js
 import zio.lazagna.dom.http.Request
 import zio.lazagna.dom.http.Request._
 import zio.{UIO, ZIO}
+import draw.data.SymbolRef
+import draw.data.SymbolCategory
 
 trait SymbolIndex {
   def lookup(text: String): UIO[SymbolIndex.Result]

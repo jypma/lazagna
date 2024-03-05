@@ -6,6 +6,7 @@ import org.scalajs.dom
 
 import scalajs.js
 import zio.lazagna.dom.http.Request._
+import draw.data.SymbolRef
 
 trait Exporter {
   def triggerExport: ZIO[Any, RequestError, Unit]
