@@ -55,7 +55,6 @@ object IndexedDBEventStore {
       // TODO: Add publish with type T directly (from websocket), so we can bypass codec there.
       // TEST: Allow publishing the same identical event twice (idempotency)
       def publish(event: E) = {
-        println("Publish in " + objectStoreName + ": " + event)
         publishOrVerify(event).whenZIO(haveLock.get) *> hub.publish(event).unit
       }
 

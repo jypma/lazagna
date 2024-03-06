@@ -140,14 +140,14 @@ object DrawingTools {
           onMouseDown(_
             .filter { e => (e.buttons & 4) != 0 }
             .flatMap { event =>
-              val pos = helper.screenToLocal(event)
+              val pos = helper.screenToSvg(event)
               dragStart.set(Point(pos.x, pos.y))
             }
           ),
           onMouseMove(_
             .filter { e => (e.buttons & 4) != 0 }
             .flatMap { event =>
-              val pos = helper.screenToLocal(event)
+              val pos = helper.screenToSvg(event)
               for {
                 start <- dragStart.get
                 _ <- drawing.viewport.update(_.pan(start.x - pos.x, start.y - pos.y))
@@ -160,7 +160,7 @@ object DrawingTools {
                 case 1 => (event.deltaY * 0.01) + 1
                 case _ => (event.deltaY * 0.01) + 1
               }
-              val pos = helper.screenToLocal(event)
+              val pos = helper.screenToSvg(event)
               drawing.viewport.update(_.zoom(factor, pos.x, pos.y))
             }),
           keyboard.addChild { _ =>
@@ -188,7 +188,7 @@ object DrawingTools {
   } yield {
     SVGHelper { helper =>
       def doSelect(event: dom.MouseEvent) = {
-        val pos = helper.screenToLocal(event)
+        val pos = helper.screenToSvg(event)
         val target = DrawingRenderer.getSelectTargetObject(event).map(_.id).toSet
         addToSelection.get.zip(removeFromSelection.get).flatMap { (adding, removing) =>
           if (adding) {
@@ -211,7 +211,7 @@ object DrawingTools {
           .collectF {
             case (event, selection) if !selection.isEmpty =>
               println("Preparing to move.")
-              val pos = helper.screenToLocal(event)
+              val pos = helper.screenToSvg(event)
               Some(MoveState(selection, Point(pos.x, pos.y)))
           }
           .flatMap(moveState.set)
@@ -220,7 +220,7 @@ object DrawingTools {
         onMouseMove(_
           .zip(moveState.get)
           .collectF {
-            case (event, Some(state)) => (state, helper.screenToLocal(event))
+            case (event, Some(state)) => (state, helper.screenToSvg(event))
           }
           .flatMap { (state, pos) =>
             ZIO.collectAll(state.selection.map { obj =>
@@ -259,7 +259,7 @@ object DrawingTools {
     onMouseDown(_
       .filter { e => (e.buttons & 1) != 0 }
       .flatMap { ev =>
-        val pos = helper.screenToLocal(ev)
+        val pos = helper.screenToSvg(ev)
         startPoint.set(Some(Point(pos.x, pos.y))) *>
           count.set(0) *>
           makeUUID.flatMap(id => currentScribbleId.set(Some(id)))
@@ -274,7 +274,7 @@ object DrawingTools {
         .collectF { case (id, ev, count) if count < 200 => (id, ev) }
         .flatMap((id, ev) => startPoint.get.map((id, _, ev)))
         .flatMap { (id, start, event) =>
-          val pos = helper.screenToLocal(event)
+          val pos = helper.screenToSvg(event)
           val point = Point(pos.x, pos.y)
 
           if (start.isDefined) {
@@ -342,7 +342,7 @@ object DrawingTools {
     SVGHelper { helper =>
       Modifier.combine(
         onMouseMove(_.flatMap { e =>
-          cursorPos.set(Some(helper.screenToLocal(e)))
+          cursorPos.set(Some(helper.screenToSvg(e)))
         }),
         keyboard.addChild { _ =>
           keyboardAction("t", "Select icon", selectDialog)
@@ -353,7 +353,7 @@ object DrawingTools {
             for {
               symbol <- selectedIcon.get
               id <- makeUUID
-              pos = helper.screenToLocal(e)
+              pos = helper.screenToSvg(e)
               _ <- drawing.perform(DrawCommand(CreateIcon(id, Point(pos.x, pos.y), symbol.category.name, symbol.name)))
             } yield {}
           }),
@@ -378,8 +378,8 @@ object DrawingTools {
           case None => Modifier.empty
           case Some(target) =>
             dialogs.addChild { _ =>
-              val pos = helper.localToScreen(Point(target.position.x - iconSize / 2, target.position.y + iconSize * 0.45))
-              val bounds = helper.localToScreen(Point(target.position.x + iconSize / 2, target.position.y - iconSize / 2))
+              val pos = helper.svgToScreen(Point(target.position.x - iconSize / 2, target.position.y + iconSize * 0.45))
+              val bounds = helper.svgToScreen(Point(target.position.x + iconSize / 2, target.position.y - iconSize / 2))
               val width = bounds.x - pos.x
               val close = selected.set(None)
               div(

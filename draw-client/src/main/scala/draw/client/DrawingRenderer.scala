@@ -17,6 +17,8 @@ import draw.data.{IconState, LinkState, ObjectState, ScribbleState}
 import org.scalajs.dom
 
 import Drawing._
+import zio.lazagna.dom.svg.SVGHelper
+import zio.lazagna.Consumeable
 
 trait DrawingRenderer {
   def render: Modifier
@@ -98,7 +100,12 @@ object DrawingRenderer {
         }
       }
 
-      val renderedObjects = Modifier.unwrap {
+      def renderedObjects(helper: SVGHelper) = Modifier.unwrap {
+        def getBoundingBox(in: Consumeable[ObjectState[_]]) = in.collect {
+          case ObjectState(id, _, _, _:IconState) =>
+            helper.svgBBox(dom.document.getElementById(s"icon${id}").querySelector(".selectTarget").asInstanceOf[dom.SVGGElement], 5)
+        }.changes
+
         for {
           children <- Children.make
           _ <- drawing.initialObjectStates.tap(switchWhenReady).mapZIO { initial =>
@@ -170,18 +177,14 @@ object DrawingRenderer {
                     )
 
                   case LinkState(src, dest, _, _) =>
-                    val srcPosition = drawing.objectState(src).map(_.body)
-                      .collect { case IconState(pos, _, _) => pos }
-                      .changes
-
-                    val destPosition = drawing.objectState(dest).map(_.body)
-                      .collect { case IconState(pos, _, _) => pos }
-                      .changes
-
-                    val points = d <-- srcPosition.zipLatest(destPosition).map { (s, d) =>
+                    val srcBox = getBoundingBox(drawing.objectState(src))
+                    val destBox = getBoundingBox(drawing.objectState(dest))
+                    val points = d <-- srcBox.zipLatest(destBox).map { (s, d) =>
+                      val dp = pointOnRect(Point(s.x + 0.5 * s.width, s.y + 0.5 * s.height), d)
+                      val sp = pointOnRect(Point(d.x + 0.5 * d.width, d.y + 0.5 * d.height), s)
                       PathData.render(Seq(
-                        PathData.MoveTo(s.x, s.y),
-                        PathData.LineTo(d.x, d.y)
+                        PathData.MoveTo(sp.x, sp.y),
+                        PathData.LineTo(dp.x, dp.y)
                       ))
                     }
 
@@ -224,9 +227,11 @@ object DrawingRenderer {
             overflow := "hidden",
             tabindex := 0, // To enable keyboard events
             focusNow, // To allow dragging immediately
-            g(
-              renderedObjects
-            ),
+            SVGHelper { helper =>
+              g(
+                renderedObjects(helper)
+              )
+            },
             drawingTools.renderHandlers
           )
         )
@@ -242,4 +247,40 @@ object DrawingRenderer {
       }
     }
   }
+
+  // source: https://stackoverflow.com/questions/1585525/how-to-find-the-intersection-point-between-a-line-and-a-rectangle
+  private def pointOnRect(p: Point, rect: dom.SVGRect): Point = {
+    val x = p.x
+    val y = p.y
+    val minX = rect.x
+    val minY = rect.y
+    val maxX = rect.x + rect.width
+    val maxY = rect.y + rect.height
+
+    //assert minX <= maxX;
+    //assert minY <= maxY;
+    val midX = (minX + maxX) / 2
+    val midY = (minY + maxY) / 2
+    // if (midX - x == 0) -> m == ±Inf -> minYx/maxYx == x (because value / ±Inf = ±0)
+    val m = (midY - y) / (midX - x)
+
+    val minXy = m * (minX - x) + y
+    val maxXy = m * (maxX - x) + y
+    val minYx = (minY - y) / m + x
+    val maxYx = (maxY - y) / m + x
+    if ((x <= midX) && (minY <= minXy && minXy <= maxY)) {
+      Point(minX, minXy)
+    } else if ((x >= midX) && (minY <= maxXy && maxXy <= maxY)) {
+      Point(maxX, maxXy)
+    } else if ((y <= midY) && (minX <= minYx && minYx <= maxX)) {
+      Point(minYx, minY)
+    } else if ((y >= midY) && (minX <= maxYx && maxYx <= maxX)) {
+      Point(maxYx, maxY)
+    } else {
+      // edge case when finding midpoint intersection: m = 0/0 = NaN
+      //if (x === midX && y === midY)
+      Point(x, y)
+    }
+  }
+
 }
