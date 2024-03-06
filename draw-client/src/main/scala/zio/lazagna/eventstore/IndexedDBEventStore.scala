@@ -53,9 +53,23 @@ object IndexedDBEventStore {
       def latestSequenceNr = getLastSequenceNr
 
       // TODO: Add publish with type T directly (from websocket), so we can bypass codec there.
+      // TEST: Allow publishing the same identical event twice (idempotency)
       def publish(event: E) = {
         println("Publish in " + objectStoreName + ": " + event)
-        objectStore.add(event, getSequenceNr(event)).whenZIO(haveLock.get) *> hub.publish(event).unit
+        publishOrVerify(event).whenZIO(haveLock.get) *> hub.publish(event).unit
+      }
+
+      private def publishOrVerify(event: E) = {
+        objectStore.add(event, getSequenceNr(event)).catchAll {
+          case err =>
+             // Adding to object store failed. Let's try to read instead, to allow idempotency.
+            objectStore.get(getSequenceNr(event)).flatMap { _ match {
+              case existing if existing == event =>
+                ZIO.unit
+              case other =>
+                ZIO.fail(err)
+            }}
+        }
       }
 
       def reset = objectStore.clear.whenZIO(haveLock.get).unit.catchAll { err =>

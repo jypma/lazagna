@@ -47,6 +47,11 @@ object Main extends ZIOAppDefault {
 
   val drawingId = UUID.fromString("0314aaab-684c-49c6-bd29-0921a3897ce5") // TODO: Drawing selector
 
+  def printContents[Err](store: EventStore[DrawEvent,Err]) = for {
+    last <- store.latestSequenceNr
+    _ <- store.events.takeUntil(e => e.sequenceNr >= last).debug.runDrain
+  } yield ()
+
   val eventStore = ZLayer.fromZIO {
     Setup.start {
       for {
@@ -54,6 +59,7 @@ object Main extends ZIOAppDefault {
         store <- IndexedDBEventStore.make[DrawEvent,ArrayBuffer](s"events", lock, _.sequenceNr)
         prunedStore <- IndexedDBEventStore.make[DrawEvent,ArrayBuffer](s"events-pruned", lock, _.sequenceNr)
         pruned <- PrunedEventStore.make(store, prunedStore, lock, Pruned.State())(_.prune(_))(_.recover(_))
+        _ <- printContents(pruned)
         cached <- CachedEventStore.make(pruned)
       } yield cached
     }

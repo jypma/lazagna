@@ -39,6 +39,7 @@ object CachedEventStore {
         )
       }
 
+      // TEST: Verify that idempotency works here
       def publish(event: E): State = {
         State(
           events = events :+ event,

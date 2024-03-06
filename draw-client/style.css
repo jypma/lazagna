@@ -44,6 +44,12 @@ g.link path {
     stroke-dasharray: 4 1
 }
 
+g.link path.selectTarget {
+    stroke-width: 10px;
+    opacity: 0;
+    stroke-dasharray: 0;
+}
+
 g.icon text.label {
     fill: rgba(var(--fg-color-main));
     text-anchor: middle;

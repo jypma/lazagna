@@ -29,6 +29,7 @@ object DrawingRenderer {
       val id = target.id match {
         case s if s.startsWith("scribble") => Some(s.substring("scribble".length))
         case s if s.startsWith("icon") => Some(s.substring("icon".length))
+        case s if s.startsWith("link") => Some(s.substring("link".length))
         case _ => None
       }
       id.map(i => ObjectTarget(i, Point(
@@ -177,16 +178,22 @@ object DrawingRenderer {
                       .collect { case IconState(pos, _, _) => pos }
                       .changes
 
+                    val points = d <-- srcPosition.zipLatest(destPosition).map { (s, d) =>
+                      PathData.render(Seq(
+                        PathData.MoveTo(s.x, s.y),
+                        PathData.LineTo(d.x, d.y)
+                      ))
+                    }
+
                     g(
                       id := s"link${initial.id}",
-                      cls := "link editTarget",
+                      cls := "link",
                       path(
-                        d <-- srcPosition.zipLatest(destPosition).map { (s, d) =>
-                          PathData.render(Seq(
-                            PathData.MoveTo(s.x, s.y),
-                            PathData.LineTo(d.x, d.y)
-                          ))
-                        }
+                        points
+                      ),
+                      path(
+                        cls := "selectTarget editTarget",
+                        points
                       )
                     )
                 }

@@ -24,9 +24,12 @@ case class DrawingState(
 ) {
   import DrawingState._
 
+  private def alive = objects.view.filter(!_._2.deleted)
+
   private def set(state: ObjectState[_], isNew: Boolean, newLinks: Links) = (
     (Some(state), isNew),
     copy(
+      // TEST: Deletes objects stick around in state (so we know they've been deleted asynchronously). It's OK, they won't be in pruned event storage.
       objects = objects + (state.id -> state),
       lastSequenceNr = state.sequenceNr,
       objectLinks = newLinks
@@ -61,7 +64,7 @@ case class DrawingState(
         update(id, event)
       case ObjectLabelled(id, _, _) =>
         update(id, event)
-      case ObjectDeleted(id, _) => objects.get(id).map(_.body) match {
+      case ObjectDeleted(id, _) => alive.get(id).map(_.body) match {
         case Some(LinkState(src, dest, _, _)) =>
           update(id, event, newLinks = objectLinks.remove(src, id).remove(dest, id))
         case _ =>
@@ -99,10 +102,12 @@ case class DrawingState(
         emit(ObjectLabelled(id, label))
       case CreateLink(id, src, dest, preferredDistance, preferredAngle, _) =>
         // TODO: verify ids exist
-        if (objects.values.map(_.body).exists {
+        // TEST: Don't allow adding of link between already linked objects
+        if (alive.values.map(_.body).exists {
           case LinkState(s,d,_,_) if s == src && d == dest => true
           case _ => false
         }) {
+          println("!!! Duplicate link")
           // We already have this link
           Seq.empty
         } else {

@@ -83,6 +83,7 @@ trait ObjectStore[T, K] {
   private[indexeddb] def doGetRange(range: Option[Range[K]], direction: IDBCursorDirection): ZStream[Any, dom.ErrorEvent, T]
   def getRange(range: Range[K], direction: IDBCursorDirection = IDBCursorDirection.next): ZStream[Any, dom.ErrorEvent, T] = doGetRange(Some(range), direction)
   def getAll(direction: IDBCursorDirection = IDBCursorDirection.next): ZStream[Any, dom.ErrorEvent, T] = doGetRange(None, direction)
+  def get(key: K): Request[T]
 
   def add(value: T, key: K): Request[Unit]
   def clear: Request[Unit]
@@ -119,6 +120,11 @@ private[indexeddb] case class ObjectStoreImpl[T, TV <: js.Any, K](db: dom.IDBDat
     val t = db.transaction(Seq(objectStoreName).toJSArray, dom.IDBTransactionMode.readwrite)
     t.objectStore(objectStoreName).add(valueCodec.encode(value), keyCodec.encode(key))
   }.unit
+
+  def get(key: K): Request[T] = request {
+    val t = db.transaction(Seq(objectStoreName).toJSArray)
+    t.objectStore(objectStoreName).get(keyCodec.encode(key))
+  }.map(v => valueCodec.decode(v.asInstanceOf[TV]))
 
   def clear: Request[Unit] = request {
     val t = db.transaction(Seq(objectStoreName).toJSArray, dom.IDBTransactionMode.readwrite)

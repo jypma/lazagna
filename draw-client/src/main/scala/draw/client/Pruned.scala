@@ -71,6 +71,8 @@ object Pruned {
     icons: Map[String, IconState] = Map.empty,
     links: Map[String, LinkState] = Map.empty
   ) {
+    private def allObjects = scribbles ++ icons ++ links
+
     private def update(id: String, state: ScribbleState) = copy(
       scribbles = scribbles + (id -> state)
     )
@@ -146,7 +148,7 @@ object Pruned {
 
         case ObjectDeleted(id, _) =>
           // We don't need to keep the Deleted event itself, since we're removing all traces of the object.
-          val toDelete = (scribbles.get(id).toSeq ++ icons.get(id).toSeq).flatMap(_.ownedEvents)
+          val toDelete = allObjects.get(id).toSeq.flatMap(_.ownedEvents)
           ZIO.collectAll(toDelete.map(e => storage.delete(e.sequenceNr))).as(copy(
             scribbles = scribbles - id,
             icons = icons - id
