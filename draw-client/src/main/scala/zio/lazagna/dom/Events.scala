@@ -2,14 +2,12 @@ package zio.lazagna.dom
 
 import scala.scalajs.js
 
+import zio.lazagna.Filtered._
+import zio.lazagna.{Filtered, Setup}
 import zio.stream.ZStream
 import zio.{Chunk, Hub, Ref, Runtime, Scope, Unsafe, ZIO, ZLayer}
 
 import org.scalajs.dom
-
-import zio.lazagna.Filtered
-import zio.lazagna.Filtered._
-import zio.lazagna.Setup
 
 /** Emits events from DOM objects, in a push-fashion. Operators have the same semantics as ZStream. */
 case class EventsEmitter[-E <: dom.Event, +T](

@@ -1,4 +1,4 @@
-package draw.client
+package draw.client.tools
 
 import java.util.Base64
 
@@ -13,18 +13,15 @@ import zio.lazagna.dom.Modifier._
 import zio.lazagna.dom.svg.SVGHelper
 import zio.lazagna.dom.{Alternative, Children, Element, Modifier}
 import zio.stream.SubscriptionRef
-import zio.{Clock, Hub, Random, Ref, UIO, ZIO, ZLayer}
+import zio.{Clock, Hub, Random, Ref, Scope, UIO, ZIO, ZLayer}
 
-import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, MoveObject, StartScribble, LabelObject}
-import draw.data.point.Point
-import org.scalajs.dom
+import draw.client.Drawing._
 import draw.client.DrawingRenderer.ObjectTarget
-import zio.Scope
-import Drawing._
-import draw.data.ObjectState
-import draw.data.Moveable
-import draw.data.SymbolRef
-import draw.data.IconState
+import draw.client.{Drawing, DrawingRenderer, SymbolIndex}
+import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, LabelObject, MoveObject, StartScribble}
+import draw.data.point.Point
+import draw.data.{IconState, Moveable, ObjectState, SymbolRef}
+import org.scalajs.dom
 
 trait DrawingTools {
   def renderKeyboard: Modifier
@@ -81,11 +78,13 @@ object DrawingTools {
       iconTool <- icon(drawing, dialogs, keyboard, index)
       labelTool <- labelTool(drawing, dialogs, keyboard)
       selectTool <- selectTool(drawing, keyboard)
+      linkTool <- LinkTool(drawing)
       tools = Seq(
-        Tool("s", "select", "Select and adjust existing objects", "⛶", selectTool),
+        Tool("s", "select", "Select, move and adjust existing objects", "⛶", selectTool),
         Tool("p", "pencil", "Add pencil strokes", "✏️", pencil(drawing)),
-        Tool("i", "icon", "Add icon", "🚶", iconTool),
-        Tool("l", "label", "Add labels", "T", labelTool),
+        Tool("i", "icon", "Add icons", "🚶", iconTool),
+        Tool("t", "label", "Add labels", "🏷️", labelTool),
+        Tool("l", "link", "Add links", "🔗", linkTool),
       )
       selectedTool <- SubscriptionRef.make(tools(0))
       common <- commonTools(drawing, keyboard, selectedTool, tools)
@@ -180,10 +179,6 @@ object DrawingTools {
       )
     }
   }
-
-
-  //   Icon: (L)abel, (P)icture
-  //     Multiple selection -> Display all shortcuts for group of types
 
   case class MoveState(selection: Set[ObjectState[Moveable]], start: Point)
   def selectTool(drawing: Drawing, keyboard: Children) = for {

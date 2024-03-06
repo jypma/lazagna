@@ -37,6 +37,13 @@ g.scribble path.selectTarget {
     opacity: 0;
 }
 
+g.link path {
+    fill: none;
+    stroke: rgba(var(--fg-color-main));
+    stroke-width: 1px;
+    stroke-dasharray: 4 1
+}
+
 g.icon text.label {
     fill: rgba(var(--fg-color-main));
     text-anchor: middle;

@@ -2,11 +2,11 @@ package draw.server.drawing
 
 import java.util.UUID
 
-import zio.stream.{ZStream}
+import zio.stream.ZStream
 import zio.{IO, ZIO}
 
-import draw.data.drawcommand.{DrawCommand}
-import draw.data.drawevent.{DrawEvent}
+import draw.data.drawcommand.DrawCommand
+import draw.data.drawevent.DrawEvent
 
 import Drawings.DrawingError
 

@@ -1,8 +1,7 @@
 package zio.lazagna
 
 import zio.stream.{SubscriptionRef, ZStream}
-import zio.{Hub, Promise, Scope, ZIO}
-import zio.Dequeue
+import zio.{Dequeue, Hub, Promise, Scope, ZIO}
 
 // TODO: Reconsider if Consumeable is allowed to have an error E, which we ignore when calling consume.
 

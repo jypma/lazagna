@@ -8,30 +8,28 @@ import scala.collection.Searching.{Found, InsertionPoint}
 import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Clock, Ref, ZIO, ZLayer}
 
+import draw.data.DrawingState
 import draw.data.drawcommand.DrawCommand
 import draw.data.drawevent.DrawEvent
 
 import Drawings.DrawingError
-import draw.data.DrawingState
 
 case class DrawingStorage(state: DrawingState = DrawingState(), events: Seq[DrawEvent] = Seq.empty) {
   def size = events.size
 
-  def handle(now: Instant, command: DrawCommand): (Option[DrawEvent], DrawingStorage) = {
-    val event = state.handle(now, command)
-    (event, DrawingStorage(
-      state = event.map(state.update).map(_._2).getOrElse(state),
-      events = events ++ event.toSeq
-    ))
+  def handle(now: Instant, command: DrawCommand): (Seq[DrawEvent], DrawingStorage) = {
+    val emitted = state.handle(now, command)
+    (emitted, doHandle(emitted))
   }
 
   def handleCreate(now: Instant) = {
-    val event = state.handleCreate(now)
-    copy(
-      state = state.update(event)._2,
-      events = events :+ event
-    )
+    doHandle(state.handleCreate(now))
   }
+
+  private def doHandle(emitted: Seq[DrawEvent]) = copy(
+    state = emitted.foldLeft(state)((s,e) => s.update(e)._2),
+    events = events ++ emitted
+  )
 }
 
 case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Drawing {

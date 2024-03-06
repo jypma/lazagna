@@ -11,40 +11,73 @@ import draw.data.drawevent.ObjectLabelled
 import draw.data.drawevent.ObjectDeleted
 import draw.data.drawevent.DrawEventBody
 import draw.data.drawevent.DrawingCreated
+import draw.data.drawevent.LinkCreated
 import java.time.Instant
+import draw.data.drawcommand.CreateLink
 
-case class DrawingState(lastSequenceNr: Long = 0, objects: Map[String, ObjectState[_]] = Map.empty) {
-  private def set(sequenceNr: Long, id: String, state: ObjectState[_], isNew: Boolean) =
-    ((Some(state), isNew), copy(objects = objects + (id -> state), lastSequenceNr = sequenceNr))
 
-  private def update(id: String, event: DrawEvent) = {
+case class DrawingState(
+  lastSequenceNr: Long = 0,
+  objects: Map[String, ObjectState[_]] = Map.empty,
+  /* Key is object ID, value is link ID */
+  objectLinks: DrawingState.Links = Map.empty
+) {
+  import DrawingState._
+
+  private def set(state: ObjectState[_], isNew: Boolean, newLinks: Links) = (
+    (Some(state), isNew),
+    copy(
+      objects = objects + (state.id -> state),
+      lastSequenceNr = state.sequenceNr,
+      objectLinks = newLinks
+    )
+  )
+
+  private def unaffected(event: DrawEvent) =
+    ((None, false), copy(lastSequenceNr = event.sequenceNr))
+
+  private def update(id: String, event: DrawEvent, newLinks: Links = objectLinks) = {
     objects.get(id).map { state =>
-      set(event.sequenceNr, id, state.update(event), false)
-    }.getOrElse(((None, false), this))
+      set(state.update(event), false, newLinks)
+    }.getOrElse(unaffected(event))
   }
 
   /** Returns the new drawing state, new object state, and whether that object is new */
-  def update(event: DrawEvent): ((Option[ObjectState[_]], Boolean), DrawingState) = event match {
-    case DrawEvent(sequenceNr, ScribbleStarted(id, points, _), _, _, _) =>
-      set(event.sequenceNr, id, ObjectState(id, sequenceNr, false, ScribbleState(Point(0,0), points)), true)
-    case DrawEvent(sequenceNr, IconCreated(id, optPos, Some(category), Some(name), _), _, _, _) =>
-      set(event.sequenceNr, id, ObjectState(id, sequenceNr, false, IconState(optPos.getOrElse(Point(0,0)), SymbolRef(SymbolCategory(category), name), "")), true)
-    case DrawEvent(_, ScribbleContinued(id, _, _), _, _, _) =>
-      update(id, event)
-    case DrawEvent(_, ObjectMoved(id, _, _), _, _, _) =>
-      update(id, event)
-    case DrawEvent(_, ObjectLabelled(id, _, _), _, _, _) =>
-      update(id, event)
-    case DrawEvent(_, ObjectDeleted(id, _), _, _, _) =>
-      update(id, event)
+  def update(event: DrawEvent): ((Option[ObjectState[_]], Boolean), DrawingState) = {
+    def create(id: String, body: ObjectStateBody, newLinks: Links = objectLinks) =
+      set(ObjectState(id, event.sequenceNr, false, body), true, newLinks)
 
-    case _ =>
-      ((None, false), this)
+    event.body match {
+      case ScribbleStarted(id, points, _) =>
+        create(id, ScribbleState(Point(0,0), points))
+      case IconCreated(id, optPos, Some(category), Some(name), _) =>
+        create(id, IconState(optPos.getOrElse(Point(0,0)), SymbolRef(SymbolCategory(category), name), ""))
+      case LinkCreated(id, src, dest, preferredDistance, preferredAngle, _) =>
+        create(id, LinkState(src, dest, preferredDistance, preferredAngle),
+          newLinks = objectLinks.add(src, id).add(dest, id))
+      case ScribbleContinued(id, _, _) =>
+        update(id, event)
+      case ObjectMoved(id, _, _)  =>
+        update(id, event)
+      case ObjectLabelled(id, _, _) =>
+        update(id, event)
+      case ObjectDeleted(id, _) => objects.get(id).map(_.body) match {
+        case Some(LinkState(src, dest, _, _)) =>
+          update(id, event, newLinks = objectLinks.remove(src, id).remove(dest, id))
+        case _ =>
+          update(id, event, newLinks = objectLinks - id)
+      }
+      case _:DrawingCreated =>
+        unaffected(event)
+      case _ =>
+        println("??? Unhandled: " + event)
+        unaffected(event)
+    }
   }
 
   /** Returns which events to emit when handling the given command. */
-  def handle(now: Instant, command: DrawCommand): Option[DrawEvent] = {
-    def emit(body: DrawEventBody) = Some(this.emit(now, body))
+  def handle(now: Instant, command: DrawCommand): Seq[DrawEvent] = {
+    def emit(body: DrawEventBody) = this.emit(now, Seq(body))
 
     command.body match {
       case StartScribble(id, points, _) =>
@@ -54,7 +87,8 @@ case class DrawingState(lastSequenceNr: Long = 0, objects: Map[String, ObjectSta
         emit(ScribbleContinued(id, points.map { p => Point(p.x, p.y) }))
       case DeleteObject(id, _) =>
         // TODO: Verify scribble OR icon exists
-        emit(ObjectDeleted(id))
+        val deleteLinks = objectLinks.getOrElse(id, Set.empty).map(ObjectDeleted(_)).toSeq
+        this.emit(now, deleteLinks :+ ObjectDeleted(id))
       case MoveObject(id, Some(position), _) =>
         // TODO: Verify scribble OR icon exists
         emit(ObjectMoved(id, Some(position)))
@@ -63,17 +97,42 @@ case class DrawingState(lastSequenceNr: Long = 0, objects: Map[String, ObjectSta
       case LabelObject(id, label, _) =>
         // TODO: verify icon exists
         emit(ObjectLabelled(id, label))
+      case CreateLink(id, src, dest, preferredDistance, preferredAngle, _) =>
+        // TODO: verify ids exist
+        if (objects.values.map(_.body).exists {
+          case LinkState(s,d,_,_) if s == src && d == dest => true
+          case _ => false
+        }) {
+          // We already have this link
+          Seq.empty
+        } else {
+          emit(LinkCreated(id, src, dest, preferredDistance, preferredAngle))
+        }
       case _ =>
-        None
+        Seq.empty
     }
   }
 
   /** Returns whether this drawing exists (has any events), or is completely new */
   def exists: Boolean = lastSequenceNr > 0
 
-  /** Returns the event to emit in case this drawing is completely new (doesn't exist) */
-  def handleCreate(now: Instant): DrawEvent = emit(now, DrawingCreated())
+  /** Returns the events to emit in case this drawing is completely new (doesn't exist) */
+  def handleCreate(now: Instant): Seq[DrawEvent] = emit(now, Seq(DrawingCreated()))
 
-  private def emit(now: Instant, body: DrawEventBody) =
+  private def emit(now: Instant, bodies: Seq[DrawEventBody]) = bodies.map { body =>
     DrawEvent(lastSequenceNr + 1, body, Some(now.toEpochMilli()))
+  }
+
+}
+
+object DrawingState {
+  type Links = Map[String, Set[String]]
+
+  private[DrawingState] implicit class LinksOp(links: Links) {
+    def add(key: String, value: String) =
+      links.updated(key, links.getOrElse(key, Set.empty) + value)
+
+    def remove(key: String, value: String) =
+      links.updated(key, links.getOrElse(key, Set.empty) - value)
+  }
 }

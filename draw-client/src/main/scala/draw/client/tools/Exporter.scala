@@ -1,12 +1,13 @@
-package draw.client
+package draw.client.tools
 
 import zio.ZIO
+import zio.lazagna.dom.http.Request._
 
+import draw.client.Drawing
+import draw.data.SymbolRef
 import org.scalajs.dom
 
 import scalajs.js
-import zio.lazagna.dom.http.Request._
-import draw.data.SymbolRef
 
 trait Exporter {
   def triggerExport: ZIO[Any, RequestError, Unit]

@@ -1,12 +1,12 @@
 package zio.lazagna.dom.http
 
 import scala.scalajs.js
+import scala.scalajs.js.typedarray.ArrayBuffer
 
-import zio.{IO, ZIO, UIO}
+import zio.{IO, UIO, ZIO}
 
 import org.scalajs.dom
 import org.scalajs.dom.FileReader
-import scala.scalajs.js.typedarray.ArrayBuffer
 
 object Request {
   case class Response(private val request: dom.XMLHttpRequest) {

@@ -34,6 +34,7 @@ case class ScribbleState(position: Point, points: Seq[Point]) extends ObjectStat
   }
 
 }
+
 case class IconState(position: Point, symbol: SymbolRef, label: String) extends ObjectStateBody with Moveable {
   override def update(event: DrawEventBody) = event match {
     case ObjectMoved(_, Some(newPosition), _) =>
@@ -42,4 +43,8 @@ case class IconState(position: Point, symbol: SymbolRef, label: String) extends 
       copy(label = newLabel)
     case _ => this
   }
+}
+
+case class LinkState(src: String, dest: String, preferredDistance: Option[Int], preferredAngle: Option[Int]) extends ObjectStateBody {
+
 }

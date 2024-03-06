@@ -5,20 +5,18 @@ import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.tags._
-import zio.lazagna.dom.Element._
-import zio.lazagna.dom.Element.{textContent}
+import zio.lazagna.dom.Element.{textContent, _}
 import zio.lazagna.dom.svg.PathData
-import zio.lazagna.dom.{Alternative, Attribute, Modifier}
-import zio.stream.{SubscriptionRef}
+import zio.lazagna.dom.{Alternative, Attribute, Children, Modifier}
+import zio.stream.SubscriptionRef
 import zio.{ZIO, ZLayer}
 
+import draw.client.tools.DrawingTools
 import draw.data.point.Point
+import draw.data.{IconState, LinkState, ObjectState, ScribbleState}
 import org.scalajs.dom
-import zio.lazagna.dom.Children
+
 import Drawing._
-import draw.data.ObjectState
-import draw.data.ScribbleState
-import draw.data.IconState
 
 trait DrawingRenderer {
   def render: Modifier
@@ -90,6 +88,7 @@ object DrawingRenderer {
       var switchedReady = false
 
       def switchWhenReady(state: ObjectState[_]) = {
+        eventCountDebug += 1
         if (switchedReady || (state.sequenceNr < drawing.initialVersion)) ZIO.unit else {
           switchedReady = true
           val time = System.currentTimeMillis() - start
@@ -101,8 +100,7 @@ object DrawingRenderer {
       val renderedObjects = Modifier.unwrap {
         for {
           children <- Children.make
-          _ <- drawing.initialObjectStates.mapZIO { initial =>
-            eventCountDebug += 1
+          _ <- drawing.initialObjectStates.tap(switchWhenReady).mapZIO { initial =>
             val furtherEvents = drawing.objectState(initial.id).tap(switchWhenReady).takeUntil(_.deleted).map(_.body)
             children.child { destroy =>
               g(
@@ -167,6 +165,28 @@ object DrawingRenderer {
                         y := 32,
                         textContent <-- furtherEvents
                           .collect { case IconState(_,_,label) => label }
+                      )
+                    )
+
+                  case LinkState(src, dest, _, _) =>
+                    val srcPosition = drawing.objectState(src).map(_.body)
+                      .collect { case IconState(pos, _, _) => pos }
+                      .changes
+
+                    val destPosition = drawing.objectState(dest).map(_.body)
+                      .collect { case IconState(pos, _, _) => pos }
+                      .changes
+
+                    g(
+                      id := s"link${initial.id}",
+                      cls := "link editTarget",
+                      path(
+                        d <-- srcPosition.zipLatest(destPosition).map { (s, d) =>
+                          PathData.render(Seq(
+                            PathData.MoveTo(s.x, s.y),
+                            PathData.LineTo(d.x, d.y)
+                          ))
+                        }
                       )
                     )
                 }

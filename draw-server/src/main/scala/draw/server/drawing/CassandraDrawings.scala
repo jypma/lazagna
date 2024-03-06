@@ -7,11 +7,11 @@ import java.util.UUID
 import zio.stream.ZStream
 import zio.{Clock, Hub, IO, Ref, Semaphore, ZIO, ZLayer}
 
+import draw.data.DrawingState
 import draw.data.drawcommand.DrawCommand
 import draw.data.drawevent.DrawEvent
 import palanga.zio.cassandra.ZStatement.StringOps
 import palanga.zio.cassandra.{CassandraException, ZCqlSession}
-import draw.data.DrawingState
 
 object CassandraDrawings {
   import Drawings.DrawingError
@@ -28,16 +28,16 @@ object CassandraDrawings {
       hub <- Hub.unbounded[DrawEvent]
       emit = (event: DrawEvent) => storeEvent(id, event) *> state.update(_.update(event)._2)
       _ <- if (startState.exists) ZIO.unit else for {
-        event <- Clock.instant.map(startState.handleCreate)
-        _ <- emit(event)
+        events <- Clock.instant.map(startState.handleCreate)
+        _ <- ZIO.collectAll(events.map(emit(_)))
       } yield ()
     } yield new Drawing {
       override def perform(command: DrawCommand): ZIO[Any, DrawingError, Unit] = {
         semaphore.withPermit {
           for {
             now <- Clock.instant
-            optEvent <- state.get.map(_.handle(now, command))
-            _ <- ZIO.collectAll(optEvent.map { event =>
+            events <- state.get.map(_.handle(now, command))
+            _ <- ZIO.collectAll(events.map { event =>
               emit(event) *> hub.publish(event)
             })
           } yield ()

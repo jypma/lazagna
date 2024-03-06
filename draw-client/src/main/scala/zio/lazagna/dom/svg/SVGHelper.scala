@@ -1,11 +1,10 @@
 package zio.lazagna.dom.svg
 
+import zio.lazagna.dom.http.Request._
 import zio.lazagna.dom.{Element, Modifier}
 
-import org.scalajs.dom
-
 import draw.data.point.Point
-import zio.lazagna.dom.http.Request._
+import org.scalajs.dom
 
 class SVGHelper(val svg: dom.svg.SVG) {
   val pt = svg.createSVGPoint()

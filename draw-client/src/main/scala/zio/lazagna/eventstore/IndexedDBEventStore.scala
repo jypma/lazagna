@@ -53,7 +53,10 @@ object IndexedDBEventStore {
       def latestSequenceNr = getLastSequenceNr
 
       // TODO: Add publish with type T directly (from websocket), so we can bypass codec there.
-      def publish(event: E) = objectStore.add(event, getSequenceNr(event)).whenZIO(haveLock.get) *> hub.publish(event).unit
+      def publish(event: E) = {
+        println("Publish in " + objectStoreName + ": " + event)
+        objectStore.add(event, getSequenceNr(event)).whenZIO(haveLock.get) *> hub.publish(event).unit
+      }
 
       def reset = objectStore.clear.whenZIO(haveLock.get).unit.catchAll { err =>
         dom.console.log(err)

@@ -1,24 +1,13 @@
 package draw.client
 
-import zio.ZIO
-import zio.lazagna.Consumeable
+import zio.lazagna.{Consumeable, Setup}
 import zio.stream.SubscriptionRef
+import zio.{Scope, ZIO}
 
+import draw.data.ObjectState
 import draw.data.drawcommand.DrawCommand
 import org.scalajs.dom
 import org.scalajs.dom.SVGRect
-import draw.data.point.Point
-import draw.data.drawevent.ScribbleStarted
-import draw.data.drawevent.IconCreated
-import draw.data.drawevent.DrawEvent
-import draw.data.drawevent.DrawEventBody
-import draw.data.drawevent.ObjectDeleted
-import draw.data.drawevent.ScribbleContinued
-import draw.data.drawevent.ObjectMoved
-import draw.data.drawevent.ObjectLabelled
-import draw.data.ObjectState
-import zio.Scope
-import zio.lazagna.Setup
 
 trait Drawing {
   import Drawing._

@@ -2,10 +2,9 @@ package zio.lazagna.dom
 
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable._
-import zio.{Exit, Ref, Scope, UIO, ZIO}
+import zio.{Exit, Queue, Ref, Scope, UIO, ZIO}
 
 import org.scalajs.dom
-import zio.Queue
 
 /** Tracks a set of children of differing owner scopes, and renders them into a single parent. Children can be
   * rendered into here while being owned from other places. */

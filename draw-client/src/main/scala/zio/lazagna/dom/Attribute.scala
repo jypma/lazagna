@@ -2,12 +2,10 @@ package zio.lazagna.dom
 
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable._
-import zio.{Scope, ZIO}
+import zio.stream.{ZPipeline, ZStream}
+import zio.{Chunk, Scope, ZIO}
 
 import org.scalajs.dom
-import zio.stream.ZStream
-import zio.Chunk
-import zio.stream.ZPipeline
 
 case class Attribute(name: String) {
   import Attribute._

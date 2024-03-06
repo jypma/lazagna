@@ -1,30 +1,25 @@
 package draw.client
 
+import java.util.UUID
+
 import scala.scalajs.js.typedarray.{ArrayBuffer, Int8Array}
 
+import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.http.Request.{AsDynamicJSON, HEAD, POST, RequestError}
 import zio.lazagna.dom.http.WebSocket
 import zio.lazagna.eventstore.EventStore
-import zio.stream.SubscriptionRef
-import zio.{Scope, ZIO, ZLayer}
+import zio.lazagna.{Consumeable, Setup}
+import zio.stream.{SubscriptionRef, ZStream}
+import zio.{Hub, Ref, Scope, Semaphore, ZIO, ZLayer}
 
 import draw.data.drawcommand.DrawCommand
 import draw.data.drawevent.DrawEvent
+import draw.data.{DrawingState, ObjectState}
 import org.scalajs.dom
 
 import scalajs.js.typedarray._
 import scalajs.js
 import DrawingClient._
-import zio.Ref
-import zio.Hub
-import zio.lazagna.Consumeable
-import zio.lazagna.Consumeable.given
-import zio.stream.ZStream
-import zio.lazagna.Setup
-import zio.Semaphore
-import java.util.UUID
-import draw.data.DrawingState
-import draw.data.ObjectState
 
 trait DrawingClient {
   def login(user: String, password: String, drawingId: UUID): ZIO[Scope, ClientError | RequestError, Drawing]
@@ -71,16 +66,16 @@ object DrawingClient {
         }
         version <- HEAD(s"${config.baseUrl}/drawings/${drawingId}?token=${token}").map(_.header("ETag").map(_.drop(1).dropRight(1).toLong).getOrElse(0L))
         latestSeen <- store.latestSequenceNr
-        _ <- if (latestSeen > version) {
+        latestInStore <- if (latestSeen > version) {
           dom.console.log(s"Resetting client event store, since we've seen event ${latestSeen} but server only has ${version}")
-          store.reset
-        } else ZIO.unit
-        socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingId}/socket?token=${token}&afterSequenceNr=${latestSeen}")({ msg =>
+          store.reset.as(0L)
+        } else ZIO.succeed(latestSeen)
+        socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingId}/socket?token=${token}&afterSequenceNr=${latestInStore}")({ msg =>
           msg match {
             case m if m.data.isInstanceOf[ArrayBuffer] =>
               // TODO: Catch parse errors and fail accordingly
               val event = DrawEvent.parseFrom(new Int8Array(m.data.asInstanceOf[ArrayBuffer]).toArray)
-              if (event.sequenceNr <= latestSeen) {
+              if (event.sequenceNr <= latestInStore) {
                 println(s"WARN: Event not later than requested sequencrNr $latestSeen: $event")
               }
               store.publish(event).catchAll { err => ZIO.succeed {
@@ -113,7 +108,7 @@ object DrawingClient {
             ZIO.unit
            }
         }
-        override def initialVersion = latestSeen
+        override def initialVersion = latestInStore
         override def viewport = drawViewport
         override def connectionStatus = connStatus
         override def objectState(id: String): Consumeable[ObjectState[_]] = ZStream.unwrapScoped {
