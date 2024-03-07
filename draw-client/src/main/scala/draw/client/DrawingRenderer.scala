@@ -1,24 +1,23 @@
 package draw.client
 
+import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable._
 import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Element.{textContent, _}
-import zio.lazagna.dom.svg.PathData
+import zio.lazagna.dom.svg.{PathData, SVGHelper}
 import zio.lazagna.dom.{Alternative, Attribute, Children, Modifier}
 import zio.stream.SubscriptionRef
 import zio.{ZIO, ZLayer}
 
 import draw.client.tools.DrawingTools
-import draw.data.point.Point
 import draw.data.{IconState, LinkState, ObjectState, ScribbleState}
+import draw.geom.{Point, Rectangle}
 import org.scalajs.dom
 
 import Drawing._
-import zio.lazagna.dom.svg.SVGHelper
-import zio.lazagna.Consumeable
 
 trait DrawingRenderer {
   def render: Modifier
@@ -79,6 +78,8 @@ object DrawingRenderer {
       .flatMap(ObjectTarget.apply(_))
   }
 
+  val iconSize = 64
+
   val live = ZLayer.fromZIO {
     for {
       drawingTools <- ZIO.service[DrawingTools]
@@ -103,7 +104,12 @@ object DrawingRenderer {
       def renderedObjects(helper: SVGHelper) = Modifier.unwrap {
         def getBoundingBox(in: Consumeable[ObjectState[_]]) = in.collect {
           case ObjectState(id, _, _, _:IconState) =>
-            helper.svgBBox(dom.document.getElementById(s"icon${id}").querySelector(".selectTarget").asInstanceOf[dom.SVGGElement], 5)
+            val icon = dom.document.getElementById(s"icon${id}")
+            val main = helper.svgBoundingBox(icon.querySelector(".selectTarget").asInstanceOf[dom.SVGLocatable], 5)
+            val label = Option(icon.querySelector(".label"))
+              .filter(!_.innerHTML.isEmpty)
+              .map(e => helper.svgBoundingBox(e.asInstanceOf[dom.SVGLocatable], 0))
+            (main, label)
         }.changes
 
         for {
@@ -161,31 +167,41 @@ object DrawingRenderer {
                           svgTitle(textContent := symbol.name),
                           href := symbol.href,
                           cls := "icon",
-                          width := 64, // TODO: share iconSize between preview in DrawingTools and actual rendering here. Probably share the rendering code itself.
-                          height := 64,
-                          x := -32,
-                          y := -32
+                          width := iconSize,
+                          height := iconSize,
+                          x := -iconSize / 2,
+                          y := -iconSize / 2
                         ),
                       ),
                       text(
                         cls := "label",
                         x := 0,
-                        y := 32,
+                        y := iconSize / 2,
                         textContent <-- furtherEvents
                           .collect { case IconState(_,_,label) => label }
                       )
                     )
 
                   case LinkState(src, dest, _, _) =>
-                    val srcBox = getBoundingBox(drawing.objectState(src))
-                    val destBox = getBoundingBox(drawing.objectState(dest))
-                    val points = d <-- srcBox.zipLatest(destBox).map { (s, d) =>
-                      val dp = pointOnRect(Point(s.x + 0.5 * s.width, s.y + 0.5 * s.height), d)
-                      val sp = pointOnRect(Point(d.x + 0.5 * d.width, d.y + 0.5 * d.height), s)
+                    val srcBoxes = getBoundingBox(drawing.objectState(src))
+                    val destBoxes = getBoundingBox(drawing.objectState(dest))
+
+                    val points = d <-- srcBoxes.zipWithLatest(destBoxes)((_, _)).map { case ((src, srcLabel), (dst, dstLabel)) =>
+                      // FIXME: sometimes the pointOnRect doesn't cut the line properly on the initial render
+                      val fullLine = src.middle.to(dst.middle)
+
+                      def intersect(icon: Rectangle, label: Option[Rectangle]) = label.filter(_.intersects(fullLine)).map { r =>
+                        Rectangle(Point(r.origin.x, icon.origin.y), r.width, r.origin.y - icon.origin.y + r.height)
+                      }.getOrElse(icon)
+
+                      val srcBox = intersect(src, srcLabel)
+                      val dstBox = intersect(dst, dstLabel)
+                      val dp = src.middle.toIntersection(dstBox).to
+                      val sp = dst.middle.toIntersection(srcBox).to
                       PathData.render(Seq(
                         PathData.MoveTo(sp.x, sp.y),
                         PathData.LineTo(dp.x, dp.y)
-                      ))
+                       ))
                     }
 
                     g(
@@ -247,40 +263,4 @@ object DrawingRenderer {
       }
     }
   }
-
-  // source: https://stackoverflow.com/questions/1585525/how-to-find-the-intersection-point-between-a-line-and-a-rectangle
-  private def pointOnRect(p: Point, rect: dom.SVGRect): Point = {
-    val x = p.x
-    val y = p.y
-    val minX = rect.x
-    val minY = rect.y
-    val maxX = rect.x + rect.width
-    val maxY = rect.y + rect.height
-
-    //assert minX <= maxX;
-    //assert minY <= maxY;
-    val midX = (minX + maxX) / 2
-    val midY = (minY + maxY) / 2
-    // if (midX - x == 0) -> m == ±Inf -> minYx/maxYx == x (because value / ±Inf = ±0)
-    val m = (midY - y) / (midX - x)
-
-    val minXy = m * (minX - x) + y
-    val maxXy = m * (maxX - x) + y
-    val minYx = (minY - y) / m + x
-    val maxYx = (maxY - y) / m + x
-    if ((x <= midX) && (minY <= minXy && minXy <= maxY)) {
-      Point(minX, minXy)
-    } else if ((x >= midX) && (minY <= maxXy && maxXy <= maxY)) {
-      Point(maxX, maxXy)
-    } else if ((y <= midY) && (minX <= minYx && minYx <= maxX)) {
-      Point(minYx, minY)
-    } else if ((y >= midY) && (minX <= maxYx && maxYx <= maxX)) {
-      Point(maxYx, maxY)
-    } else {
-      // edge case when finding midpoint intersection: m = 0/0 = NaN
-      //if (x === midX && y === midY)
-      Point(x, y)
-    }
-  }
-
 }

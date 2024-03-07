@@ -16,11 +16,10 @@ import zio.stream.SubscriptionRef
 import zio.{Clock, Hub, Random, Ref, Scope, UIO, ZIO, ZLayer}
 
 import draw.client.Drawing._
-import draw.client.DrawingRenderer.ObjectTarget
 import draw.client.{Drawing, DrawingRenderer, SymbolIndex}
-import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, LabelObject, MoveObject, StartScribble}
+import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, MoveObject, StartScribble}
 import draw.data.point.Point
-import draw.data.{IconState, Moveable, ObjectState, SymbolRef}
+import draw.data.{Moveable, ObjectState, SymbolRef}
 import org.scalajs.dom
 
 trait DrawingTools {
@@ -31,7 +30,7 @@ trait DrawingTools {
 }
 
 object DrawingTools {
-  private def keyboardAction(key: String, description: String, execute: => ZIO[Scope, Nothing, Unit],
+  def keyboardAction(key: String, description: String, execute: => ZIO[Scope, Nothing, Unit],
     extraCSS: Option[Consumeable[String]] = None): Element[dom.Element] = {
     val keyName = key match {
       case "Escape" => "⎋"
@@ -76,7 +75,7 @@ object DrawingTools {
       index <- ZIO.service[SymbolIndex]
       keyboard <- Children.make
       iconTool <- icon(drawing, dialogs, keyboard, index)
-      labelTool <- labelTool(drawing, dialogs, keyboard)
+      labelTool <- LabelTool.make(drawing, dialogs, keyboard)
       selectTool <- selectTool(drawing, keyboard)
       linkTool <- LinkTool(drawing)
       tools = Seq(
@@ -345,7 +344,7 @@ object DrawingTools {
           cursorPos.set(Some(helper.screenToSvg(e)))
         }),
         keyboard.addChild { _ =>
-          keyboardAction("t", "Select icon", selectDialog)
+          keyboardAction("u", "Select icon", selectDialog)
         },
         onMouseDown(_
           .filter(_.button == 0)
@@ -368,50 +367,4 @@ object DrawingTools {
       )
     }
   }
-
-  private def labelTool(drawing: Drawing, dialogs: Children, keyboard: Children) = for {
-    selected <- SubscriptionRef.make[Option[ObjectTarget]](None)
-  } yield {
-    SVGHelper { helper =>
-      Modifier.combine(
-        Alternative.mountOne(selected) {
-          case None => Modifier.empty
-          case Some(target) =>
-            dialogs.addChild { _ =>
-              val pos = helper.svgToScreen(Point(target.position.x - iconSize / 2, target.position.y + iconSize * 0.45))
-              val bounds = helper.svgToScreen(Point(target.position.x + iconSize / 2, target.position.y - iconSize / 2))
-              val width = bounds.x - pos.x
-              val close = selected.set(None)
-              div(
-                cls := "label-input",
-                style := s"left: ${pos.x - width * 1}px; top: ${pos.y}px;",
-                input(
-                  style := s"width: ${width * 3}px; font-size:${width * 45 / 178}px",
-                  typ := "text",
-                  placeholder := "Enter label...",
-                  focusNow,
-                  value <-- drawing.objectState(target.id).map(_.body).collect { case IconState(_,_,label) => label },
-                  onInput.asTargetValue(_.flatMap { text =>
-                    drawing.perform(DrawCommand(LabelObject(target.id, text)))
-                  })
-                ),
-                keyboard.addChild { _ =>
-                  keyboardAction("Escape", "Close dialog", close)
-                },
-                keyboard.addChild { _ =>
-                  keyboardAction("Enter", "Close dialog", close)
-                }
-              )
-            }
-        },
-        onMouseDown(_
-          .filter(_.button == 0)
-          .flatMap { e =>
-            selected.set(DrawingRenderer.getEditTargetObject(e))
-          }
-        )
-      )
-    }
-  }
-
 }

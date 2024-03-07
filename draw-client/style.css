@@ -50,6 +50,13 @@ g.link path.selectTarget {
     stroke-dasharray: 0;
 }
 
+path.link-preview {
+    stroke: rgba(var(--fg-color-highlight));
+    opacity: 0.4;
+    stroke-width: 1px;
+    stroke-dasharray: 4 1
+}
+
 g.icon text.label {
     fill: rgba(var(--fg-color-main));
     text-anchor: middle;
@@ -72,8 +79,7 @@ g.icon text.label {
     opacity: 0.5;
 }
 
-
-.tool-select use.icon:hover {
+.tool-select use.icon:hover, .tool-link use.icon:hover {
     filter: drop-shadow(0px 0px 10px rgba(var(--fg-color-highlight), 0.8));
 }
 

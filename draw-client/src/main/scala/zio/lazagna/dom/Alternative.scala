@@ -64,6 +64,13 @@ object Alternative {
     mountOne(stream)(r => r)
   }
 
+  def option[T](source: Consumeable[Option[T]])(render: T => Modifier): Modifier = {
+    mountOne(source) {
+      case Some(value) => render(value)
+      case None => Modifier.empty
+    }
+  }
+
   /** Selects from a limited set of alternative renders. All renders are always mounted, but hidden using CSS.
     * Whenever the consumable pushes a new T, the matching alternative is shown. If no alternative matches,
     * none are shown. */

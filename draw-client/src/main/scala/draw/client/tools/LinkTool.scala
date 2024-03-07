@@ -1,30 +1,48 @@
 package draw.client.tools
 
-import zio.Ref
+import zio.lazagna.Consumeable._
+import zio.lazagna.dom.Attribute._
+import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Events._
-import zio.lazagna.dom.Modifier
 import zio.lazagna.dom.Modifier._
-import zio.lazagna.dom.svg.SVGHelper
+import zio.lazagna.dom.svg.{PathData, SVGHelper}
+import zio.lazagna.dom.{Alternative, Modifier}
+import zio.stream.SubscriptionRef
 
 import draw.client.DrawingRenderer.ObjectTarget
 import draw.client.{Drawing, DrawingRenderer}
 import draw.data.drawcommand.{CreateLink, DrawCommand}
+import org.scalajs.dom
 
 object LinkTool {
-  case class State(src: ObjectTarget)
+  case class State(src: ObjectTarget, pos: dom.SVGPoint, dst: Option[ObjectTarget])
 
   def apply(drawing: Drawing) = for {
-    state <- Ref.make[Option[State]](None)
+    state <- SubscriptionRef.make[Option[State]](None)
   } yield SVGHelper { helper =>
     Modifier.combine(
+      Alternative.option(state) { s =>
+        path(
+          cls := "link-preview",
+          d := PathData.render(Seq(PathData.MoveTo(s.src.position.x, s.src.position.y), PathData.LineTo(s.pos.x, s.pos.y)))
+        )
+      },
       onMouseDown(_
         .filter(_.button == 0)
-        .map(DrawingRenderer.getSelectTargetObject)
-        .collectF { case Some(obj) =>
-          println("from " + obj)
-          obj
+        .map(e => (e, DrawingRenderer.getSelectTargetObject(e)))
+        .collectF { case (e, Some(obj)) => (e, obj) }
+        .flatMap { (e, obj) =>
+          val pos = helper.screenToSvg(e)
+          state.set(Some(State(obj, pos, None)))
         }
-        .flatMap(o => state.set(Some(State(o))))
+      ),
+      onMouseMove(_
+        .zip(state.get)
+        .collectF { case (e, Some(s)) => (e, s) }
+        .flatMap { (e, s) =>
+          val pos = helper.screenToSvg(e)
+          state.set(Some(s.copy(pos = pos)))
+        }
       ),
       onMouseUp(_
         .zip(state.getAndSet(None))

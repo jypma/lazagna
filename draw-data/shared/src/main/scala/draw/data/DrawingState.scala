@@ -104,7 +104,7 @@ case class DrawingState(
         // TODO: verify ids exist
         // TEST: Don't allow adding of link between already linked objects
         if (alive.values.map(_.body).exists {
-          case LinkState(s,d,_,_) if s == src && d == dest => true
+          case LinkState(s,d,_,_) if (s == src && d == dest) || (s == dest && d == src) => true
           case _ => false
         }) {
           println("!!! Duplicate link")
