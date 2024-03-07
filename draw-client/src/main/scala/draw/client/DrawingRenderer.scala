@@ -188,6 +188,10 @@ object DrawingRenderer {
 
                     val points = d <-- srcBoxes.zipWithLatest(destBoxes)((_, _)).map { case ((src, srcLabel), (dst, dstLabel)) =>
                       // FIXME: sometimes the pointOnRect doesn't cut the line properly on the initial render
+                      // This is, because in those cases we're rendering this link BEFORE we've actually put the icons on the screen.
+                      // Solution A: Have a SubscriptionRef per object bounding box, which we calculate whenever the underlying element changes. Somehow sync on creation.
+                      // Solution B: Have a Hub per object which we send "ready" whenever we've done rendering an update
+                      // Solution C: Keep a SubscriptionRef with the actual SVG element per object, AND a hub with updates (receiving the ObjectState that triggered the update)
                       val fullLine = src.middle.to(dst.middle)
 
                       def intersect(icon: Rectangle, label: Option[Rectangle]) = label.filter(_.intersects(fullLine)).map { r =>

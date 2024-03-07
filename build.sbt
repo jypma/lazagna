@@ -21,7 +21,12 @@ val commonSettings = Seq(
   // (optional) If you need scalapb/scalapb.proto or anything from
   // google/protobuf/*.proto
   libraryDependencies ++= Seq(
-    "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
+    "com.thesamet.scalapb" %%% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
+    "dev.zio" %%% "zio" % zioVersion,
+    "dev.zio" %%% "zio-streams" % zioVersion,
+    "dev.zio" %%% "zio-test"          % zioVersion % Test,
+    "dev.zio" %%% "zio-test-sbt"      % zioVersion % Test,
+    "dev.zio" %%% "zio-test-magnolia" % zioVersion % Test
   ))
 
 lazy val data = crossProject(JSPlatform, JVMPlatform).in(file("draw-data"))
@@ -59,14 +64,8 @@ lazy val client = project.in(file("draw-client"))
 
     libraryDependencies ++= Seq(
       "org.scala-js" %%% "scalajs-dom" % "2.4.0",
-      "dev.zio" %%% "zio" % zioVersion,
-      "dev.zio" %%% "zio-streams" % zioVersion,
       "io.github.cquiroz" %%% "scala-java-time" % javaTimeVersion,
       "io.github.cquiroz" %%% "scala-java-time-tzdb" % javaTimeVersion,
-
-      "dev.zio" %%% "zio-test"          % zioVersion % Test,
-      "dev.zio" %%% "zio-test-sbt"      % zioVersion % Test,
-      "dev.zio" %%% "zio-test-magnolia" % zioVersion % Test
     ),
   )
 
@@ -77,11 +76,6 @@ lazy val server = project.in(file("draw-server"))
   .settings(
     resolvers += "Sonatype OSS Snapshots" at "https://s01.oss.sonatype.org/content/repositories/snapshots",
     libraryDependencies ++= Seq(
-      "dev.zio" %%% "zio" % zioVersion,
-      "dev.zio" %%% "zio-streams" % zioVersion,
-      "dev.zio" %%% "zio-test"          % zioVersion % Test,
-      "dev.zio" %%% "zio-test-sbt"      % zioVersion % Test,
-      "dev.zio" %%% "zio-test-magnolia" % zioVersion % Test,
       "dev.zio" %% "zio-http" % "3.0.0-RC4",
 
       "io.github.palanga" %% "zio-cassandra" % "0.10.0+48-99339c35-SNAPSHOT",
