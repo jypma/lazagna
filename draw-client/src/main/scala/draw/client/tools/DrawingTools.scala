@@ -16,7 +16,8 @@ import zio.stream.SubscriptionRef
 import zio.{Clock, Hub, Random, Ref, Scope, UIO, ZIO, ZLayer}
 
 import draw.client.Drawing._
-import draw.client.{Drawing, DrawingRenderer, SymbolIndex}
+import draw.client.render.DrawingRenderer
+import draw.client.{Drawing, SymbolIndex}
 import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, MoveObject, StartScribble}
 import draw.data.point.Point
 import draw.data.{Moveable, ObjectState, SymbolRef}

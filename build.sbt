@@ -9,6 +9,7 @@ val commonSettings = Seq(
     "-Wunused:imports",
     "-feature",
     "-explaintypes",
+    "-deprecation",
     "-language:implicitConversions"
   ),
   semanticdbEnabled := true,

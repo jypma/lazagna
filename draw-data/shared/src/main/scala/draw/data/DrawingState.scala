@@ -103,7 +103,10 @@ case class DrawingState(
       case CreateLink(id, src, dest, preferredDistance, preferredAngle, _) =>
         // TODO: verify ids exist
         // TEST: Don't allow adding of link between already linked objects
-        if (alive.values.map(_.body).exists {
+        if (src == dest) {
+          println("!!! Invalid link")
+          Seq.empty
+        } else if (alive.values.map(_.body).exists {
           case LinkState(s,d,_,_) if (s == src && d == dest) || (s == dest && d == src) => true
           case _ => false
         }) {

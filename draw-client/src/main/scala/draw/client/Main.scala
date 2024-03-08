@@ -15,6 +15,7 @@ import zio.lazagna.eventstore.{CachedEventStore, EventStore, IndexedDBEventStore
 import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Chunk, Exit, ExitCode, Fiber, Schedule, Scope, ZIO, ZIOAppDefault, ZLayer, durationInt}
 
+import draw.client.render.DrawingRenderer
 import draw.client.tools.DrawingTools
 import draw.data.drawevent.DrawEvent
 import org.scalajs.dom

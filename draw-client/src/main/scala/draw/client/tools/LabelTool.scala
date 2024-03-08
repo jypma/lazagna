@@ -10,10 +10,12 @@ import zio.lazagna.dom.svg.SVGHelper
 import zio.lazagna.dom.{Alternative, Children, Modifier}
 import zio.stream.SubscriptionRef
 
-import draw.client.DrawingRenderer.{ObjectTarget, iconSize}
-import draw.client.{Drawing, DrawingRenderer}
+import draw.client.Drawing
+import draw.client.render.DrawingRenderer
 import draw.data.IconState
 import draw.data.drawcommand.{DrawCommand, LabelObject}
+
+import DrawingRenderer.{ObjectTarget, iconSize}
 
 object LabelTool {
   def make(drawing: Drawing, dialogs: Children, keyboard: Children) = for {

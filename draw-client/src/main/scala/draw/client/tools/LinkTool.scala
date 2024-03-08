@@ -9,10 +9,12 @@ import zio.lazagna.dom.svg.{PathData, SVGHelper}
 import zio.lazagna.dom.{Alternative, Modifier}
 import zio.stream.SubscriptionRef
 
-import draw.client.DrawingRenderer.ObjectTarget
-import draw.client.{Drawing, DrawingRenderer}
+import draw.client.Drawing
+import draw.client.render.DrawingRenderer
 import draw.data.drawcommand.{CreateLink, DrawCommand}
 import org.scalajs.dom
+
+import DrawingRenderer.{ObjectTarget}
 
 object LinkTool {
   case class State(src: ObjectTarget, pos: dom.SVGPoint, dst: Option[ObjectTarget])
@@ -48,7 +50,7 @@ object LinkTool {
         .zip(state.getAndSet(None))
         .collectF { case (e, Some(s)) => (e, s) }
         .map((e, s) => (DrawingRenderer.getSelectTargetObject(e), s))
-        .collectF { case (Some(obj), s) => (obj, s) }
+        .collectF { case (Some(obj), s) if s.src.id != obj.id => (obj, s) } // No link to self!
         .zip(DrawingTools.makeUUID)
         .flatMap((obj, s, id) =>
           println("From " + s.src + " to " + obj)
