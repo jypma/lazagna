@@ -35,6 +35,10 @@ case class Point(x: Double, y: Double) {
   }
 }
 
+object Point {
+  implicit def fromProtobuf(p: draw.data.point.Point): Point = Point(p.x, p.y)
+}
+
 case class Line(from: Point, to: Point) {
   def reverse = Line(to, from)
 

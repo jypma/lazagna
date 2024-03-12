@@ -8,7 +8,7 @@ import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Element.{textContent, _}
 import zio.lazagna.dom.svg.SVGHelper
-import zio.lazagna.dom.{Alternative, Attribute, Children, Modifier}
+import zio.lazagna.dom.{Alternative, Attribute, Children, Element, Modifier}
 import zio.stream.SubscriptionRef
 import zio.{ZIO, ZLayer}
 
@@ -88,9 +88,11 @@ object DrawingRenderer {
     for {
       drawingTools <- ZIO.service[DrawingTools]
       drawing <- ZIO.service[Drawing]
+      renderState <- ZIO.service[RenderState]
       initialView = if (drawing.initialVersion <= 1) 1 else 0
       currentView <- SubscriptionRef.make(initialView)
     } yield new DrawingRenderer {
+      println("Rendering up to event " + drawing.initialVersion + " in background.")
       val start = System.currentTimeMillis()
       var eventCountDebug = 0
       var switchedReady = false
@@ -105,11 +107,12 @@ object DrawingRenderer {
             tabindex := 0, // To enable keyboard events
             focusNow, // To allow dragging immediately
             SVGHelper { helper =>
+              val deps = ZLayer.succeed(renderState) ++ ZLayer.succeed(helper) ++ ZLayer.succeed(drawing)
               Modifier.unwrap {
                 for {
-                  scribbleR <- ScribbleRenderer.make
-                  iconR <- IconRenderer.make
-                  linkR <- LinkRenderer.make.provide(ZLayer.succeed(helper), ZLayer.succeed(drawing))
+                  scribbleR <- ScribbleRenderer.make.provide(deps)
+                  iconR <- IconRenderer.make.provide(deps)
+                  linkR <- LinkRenderer.make.provide(deps, ZLayer.succeed(iconR))
                   children <- Children.make
                   _ <- drawing.initialObjectStates.tap(switchWhenReady).mapZIO { initial =>
                     val furtherEvents = drawing.objectState(initial.id).tap(switchWhenReady).takeUntil(_.deleted).map(_.body)

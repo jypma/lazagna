@@ -1,5 +1,6 @@
 package zio.lazagna
 
+import zio.lazagna.dom.Modifier
 import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Dequeue, Hub, Promise, Scope, ZIO}
 
@@ -34,5 +35,8 @@ object Consumeable {
         consumeable.runDrain.forkScoped.unit
       }
     }
+
+    /** Returns a Modifier that will consume this stream when mounted */
+    implicit def runAsModifier: Modifier = Modifier.run(consume)
   }
 }

@@ -8,7 +8,6 @@ val commonSettings = Seq(
   scalacOptions ++= Seq(
     "-Wunused:imports",
     "-feature",
-    "-explaintypes",
     "-deprecation",
     "-language:implicitConversions"
   ),

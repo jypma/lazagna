@@ -2,52 +2,79 @@ package draw.client.render
 
 import zio.ZIO
 import zio.lazagna.Consumeable
+import zio.lazagna.Consumeable._
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.{textContent, _}
-import zio.lazagna.dom.Modifier
+import zio.lazagna.dom.svg.SVGHelper
+import zio.lazagna.dom.{Modifier, MultiUpdate}
 
 import draw.data.{IconState, ObjectState}
+import draw.geom.Rectangle
+import org.scalajs.dom
 
 import DrawingRenderer.dataX
 import DrawingRenderer.dataY
 import DrawingRenderer.iconSize
 
-object IconRenderer {
-  def make = ZIO.succeed {
-    new ObjectRenderer[IconState] {
-      override def render(initial: ObjectState[IconState], furtherEvents: Consumeable[IconState]): Modifier = {
-        val position = furtherEvents
-          .collect { case IconState(pos, _, _) => pos }
-          .changes
+trait IconRenderer extends ObjectRenderer[IconState] {
+  /** Returns the icon and (optional) label bounding boxes, updating as the icon is edited */
+  def getBoundingBoxes(id: String): Consumeable[(Rectangle, Option[Rectangle])]
+}
 
+object IconRenderer {
+  def make = for {
+    rendered <- ZIO.service[RenderState]
+    helper <- ZIO.service[SVGHelper]
+  } yield new IconRenderer {
+    override def render(initial: ObjectState[IconState], furtherEvents: Consumeable[IconState]): Modifier = Modifier.unwrap {
+      for {
+        state <- MultiUpdate.make[IconState]
+      } yield g(
+        id := s"icon${initial.id}",
+        cls := "icon editTarget",
+        state { s =>
+          val p = s.position
+          transform.set(s"translate(${p.x},${p.y})") *>
+          dataX.set(p.x) *>
+          dataY.set(p.y)
+        },
         g(
-          id := s"icon${initial.id}",
-          cls := "icon editTarget",
-          transform <-- position.map(p => s"translate(${p.x},${p.y})"),
-          dataX <-- position.map(_.x),
-          dataY <-- position.map(_.y),
-          g(
-            cls := "selectTarget",
-            use(
-              svgTitle(textContent := initial.body.symbol.name),
-              href := initial.body.symbol.href,
-              cls := "icon",
-              width := iconSize,
-              height := iconSize,
-              x := -iconSize / 2,
-              y := -iconSize / 2
-            ),
+          cls := "selectTarget",
+          use(
+            svgTitle(textContent := initial.body.symbol.name),
+            href := initial.body.symbol.href,
+            cls := "icon",
+            width := iconSize,
+            height := iconSize,
+            x := -iconSize / 2,
+            y := -iconSize / 2
           ),
-          text(
-            cls := "label",
-            x := 0,
-            y := iconSize / 2,
-            textContent <-- furtherEvents
-              .collect { case IconState(_,_,label) => label }
-          )
-        )
-      }
+        ),
+        text(
+          cls := "label",
+          x := 0,
+          y := iconSize / 2,
+          state { s =>
+            textContent := s.label
+          }
+        ),
+        thisElementAs { element =>
+          furtherEvents
+            .via(state.pipeline)
+            .tap { state => rendered.notifyRendered(RenderedObject(initial.id, state, element)) }
+        }
+      )
     }
+
+    def getBoundingBoxes(id: String) = rendered.objectState(id).collect {
+      case RenderedObject(id, _:IconState, icon) =>
+        //val icon = dom.document.getElementById(s"icon${id}")
+        val main = helper.svgBoundingBox(icon.querySelector(".selectTarget").asInstanceOf[dom.SVGLocatable], 5)
+        val label = Option(icon.querySelector(".label"))
+          .filter(!_.innerHTML.isEmpty)
+          .map(e => helper.svgBoundingBox(e.asInstanceOf[dom.SVGLocatable], 0))
+        (main, label)
+    }.changes
   }
 }

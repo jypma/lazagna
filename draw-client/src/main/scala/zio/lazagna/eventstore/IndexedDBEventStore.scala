@@ -45,7 +45,9 @@ object IndexedDBEventStore {
       private def getLastSequenceNr = {
         for {
           latest <- objectStore.getAll(dom.IDBCursorDirection.prev).runHead
-        } yield latest.map(e => getSequenceNr(e)).getOrElse(0L)
+        } yield {
+          latest.map(e => getSequenceNr(e)).getOrElse(0L)
+        }
       }.catchAll { err =>
         dom.console.log(err)
         ZIO.succeed(-1L)

@@ -7,7 +7,7 @@ import zio.{Ref, UIO, ZIO, ZLayer}
   This is different from Scope, since we want to add background fibers to Scope, but setup actions that
   wait for their creation in a Setup, from the same ZIO. */
 trait Setup {
-  def addStartAction(action: UIO[Unit]): UIO[Unit]
+  def addStartAction[R](action: ZIO[R & Setup, Nothing, Any]): ZIO[R, Nothing, Unit]
 }
 
 object Setup {
@@ -21,8 +21,15 @@ object Setup {
     for {
       actions <- Ref.make[Seq[UIO[Unit]]](Seq.empty)
     } yield new Setup.Startable {
-      override def addStartAction(action: UIO[Unit]) = actions.update(_ :+ action)
-      override def start = actions.get.flatMap(ZIO.collectAll).unit
+      override def addStartAction[R](action: ZIO[R & Setup, Nothing, Any]) = {
+        ZIO.environment[R].flatMap { env =>
+          actions.update(_ :+ action.unit.provideEnvironment(env.add(this)))
+        }
+      }
+      override def start = actions.getAndSet(Seq.empty).flatMap {
+        case s if s.isEmpty => ZIO.unit
+        case s => ZIO.collectAll(s) *> start
+      }
     }
   }
 

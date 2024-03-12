@@ -15,7 +15,7 @@ import zio.lazagna.eventstore.{CachedEventStore, EventStore, IndexedDBEventStore
 import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Chunk, Exit, ExitCode, Fiber, Schedule, Scope, ZIO, ZIOAppDefault, ZLayer, durationInt}
 
-import draw.client.render.DrawingRenderer
+import draw.client.render.{DrawingRenderer, RenderState}
 import draw.client.tools.DrawingTools
 import draw.data.drawevent.DrawEvent
 import org.scalajs.dom
@@ -54,16 +54,14 @@ object Main extends ZIOAppDefault {
   } yield ()
 
   val eventStore = ZLayer.fromZIO {
-    Setup.start {
-      for {
-        lock <- ZIO.service[SubscriptionRef[Boolean]]
-        store <- IndexedDBEventStore.make[DrawEvent,ArrayBuffer](s"events", lock, _.sequenceNr)
-        prunedStore <- IndexedDBEventStore.make[DrawEvent,ArrayBuffer](s"events-pruned", lock, _.sequenceNr)
-        pruned <- PrunedEventStore.make(store, prunedStore, lock, Pruned.State())(_.prune(_))(_.recover(_))
-        _ <- printContents(pruned)
-        cached <- CachedEventStore.make(pruned)
-      } yield cached
-    }
+    for {
+      lock <- ZIO.service[SubscriptionRef[Boolean]]
+      store <- IndexedDBEventStore.make[DrawEvent,ArrayBuffer](s"events", lock, _.sequenceNr)
+      prunedStore <- IndexedDBEventStore.make[DrawEvent,ArrayBuffer](s"events-pruned", lock, _.sequenceNr)
+      pruned <- PrunedEventStore.make(store, prunedStore, lock, Pruned.State())(_.prune(_))(_.recover(_))
+      _ <- printContents(pruned)
+      cached <- CachedEventStore.make(pruned)
+    } yield cached
   }
 
   val database = ZLayer.fromZIO(IndexedDB.open(s"drawing-${drawingId}", Schema(
@@ -95,17 +93,26 @@ object Main extends ZIOAppDefault {
     for {
       _ <- dump.fork
       writeLock <- ZLayer.fromZIO(Lock.makeAndLockExclusively(s"${drawingId}-writeLock")).memoize
+      setup <- Setup.make
       _ <- (for {
         client <- ZIO.service[DrawingClient]
         dialogs <- Children.make
         drawing <- client.login("jan", "jan", drawingId)
-        _ <- main.provideSome[Scope](ZLayer.succeed(drawing), DrawingTools.live, DrawingRenderer.live, ZLayer.succeed(dialogs), ZLayer.fromZIO(SymbolIndex.make))
+        _ <- main.provideSome[Scope](
+          ZLayer.succeed(drawing),
+          DrawingTools.live,
+          DrawingRenderer.live,
+          RenderState.live,
+          ZLayer.succeed(dialogs),
+          ZLayer.fromZIO(SymbolIndex.make)
+        )
         store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
-        _ = dom.console.log("Main is ready.")
-        _ <- ZIO.never // We don't want to exit main, since our background fibers do the real work.
+        _ <- setup.start
       } yield ()).provideSome[Scope](
-        DrawingClient.live, DrawingClient.configTest, database, eventStore, writeLock
+        DrawingClient.live, DrawingClient.configTest, database, eventStore, writeLock, ZLayer.succeed(setup)
       )
+      _ = dom.console.log("Main is ready.")
+      _ <- ZIO.never // We don't want to exit main, since our background fibers do the real work.
     } yield ExitCode.success
   }.catchAllCause { cause =>
     dom.console.log(cause.prettyPrint)

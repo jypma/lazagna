@@ -4,10 +4,15 @@ import zio.{Scope, ZIO, ZLayer}
 
 import org.scalajs.dom
 
+// TODO: It looks like Modifier, Element and Attribute might be plain ZIO's after all
+// ZIO[dom.Element & Scope, Nothing, Unit]
+
 trait Modifier {
   /** Returns a ZIO that applies this modifier to the visible DOM tree under the given parent and then returns. Any clean-up actions
     * that should be performed on unmount are tied to the given Scope. */
   def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit]
+
+  def *> (that: =>Modifier) = Modifier { parent => mount(parent) *> that.mount(parent) }
 }
 
 object Modifier {

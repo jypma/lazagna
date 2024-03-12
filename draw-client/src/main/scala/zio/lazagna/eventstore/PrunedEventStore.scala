@@ -42,7 +42,10 @@ object PrunedEventStore {
 
     for {
       // We only materialize if we have the write lock (so we only write from one browser tab at a time)
-      _ <- haveLock.changes.filter(_ == true).take(1).mapZIO(_ => materialize).runDrain.forkScoped
+      setup <- ZIO.service[Setup]
+      _ <- setup.addStartAction {
+        haveLock.changes.filter(_ == true).take(1).mapZIO(_ => materialize).runDrain.forkScoped
+      }
     } yield new EventStore[E,Err] {
       def events: Consumeable[E] = ZStream.unwrap {
         // read from storage until latest there, read rest from source
