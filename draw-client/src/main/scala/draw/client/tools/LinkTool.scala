@@ -8,6 +8,7 @@ import zio.lazagna.dom.Modifier._
 import zio.lazagna.dom.svg.{PathData, SVGHelper}
 import zio.lazagna.dom.{Alternative, Modifier}
 import zio.stream.SubscriptionRef
+import zio.UIO
 
 import draw.client.Drawing
 import draw.client.render.DrawingRenderer
@@ -19,10 +20,10 @@ import DrawingRenderer.{ObjectTarget}
 object LinkTool {
   case class State(src: ObjectTarget, pos: dom.SVGPoint, dst: Option[ObjectTarget])
 
-  def apply(drawing: Drawing) = for {
+  def apply(drawing: Drawing): UIO[Modifier[Unit]] = for {
     state <- SubscriptionRef.make[Option[State]](None)
   } yield SVGHelper { helper =>
-    Modifier.combine(
+    Modifier.all(
       Alternative.option(state) { s =>
         path(
           cls := "link-preview",
@@ -54,7 +55,7 @@ object LinkTool {
         .zip(DrawingTools.makeUUID)
         .flatMap((obj, s, id) =>
           println("From " + s.src + " to " + obj)
-          drawing.perform(DrawCommand(CreateLink(id, s.src.id, obj.id, None, None)))
+            drawing.perform(DrawCommand(CreateLink(id, s.src.id, obj.id, None, None)))
         )
       )
     )

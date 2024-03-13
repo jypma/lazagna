@@ -24,9 +24,9 @@ import draw.data.{Moveable, ObjectState, SymbolRef}
 import org.scalajs.dom
 
 trait DrawingTools {
-  def renderKeyboard: Modifier
-  def renderHandlers: Modifier
-  def renderToolbox: Modifier
+  def renderKeyboard: Modifier[dom.Element]
+  def renderHandlers: Modifier[Unit]
+  def renderToolbox: Modifier[dom.Element]
   def currentToolName: Consumeable[String]
 }
 
@@ -67,7 +67,7 @@ object DrawingTools {
     keyboardAction(key, description, target.update(toB => !toB), Some(target.tap(onChange).map(a => if (a) "active" else "")))
   }
 
-  private case class Tool(key: String, name: String, hint: String, icon: String, render: Modifier)
+  private case class Tool(key: String, name: String, hint: String, icon: String, render: Modifier[Unit])
 
   val live = ZLayer.scoped {
     for {
@@ -133,10 +133,9 @@ object DrawingTools {
     dragStart <- Ref.make(Point(0,0))
   } yield {
     SVGHelper { helper =>
-      Modifier.unwrap(
-        for {
-          exporter <- Exporter.make(helper.svg).provideLayer(ZLayer.succeed(drawing))
-        } yield Modifier.combine(
+      for {
+        exporter <- Exporter.make(helper.svg).provideLayer(ZLayer.succeed(drawing))
+        _ <- Modifier.combine(
           onMouseDown(_
             .filter { e => (e.buttons & 4) != 0 }
             .flatMap { event =>
@@ -163,7 +162,7 @@ object DrawingTools {
               val pos = helper.screenToSvg(event)
               drawing.viewport.update(_.zoom(factor, pos.x, pos.y))
             }),
-          keyboard.addChild { _ =>
+          keyboard.child { _ =>
             div(
               keyboardAction("?", "Tutorial (MMB to pan, wheel to zoom)", ZIO.unit),
               keyboardAction("f", "Fit into view",
@@ -176,17 +175,16 @@ object DrawingTools {
             )
           }
         )
-      )
+      } yield ()
     }
   }
 
   case class MoveState(selection: Set[ObjectState[Moveable]], start: Point)
-  def selectTool(drawing: Drawing, keyboard: Children) = for {
+  def selectTool(drawing: Drawing, keyboard: Children): UIO[Modifier[Unit]] = for {
     moveState <- Ref.make[Option[MoveState]](None)
     addToSelection <- SubscriptionRef.make(false)
     removeFromSelection <- SubscriptionRef.make(false)
-  } yield {
-    SVGHelper { helper =>
+  } yield SVGHelper { helper =>
       def doSelect(event: dom.MouseEvent) = {
         val pos = helper.screenToSvg(event)
         val target = DrawingRenderer.getSelectTargetObject(event).map(_.id).toSet
@@ -201,7 +199,7 @@ object DrawingTools {
         }
       }
 
-      Modifier.combine(
+      Modifier.all(
         onMouseDown(_
           .filter { e => (e.buttons & 1) != 0 }
           .tap(doSelect)
@@ -230,15 +228,15 @@ object DrawingTools {
             })
           }
         ),
-        keyboard.addChild { _ =>
+        keyboard.child { _ =>
           keyboardToggle("a", "Add to sticky selection", addToSelection, b => removeFromSelection.set(false).when(b))
         },
-        keyboard.addChild { _ =>
+        keyboard.child { _ =>
           keyboardToggle("r", "Remove from sticky selection", removeFromSelection, b => addToSelection.set(false).when(b))
         },
         Alternative.mountOne(drawing.selection) { selection =>
           if (selection.isEmpty) Modifier.empty else {
-            keyboard.addChild { _ =>
+            keyboard.child { _ =>
               keyboardAction("Delete", "Delete items",
                 ZIO.collectAll(selection.map { id =>
                   drawing.perform(DrawCommand(DeleteObject(id)))
@@ -249,49 +247,50 @@ object DrawingTools {
         }
       )
     }
-  }
 
-  def pencil(drawing: Drawing): Modifier = Modifier.unwrap(for {
+
+  def pencil(drawing: Drawing): Modifier[Unit] = for {
     currentScribbleId <- Ref.make[Option[String]](None)
     startPoint <- Ref.make[Option[Point]](None)
     count <- Ref.make(0)
-  } yield SVGHelper { helper =>
-    onMouseDown(_
-      .filter { e => (e.buttons & 1) != 0 }
-      .flatMap { ev =>
-        val pos = helper.screenToSvg(ev)
-        startPoint.set(Some(Point(pos.x, pos.y))) *>
+    _ <- SVGHelper { helper =>
+      onMouseDown(_
+        .filter { e => (e.buttons & 1) != 0 }
+        .flatMap { ev =>
+          val pos = helper.screenToSvg(ev)
+          startPoint.set(Some(Point(pos.x, pos.y))) *>
           count.set(0) *>
           makeUUID.flatMap(id => currentScribbleId.set(Some(id)))
-      }
-      .drain
-    ).merge(
-      onMouseMove(_
-        .filter { e => (e.buttons & 1) != 0 }
-        .flatMap(ev => currentScribbleId.get.map((_, ev)))
-        .collectF { case (Some(id), ev) => (id, ev) }
-        .zip(count.updateAndGet(_ + 1))
-        .collectF { case (id, ev, count) if count < 200 => (id, ev) }
-        .flatMap((id, ev) => startPoint.get.map((id, _, ev)))
-        .flatMap { (id, start, event) =>
-          val pos = helper.screenToSvg(event)
-          val point = Point(pos.x, pos.y)
-
-          if (start.isDefined) {
-            startPoint.set(None).as(DrawCommand(StartScribble(id, Seq(start.get, point))))
-          } else {
-            ZIO.succeed(DrawCommand(ContinueScribble(id, Seq(point))))
-          }
         }
-      )
-    ).merge(
-      onMouseUp(_.flatMap(ev => currentScribbleId.set(None)).drain)
-    )(_.flatMap(drawing.perform _))
-  })
+        .drain
+      ).merge(
+        onMouseMove(_
+          .filter { e => (e.buttons & 1) != 0 }
+          .flatMap(ev => currentScribbleId.get.map((_, ev)))
+          .collectF { case (Some(id), ev) => (id, ev) }
+          .zip(count.updateAndGet(_ + 1))
+          .collectF { case (id, ev, count) if count < 200 => (id, ev) }
+          .flatMap((id, ev) => startPoint.get.map((id, _, ev)))
+          .flatMap { (id, start, event) =>
+            val pos = helper.screenToSvg(event)
+            val point = Point(pos.x, pos.y)
+
+            if (start.isDefined) {
+              startPoint.set(None).as(DrawCommand(StartScribble(id, Seq(start.get, point))))
+            } else {
+              ZIO.succeed(DrawCommand(ContinueScribble(id, Seq(point))))
+            }
+          }
+        )
+      ).merge(
+        onMouseUp(_.flatMap(ev => currentScribbleId.set(None)).drain)
+      )(_.flatMap(drawing.perform _))
+    }
+  } yield ()
 
   private val iconSize = 64
 
-  private def icon(drawing: Drawing, dialogs: Children, keyboard: Children, index: SymbolIndex) = for {
+  private def icon(drawing: Drawing, dialogs: Children, keyboard: Children, index: SymbolIndex): UIO[Modifier[Unit]] = for {
     searchResult <- Hub.bounded[SymbolIndex.Result](1)
     selectedIcon <- SubscriptionRef.make(SymbolRef.person)
     cursorPos <- SubscriptionRef.make[Option[dom.SVGPoint]](None)
@@ -333,18 +332,18 @@ object DrawingTools {
             )
           ),
         ),
-        keyboard.addChild { _ =>
+        keyboard.child { _ =>
           keyboardAction("Escape", "Close dialog", close)
         }
       )
     }
 
     SVGHelper { helper =>
-      Modifier.combine(
+      Modifier.all(
         onMouseMove(_.flatMap { e =>
           cursorPos.set(Some(helper.screenToSvg(e)))
         }),
-        keyboard.addChild { _ =>
+        keyboard.child { _ =>
           keyboardAction("u", "Select icon", selectDialog)
         },
         onMouseDown(_

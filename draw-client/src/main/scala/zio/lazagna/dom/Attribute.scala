@@ -10,30 +10,24 @@ import org.scalajs.dom
 case class Attribute(name: String) {
   import Attribute._
 
-  def :=(value: Double): Modifier = set(value)
-  def set(value: Double): Modifier = :=(value.toString)
+  def :=(value: Double): Modifier[Unit] = set(value)
+  def set(value: Double): Modifier[Unit] = :=(value.toString)
 
-  def :=(value: Int): Modifier = set(value)
-  def set(value: Int): Modifier = :=(value.toString)
+  def :=(value: Int): Modifier[Unit] = set(value)
+  def set(value: Int): Modifier[Unit] = :=(value.toString)
 
-  def :=(value: String): Modifier = set(value)
-  def set(value: String): Modifier = new Modifier {
-    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      ZIO.succeed {
-        parent.setAttribute(name, value)
-      }
+  def :=(value: String): Modifier[Unit] = set(value)
+  def set(value: String): Modifier[Unit] = Modifier { parent =>
+    ZIO.succeed {
+      parent.setAttribute(name, value)
     }
   }
 
-  def <--[T](content: Consumeable[T])(implicit ev: AttributeType[T]) = new Modifier {
-    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      content.map { value =>
-        ev.setTo(parent, name, value)
-      }.consume
-    }
+  def <--[T](content: Consumeable[T])(implicit ev: AttributeType[T]) = Modifier { parent =>
+    content.map { value =>
+      ev.setTo(parent, name, value)
+    }.consume
   }
-
-
 }
 
 object Attribute {

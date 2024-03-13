@@ -47,7 +47,7 @@ class SVGHelper(val svg: dom.svg.SVG) {
 
 object SVGHelper {
   /** Binds a Helper instance if used as modifier directly under an SVG node */
-  def apply(fn: SVGHelper => Modifier): Modifier = Element.thisElementAs { svgNode =>
+  def apply[T](fn: SVGHelper => Modifier[T]): Modifier[T] = Element.thisElementAs { svgNode =>
     val h = new SVGHelper(svgNode.asInstanceOf[dom.svg.SVG])
     fn(h)
   }

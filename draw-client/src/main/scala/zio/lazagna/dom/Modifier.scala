@@ -1,51 +1,34 @@
 package zio.lazagna.dom
 
-import zio.{Scope, ZIO, ZLayer}
+import zio.{Scope, ZIO}
 
 import org.scalajs.dom
+import zio.ZLayer
 
-// TODO: It looks like Modifier, Element and Attribute might be plain ZIO's after all
-// ZIO[dom.Element & Scope, Nothing, Unit]
-
-trait Modifier {
-  /** Returns a ZIO that applies this modifier to the visible DOM tree under the given parent and then returns. Any clean-up actions
-    * that should be performed on unmount are tied to the given Scope. */
-  def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit]
-
-  def *> (that: =>Modifier) = Modifier { parent => mount(parent) *> that.mount(parent) }
-}
+/** A modifier is a ZIO that applies certain changes to its mount point, optionally returning a value T (which
+  * may be Unit if the Modifier only executes side effects). */
+type Modifier[+T] = ZIO[Modifier.MountPoint & Scope, Nothing, T]
 
 object Modifier {
-  def apply(fn: dom.Element => ZIO[Scope, Nothing, Unit]) = new Modifier {
-    def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = fn(parent)
-  }
+  case class MountPoint(parent: dom.Element, after: Option[dom.Element] = None)
+
+  def apply[T](fn: dom.Element => Modifier[T]): Modifier[T] = ZIO.service[MountPoint].flatMap { i => fn(i.parent) }
 
   /** Returns a Modifier that combines all of the given modifiers to mount into the same parent when mounted. */
-  implicit def combine(modifiers: Iterable[Modifier]): Modifier = new Modifier {
-    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      ZIO.collectAll(modifiers.map(_.mount(parent))).unit
-    }
-  }
-
-  /** Runs the given ZIO when this modifier is mounted. It can optionally access the parent into which it was mounted in its environment. */
-  def run(zio: ZIO[Scope & dom.Element, Nothing, Any]): Modifier = new Modifier {
-    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      zio.provideSomeLayer[Scope](ZLayer.succeed(parent)).unit
-    }
-  }
-
-  /** Runs the given ZIO to extract a modifier, and mounts it */
-  def unwrap(zio: ZIO[Scope, Nothing, Modifier]): Modifier = new Modifier {
-    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      zio.flatMap(_.mount(parent))
-    }
-  }
+  implicit def combine[T](modifiers: Iterable[Modifier[T]]): Modifier[Iterable[T]] =
+    ZIO.collectAll(modifiers)
 
   /** Returns a Modifier that combines all of the given modifiers to mount into the same parent when mounted. */
-  def combine(modifiers: Modifier*): Modifier = combine(modifiers.toSeq)
+  def combine[T](modifiers: Modifier[T]*): Modifier[Iterable[T]] = combine(modifiers.toSeq)
+
+  /** Returns a Modifier that combines all of the given modifiers to mount into the same parent when mounted, discarding the result. */
+  def all[T](modifiers: Modifier[T]*): Modifier[Unit] = combine(modifiers.toSeq).unit
+
+  implicit class ModifierOps[T](modifier: Modifier[T]) {
+    def mount(parent: dom.Element): ZIO[Scope, Nothing, T] =
+      modifier.provideSome[Scope](ZLayer.succeed(Modifier.MountPoint(parent)))
+  }
 
   /** A Modifier that does nothing. */
-  val empty = new Modifier {
-    override def mount(parent: dom.Element) = ZIO.unit
-  }
+  val empty:Modifier[Unit] = ZIO.unit
 }

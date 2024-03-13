@@ -16,7 +16,7 @@ object LinkRenderer {
     renderState <- ZIO.service[RenderState]
     iconRenderer <- ZIO.service[IconRenderer]
   } yield new ObjectRenderer[LinkState] {
-    override def render(initial: ObjectState[LinkState], furtherEvents: Consumeable[LinkState]): Modifier = {
+    override def render(initial: ObjectState[LinkState], furtherEvents: Consumeable[LinkState]) = {
       val srcBoxes = iconRenderer.getBoundingBoxes(initial.body.src)
       val destBoxes = iconRenderer.getBoundingBoxes(initial.body.dest)
 
@@ -47,9 +47,8 @@ object LinkRenderer {
           cls := "selectTarget editTarget",
           points
         ),
-        thisElementAs { element => Modifier.run(renderState.notifyRendered(RenderedObject(initial.id, initial.body, element)) )}
+        thisElementAs { element => renderState.notifyRendered(RenderedObject(initial.id, initial.body, element)) }
       )
-
     }
   }
 }

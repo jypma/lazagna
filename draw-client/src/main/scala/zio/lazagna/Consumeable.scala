@@ -35,8 +35,5 @@ object Consumeable {
         consumeable.runDrain.forkScoped.unit
       }
     }
-
-    /** Returns a Modifier that will consume this stream when mounted */
-    implicit def runAsModifier: Modifier = Modifier.run(consume)
   }
 }

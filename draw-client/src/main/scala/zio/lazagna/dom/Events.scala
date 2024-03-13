@@ -67,15 +67,15 @@ case class EventsEmitter[-E <: dom.Event, +T](
   )
 
   /** Returns a Modifier that runs this events emitter into the given hub when mounted */
-  def -->[T1 >: T](target: Hub[T1]): Modifier = apply(_.flatMap(e => target.offer(e))).run
+  def -->[T1 >: T](target: Hub[T1]): Modifier[Unit] = apply(_.flatMap(e => target.offer(e))).run
 
   /** Returns a Modifier that runs this events emitter into the given ref when mounted */
-  def -->[T1 >: T](target: Ref[T1]): Modifier = apply(_.flatMap(e => target.set(e))).run
+  def -->[T1 >: T](target: Ref[T1]): Modifier[Unit] = apply(_.flatMap(e => target.set(e))).run
 
   /** Runs the side effects of this event emitter as a Modifier, binding to the parent where the modifier is mounted. */
-  def run: Modifier = if (others.isEmpty) runThis else Modifier.combine(others.map(_.run) :+ runThis)
+  def run: Modifier[Unit] = if (others.isEmpty) runThis else Modifier.combine(others.map(_.run) :+ runThis).unit
 
-  private def runThis: Modifier = Modifier { parent =>
+  private def runThis: Modifier[Unit] = Modifier { parent =>
     val target = overrideTarget.getOrElse(parent)
     ZIO.scopeWith { scope =>
       (ZIO.acquireRelease(
@@ -101,12 +101,12 @@ case class EventsEmitter[-E <: dom.Event, +T](
 }
 
 object Events {
-  implicit def emitterAsModifier[E <: dom.Event, T](emitter: EventsEmitter[E,T]): Modifier = emitter.run
+  implicit def emitterAsModifier[E <: dom.Event, T](emitter: EventsEmitter[E,T]): Modifier[Unit] = emitter.run
 
   implicit class EventStreamOps[T](stream: ZStream[Scope with dom.EventTarget, Nothing, T]) {
     /** Converts the stream to a modifier that runs the stream in the background for its side effects only, providing
       * the parent to which the Modifier is mounted into the stream's environment. */
-    def toModifier: Modifier = { parent =>
+    def toModifier: Modifier[Unit] = Modifier { parent =>
       stream.provideSomeLayer[Scope](ZLayer.succeed[dom.EventTarget](parent)).runDrain.forkScoped.unit
     }
   }

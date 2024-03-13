@@ -18,10 +18,9 @@ object ScribbleRenderer {
   def make = for {
     rendered <- ZIO.service[RenderState]
   } yield new ObjectRenderer[ScribbleState] {
-    override def render(initial: ObjectState[ScribbleState], furtherEvents: Consumeable[ScribbleState]): Modifier = Modifier.unwrap {
-      for {
-        state <- MultiUpdate.make[ScribbleState]
-      } yield {
+    override def render(initial: ObjectState[ScribbleState], furtherEvents: Consumeable[ScribbleState]) = for {
+      state <- MultiUpdate.make[ScribbleState]
+      res <- {
         def pointData = state { s =>
           val p = s.points
           d := PathData.render(
@@ -50,9 +49,10 @@ object ScribbleRenderer {
             furtherEvents
               .via(state.pipeline)
               .tap { state => rendered.notifyRendered(RenderedObject(initial.id, state, element)) }
+              .consume
           }
         )
       }
-    }
+    } yield res
   }
 }

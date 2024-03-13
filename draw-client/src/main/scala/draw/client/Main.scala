@@ -24,7 +24,7 @@ import scalajs.js.typedarray._
 
 object Main extends ZIOAppDefault {
 
-  def debugView(drawing: Drawing): Modifier = div(
+  def debugView(drawing: Drawing): Modifier[_] = div(
     textContent <-- drawing.latency.sliding(10).map(c => s"Latency: ${(c.sum / 10)}ms")
   )
 

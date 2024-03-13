@@ -7,20 +7,16 @@ import zio.{Scope, ZIO}
 import org.scalajs.dom
 
 object TextContent {
-  def :=(value: String) = new Modifier {
-    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      ZIO.succeed {
-        parent.textContent = value
-      }
+  def :=(value: String) = Modifier { parent =>
+    ZIO.succeed {
+      parent.textContent = value
     }
   }
 
   // TODO: Allow other types than String through implicits
-  def <--(content: Consumeable[String]) = new Modifier {
-    override def mount(parent: dom.Element): ZIO[Scope, Nothing, Unit] = {
-      content.map { value =>
-        parent.textContent = value
-      }.consume
-    }
+  def <--(content: Consumeable[String]) = Modifier { parent =>
+    content.map { value =>
+      parent.textContent = value
+    }.consume
   }
 }

@@ -2,6 +2,7 @@ package zio.lazagna.dom
 
 import zio.stream.ZPipeline
 import zio.{Exit, Ref, Scope, ZIO, ZLayer}
+import Modifier.MountPoint
 
 import org.scalajs.dom
 
@@ -15,7 +16,7 @@ import org.scalajs.dom
 // TODO: Add a way to do .changes() here, after Modifier refactor
 trait MultiUpdate[T] { self =>
   /** Adds the given modifier to this update, executing it whenever a T arrives at the pipeline. */
-  def apply(fn: T => Modifier): Modifier
+  def apply(fn: T => Modifier[Any]): Modifier[Unit]
 
   /** Returns a pipeline that will execute the modifiers that are part of this update */
   def pipeline: ZPipeline[Scope, Nothing, T, T]
@@ -23,10 +24,10 @@ trait MultiUpdate[T] { self =>
 
 object MultiUpdate {
   private case class State[T](
-    updates: Seq[(dom.Element, T => Modifier)] = Seq.empty,
+    updates: Seq[(dom.Element, T => Modifier[Any])] = Seq.empty,
     currentScope: Option[Scope.Closeable] = None
   ) {
-    def add(parent: dom.Element, fn: T => Modifier) = copy(
+    def add(parent: dom.Element, fn: T => Modifier[Any]) = copy(
       updates = updates :+ (parent, fn)
     )
 
@@ -35,7 +36,7 @@ object MultiUpdate {
       newScope <- parentScope.fork
       layer = ZLayer.succeed(newScope)
       _ <- ZIO.collectAll(updates.map { (parent, fn) =>
-        fn(t).mount(parent).provideLayer(layer)
+        fn(t).provide(layer, ZLayer.succeed(MountPoint(parent)))
       })
     } yield copy(
       currentScope = Some(newScope)
@@ -45,7 +46,7 @@ object MultiUpdate {
   def make[T] = for {
     state <- Ref.Synchronized.make(State[T]())
   } yield new MultiUpdate[T] {
-    override def apply(fn: T => Modifier) = Modifier { parent =>
+    override def apply(fn: T => Modifier[Any]) = Modifier { parent =>
       state.update(_.add(parent, fn))
     }
 
