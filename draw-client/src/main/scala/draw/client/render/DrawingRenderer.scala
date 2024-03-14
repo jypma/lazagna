@@ -75,7 +75,7 @@ object DrawingRenderer {
                   val furtherEvents = drawing.objectState(initial.id).tap(switchWhenReady).takeUntil(_.deleted).map(_.body)
                   children.child { destroy =>
                     g(
-                      cls <-- drawing.selection.map { s => if (s.contains(initial.id)) "selected" else "" },
+                      cls <-- renderState.selection.map { s => if (s.contains(initial.id)) "selected" else "" },
                       drawing.objectState(initial.id).filter(_.deleted).mapZIO(_ => destroy).take(1).consume,
                       initial.body match {
                         case _:ScribbleState =>

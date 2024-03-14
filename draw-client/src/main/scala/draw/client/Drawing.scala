@@ -1,8 +1,8 @@
 package draw.client
 
-import zio.lazagna.{Consumeable, Setup}
+import zio.lazagna.{Consumeable}
 import zio.stream.SubscriptionRef
-import zio.{Scope, ZIO}
+import zio.{UIO}
 
 import draw.data.ObjectState
 import draw.data.drawcommand.DrawCommand
@@ -13,18 +13,13 @@ trait Drawing {
   import Drawing._
 
   def connectionStatus: Consumeable[Drawing.ConnectionStatus]
-  def perform(command: DrawCommand): ZIO[Any, Nothing, Unit]
+  def perform(command: DrawCommand): UIO[Unit]
   def initialVersion: Long
   def currentVersion: Consumeable[Long]
   def viewport: SubscriptionRef[Drawing.Viewport]
   def initialObjectStates: Consumeable[ObjectState[_]] // Returns initial object state for each object
   def objectState(id: String): Consumeable[ObjectState[_]] // Returns state for that object
   def latency: Consumeable[Long]
-  /** The set of currently selected objects */
-  def selection: SubscriptionRef[Set[String]]
-
-  def currentSelectionState: ZIO[Scope & Setup, Nothing, Set[ObjectState[_]]] =
-    selection.get.flatMap(s => ZIO.collectAll(s.map(id => objectState(id).runHead))).map(_.flatten)
 }
 
 object Drawing {
@@ -48,6 +43,7 @@ object Drawing {
       }
     }
 
+    /** Renders this Viewport as an SVG tag "viewBox" attribute value */
     def toSvgViewBox: String = {
       s"${left} ${top} ${factor * 1000.0} ${factor / aspectRatio * 1000.0}"
     }

@@ -7,6 +7,9 @@ import zio.{Hub, Ref, Semaphore, UIO, ZIO, ZLayer}
 
 import draw.data.ObjectStateBody
 import org.scalajs.dom
+import zio.stream.SubscriptionRef
+import zio.Scope
+import zio.lazagna.Setup
 
 case class RenderedObject(id: String, state: ObjectStateBody, element: dom.Element)
 trait RenderState {
@@ -23,6 +26,12 @@ trait RenderState {
   def lookupForEdit(event: dom.MouseEvent): UIO[Option[RenderedObject]] = {
     getTargetObject(event, "editTarget")
   }
+
+  /** The set of currently selected object IDs */
+  def selection: SubscriptionRef[Set[String]]
+
+  def currentSelectionState: ZIO[Scope & Setup, Nothing, Set[RenderedObject]] =
+    selection.get.flatMap(s => ZIO.collectAll(s.map(id => objectState(id).runHead))).map(_.flatten)
 
   protected def getTargetObject(event: dom.MouseEvent, className: String): UIO[Option[RenderedObject]]
 }
@@ -61,7 +70,10 @@ object RenderState {
     semaphore <- Semaphore.make(1)
     stateChanges <- Hub.bounded[RenderedObject](16)
     newObjects <- Hub.bounded[RenderedObject](16)
+    selectionRef <- SubscriptionRef.make(Set.empty[String])
   } yield new RenderState {
+    def selection = selectionRef
+
     def initialObjectStates = ZStream.unwrapScoped {
       semaphore.withPermit {
         state.get.map(_.all).flatMap { initial =>

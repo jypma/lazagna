@@ -13,17 +13,17 @@ import zio.stream.SubscriptionRef
 import zio.{URIO, ZIO}
 
 import draw.client.Drawing
-import draw.client.render.{RenderState, DrawingRenderer}
+import draw.client.render.{RenderState, DrawingRenderer, RenderedObject}
 import draw.data.drawcommand.{DeleteObject, DrawCommand, MoveObject}
 import draw.data.point.Point
-import draw.data.{IconState, Moveable, ObjectState}
+import draw.data.{IconState, Moveable}
 import org.scalajs.dom
 
 import DrawingRenderer.{iconSize}
 import draw.data.drawcommand.LabelObject
 
 object SelectTool {
-  private case class State(selection: Set[ObjectState[Moveable]], dragStart: Point)
+  private case class State(selection: Set[(String, Moveable)], dragStart: Point)
 
   def make(drawing: Drawing, dialogs: Children, keyboard: Children): URIO[RenderState,Modifier[Unit]] = for {
     state <- SubscriptionRef.make[Option[State]](None)
@@ -38,11 +38,11 @@ object SelectTool {
         target <- renderState.lookupForSelect(event).map(_.map(_.id).toSet)
         _ <- addToSelection.get.zip(removeFromSelection.get).flatMap { (adding, removing) =>
           if (adding) {
-            drawing.selection.update(_ ++ target)
+            renderState.selection.update(_ ++ target)
           } else if (removing) {
-            drawing.selection.update(_ -- target)
+            renderState.selection.update(_ -- target)
           } else {
-            drawing.selection.set(target)
+            renderState.selection.set(target)
           }
         }
       } yield ()
@@ -79,27 +79,25 @@ object SelectTool {
           }
       },
       Alternative.mountOne(state) {
-        case Some(s) if s.selection.exists(_.body.isInstanceOf[IconState]) =>
-          val icon = s.selection.head
-          println("Adding child")
-          keyboard.child { _ =>
-            DrawingTools.keyboardAction("t", "Edit label", editingLabel.set(Some(icon.id, icon.body.asInstanceOf[IconState])))
-          }
+        _.flatMap(_.selection.headOption) match {
+          case Some((id, icon:IconState)) =>
+            keyboard.child { _ =>
+              DrawingTools.keyboardAction("t", "Edit label", editingLabel.set(Some(id, icon)))
+            }
+          case _ => Modifier.empty
+        }
       },
       onMouseDown(_
         .filter { e => (e.buttons & 1) != 0 }
         .tap(doSelect)
-        .zip(drawing.currentSelectionState.map { _.collect {
-          case s@ObjectState(_,_,_,_: Moveable) => s.asInstanceOf[ObjectState[Moveable]]
+        .zip(renderState.currentSelectionState.map { _.collect {
+          case RenderedObject(id, state:Moveable, _) => (id, state)
         }})
         .collectF {
           case (event, selection) if !selection.isEmpty =>
             val pos = helper.screenToSvg(event)
-            val res = Some(State(selection, Point(pos.x, pos.y)))
-            println("Selection: " + selection)
-            res
+            Some(State(selection, Point(pos.x, pos.y)))
           case _ =>
-            println("No selection.")
             None
         }
         .flatMap(state.set)
@@ -112,10 +110,10 @@ object SelectTool {
           case (event, Some(state)) => (state, helper.screenToSvg(event))
         }
         .flatMap { (state, pos) =>
-          ZIO.collectAll(state.selection.map { obj =>
-            val x = obj.body.position.x + pos.x - state.dragStart.x
-            val y = obj.body.position.y + pos.y - state.dragStart.y
-            drawing.perform(DrawCommand(MoveObject(obj.id, Some(Point(x, y)))))
+          ZIO.collectAll(state.selection.map { (id, obj) =>
+            val x = obj.position.x + pos.x - state.dragStart.x
+            val y = obj.position.y + pos.y - state.dragStart.y
+            drawing.perform(DrawCommand(MoveObject(id, Some(Point(x, y)))))
           })
         }
       ),
@@ -125,8 +123,8 @@ object SelectTool {
       keyboard.child { _ =>
         DrawingTools.keyboardToggle("r", "Remove from sticky selection", removeFromSelection, b => addToSelection.set(false).when(b))
       },
-      Alternative.mountOne(drawing.selection) { selection =>
-        if (selection.isEmpty) Modifier.empty else {
+      Alternative.mountOne(renderState.selection) {
+        case selection if !(selection.isEmpty) =>
           keyboard.child { _ =>
             DrawingTools.keyboardAction("Delete", "Delete items",
               ZIO.collectAll(selection.map { id =>
@@ -134,7 +132,6 @@ object SelectTool {
               }).unit
             )
           }
-        }
       }
     )
   }
