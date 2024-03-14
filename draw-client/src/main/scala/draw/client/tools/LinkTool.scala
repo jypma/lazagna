@@ -8,7 +8,7 @@ import zio.lazagna.dom.Modifier._
 import zio.lazagna.dom.svg.{PathData, SVGHelper}
 import zio.lazagna.dom.{Alternative, Modifier}
 import zio.stream.SubscriptionRef
-import zio.{UIO, URIO, ZIO}
+import zio.{URIO, ZIO}
 
 import draw.client.Drawing
 import draw.client.render.{DrawingRenderer, RenderState, RenderedObject}

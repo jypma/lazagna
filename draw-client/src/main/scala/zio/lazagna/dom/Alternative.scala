@@ -19,14 +19,14 @@ object Alternative {
     * Renders of previous elements are discarded. */
 
   // TEST: Close current scope when unmounted
-  def mountOne[T](source: Consumeable[T])(render: T => Modifier[Any]): Modifier[Unit] = {
+  def mountOne[T](source: Consumeable[T])(render: PartialFunction[T, Modifier[Any]]): Modifier[Unit] = {
     case class State(t: T, scope: Scope.Closeable)
 
     for {
       current <- ZIO.acquireRelease(Ref.make[Option[State]](None))(_.get.flatMap(_.map(_.scope.close(Exit.unit)).getOrElse(ZIO.unit)))
       res <- Modifier { parent =>
         source.changes
-          .map { t => (t, render(t)) }
+          .map { t => (t, if (render.isDefinedAt(t)) render(t) else Modifier.empty) }
           .mapZIO { (t, rendered) =>
             for {
               state <- current.get
@@ -43,10 +43,9 @@ object Alternative {
 
   // TODO: Rethink viability of mountOneMemoized
 
-  def option[T](source: Consumeable[Option[T]])(render: T => Modifier[Any]): Modifier[Unit] = {
+  def option[T](source: Consumeable[Option[T]])(render: PartialFunction[T, Modifier[Any]]): Modifier[Unit] = {
     mountOne(source) {
       case Some(value) => render(value)
-      case None => Modifier.empty
     }
   }
 

@@ -25,7 +25,6 @@ object LabelTool {
   } yield SVGHelper { helper =>
     Modifier.all(
       Alternative.mountOne(selected) {
-        case None => Modifier.empty
         case Some(target) =>
           dialogs.child { _ =>
             val pos = helper.svgToScreen(target._2.position.move(-iconSize / 2, iconSize * 0.45))

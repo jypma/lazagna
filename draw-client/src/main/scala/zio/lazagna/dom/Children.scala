@@ -36,8 +36,6 @@ object Children {
   case class InsertOrMove[E1 <: dom.Element, E2 <: dom.Element](elmt: Element[E1], after: Element[E2]) extends ChildOp
   /** The given element is deleted. It must have been previously appended or inserted. */
   case class Delete(elmt: Element[_]) extends ChildOp
-  /** The given DOM element is deleted. It must be the target of a previously appended or inserted Element. */
-  case class DeleteDOM(elmt: dom.Element) extends ChildOp
 
   private[Children] case class State(
     children: Map[Element[_], (dom.Element, Scope.Closeable)] = Map.empty) {
