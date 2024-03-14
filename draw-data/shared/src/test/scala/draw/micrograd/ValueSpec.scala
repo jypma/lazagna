@@ -4,8 +4,8 @@ import zio.test.ZIOSpecDefault
 import zio.test.Assertion._
 import zio.test._
 
-object ValueTest extends ZIOSpecDefault {
-  override def spec = suite("ValueTest")(
+object ValueSpec extends ZIOSpecDefault {
+  override def spec = suite("ValueSpec")(
     test("add itself") {
       val a = Value(3)
       val r = a + a

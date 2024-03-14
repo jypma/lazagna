@@ -7,7 +7,7 @@ import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.{textContent, _}
 import zio.lazagna.dom.svg.SVGHelper
-import zio.lazagna.dom.{Modifier, MultiUpdate}
+import zio.lazagna.dom.{MultiUpdate}
 
 import draw.data.{IconState, ObjectState}
 import draw.geom.Rectangle

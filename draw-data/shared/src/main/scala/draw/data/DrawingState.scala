@@ -53,8 +53,8 @@ case class DrawingState(
     event.body match {
       case ScribbleStarted(id, points, _) =>
         create(id, ScribbleState(Point(0,0), points))
-      case IconCreated(id, optPos, Some(category), Some(name), _) =>
-        create(id, IconState(optPos.getOrElse(Point(0,0)), SymbolRef(SymbolCategory(category), name), ""))
+      case IconCreated(id, optPos, category, name, _) =>
+        create(id, IconState(optPos.getOrElse(Point(0,0)), category.zip(name).map((c,n) => SymbolRef(SymbolCategory(c), n)).getOrElse(SymbolRef.person), ""))
       case LinkCreated(id, src, dest, preferredDistance, preferredAngle, _) =>
         create(id, LinkState(src, dest, preferredDistance, preferredAngle),
           newLinks = objectLinks.add(src, id).add(dest, id))
@@ -131,6 +131,7 @@ case class DrawingState(
     DrawEvent(lastSequenceNr + 1, body, Some(now.toEpochMilli()))
   }
 
+  def links: Iterable[ObjectState[LinkState]] = objects.values.filter(_.body.isInstanceOf[LinkState]).asInstanceOf[Iterable[ObjectState[LinkState]]]
 }
 
 object DrawingState {

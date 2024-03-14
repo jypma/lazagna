@@ -1,10 +1,13 @@
 package draw.micrograd
 
-class Value(initial: Double, gradients: Seq[(Value, Double)]) { src =>
-  private[Value] var data: Double = initial
+class Value(private[Value] var data: Double, gradients: Seq[(Value, Double)]) { src =>
   private[Value] var grad: Double = 0
 
-  override def toString = s"Value($data, $grad)"
+  override def toString = f"v:$data%1.5f g:$grad%1.5f"
+
+  def adjust(stepSize: Double): Unit = {
+    data -= stepSize * grad
+  }
 
   private[Value] def backwardStep(): Unit = {
     for ((child, gradient) <- gradients) {
@@ -46,6 +49,13 @@ class Value(initial: Double, gradients: Seq[(Value, Double)]) { src =>
     ))
   }
 
+  def atan2(other: Value): Value = {
+    new Value(Math.atan2(other.data, data), Seq(
+      src -> -(other.data / ((Math.pow(src.data, 2) + Math.pow(other.data, 2)))),
+      other -> (src.data / ((Math.pow(src.data, 2) + Math.pow(other.data, 2))))
+    ))
+  }
+
   def exp: Value = {
     val res = Math.exp(data)
     new Value(res, Seq(
@@ -81,7 +91,10 @@ class Value(initial: Double, gradients: Seq[(Value, Double)]) { src =>
 }
 
 object Value {
+  val zero = Value(0.0)
   def apply(constant: Double): Value = new Value(constant, Seq.empty)
+  implicit def fromDouble(constant:Double): Value = Value(constant)
+  implicit def fromInt(constant:Int): Value = Value(constant)
 
   implicit class DoubleOps(d: Double) extends AnyVal {
     def +(v: Value): Value = Value(d) + v
