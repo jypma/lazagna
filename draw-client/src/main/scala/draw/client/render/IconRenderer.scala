@@ -6,15 +6,13 @@ import zio.lazagna.Consumeable._
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.{textContent, _}
+import zio.lazagna.dom.MultiUpdate
 import zio.lazagna.dom.svg.SVGHelper
-import zio.lazagna.dom.{MultiUpdate}
 
 import draw.data.{IconState, ObjectState}
 import draw.geom.Rectangle
 import org.scalajs.dom
 
-import DrawingRenderer.dataX
-import DrawingRenderer.dataY
 import DrawingRenderer.iconSize
 
 trait IconRenderer extends ObjectRenderer[IconState] {
@@ -34,9 +32,7 @@ object IconRenderer {
         cls := "icon editTarget",
         state { s =>
           val p = s.position
-          transform.set(s"translate(${p.x},${p.y})") *>
-          dataX.set(p.x) *>
-          dataY.set(p.y)
+          transform.set(s"translate(${p.x},${p.y})")
         },
         g(
           cls := "selectTarget",

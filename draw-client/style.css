@@ -54,7 +54,7 @@ path.link-preview {
     stroke: rgba(var(--fg-color-highlight));
     opacity: 0.4;
     stroke-width: 1px;
-    stroke-dasharray: 4 1
+    stroke-dasharray: 4 1;
 }
 
 g.icon text.label {

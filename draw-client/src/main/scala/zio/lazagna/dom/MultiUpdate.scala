@@ -2,9 +2,10 @@ package zio.lazagna.dom
 
 import zio.stream.ZPipeline
 import zio.{Exit, Ref, Scope, ZIO, ZLayer}
-import Modifier.MountPoint
 
 import org.scalajs.dom
+
+import Modifier.MountPoint
 
 /** Allows multiple modifiers to be mounted sequentially as a ZPipeline, in order to perform other actions
   * after all mounting is complete (or updated). The sequence of modifiers is applied every time a new T

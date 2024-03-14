@@ -8,10 +8,9 @@ import zio.lazagna.Consumeable._
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Modifier._
-import zio.{Exit, Ref, Scope, ZIO}
+import zio.{Exit, Ref, Scope, ZIO, ZLayer}
 
 import org.scalajs.dom
-import zio.ZLayer
 
 object Alternative {
   /** Selects from a potentially unlimited lists of alternative renders, based on an element T. Whenever the

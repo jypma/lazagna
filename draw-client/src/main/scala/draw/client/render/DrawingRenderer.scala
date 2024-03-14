@@ -40,48 +40,6 @@ object DrawingRenderer {
     }
   }
 
-  //TODO: replace with actual ObjectState once we have render callbacks in place
-  val dataX = Attribute("data-x")
-  val dataY = Attribute("data-y")
-
-  /** Finds the element, or any of its parents, that has an ID, but only if one of those ancestors also has a
-    * CSS class (indicating that it's a valid selection target) */
-  private def getTargetParent(e: dom.Element, className: String): Option[dom.Element] = {
-    var elem = e
-    var count = 3
-    var isselectTarget = e.classList.contains(className)
-    while (elem.id == "" && count > 0) {
-      elem = elem.parentNode.asInstanceOf[dom.Element]
-      if (elem.classList.contains(className)) {
-        isselectTarget = true
-      }
-      count -= 1
-    }
-    Option.when(isselectTarget)(elem)
-  }
-
-  /** Returns information about an object that might have been clicked to select it */
-  def getSelectTargetObject(event: dom.MouseEvent): Option[ObjectTarget] = {
-    //TODO: get from actual ObjectState once we capture that
-    getTargetObject(event, "selectTarget")
-  }
-
-  /** Returns information about an object that might have been clicked to edit it */
-  def getEditTargetObject(event: dom.MouseEvent): Option[ObjectTarget] = {
-    //TODO: get from actual ObjectState once we capture that
-    getTargetObject(event, "editTarget")
-  }
-
-  private def getTargetObject(event: dom.MouseEvent, className: String): Option[ObjectTarget] = {
-    Some(event)
-      .map(_.target)
-      .collect { case elem: dom.Element =>
-        elem }
-      .map { e => getTargetParent(e, className) }
-      .collect { case Some(e:dom.Element) => e }
-      .flatMap(ObjectTarget.apply(_))
-  }
-
   val iconSize = 64
 
   val live = ZLayer.fromZIO {

@@ -8,35 +8,41 @@ import zio.lazagna.dom.Modifier._
 import zio.lazagna.dom.svg.{PathData, SVGHelper}
 import zio.lazagna.dom.{Alternative, Modifier}
 import zio.stream.SubscriptionRef
-import zio.UIO
+import zio.{UIO, URIO, ZIO}
 
 import draw.client.Drawing
-import draw.client.render.DrawingRenderer
+import draw.client.render.{DrawingRenderer, RenderState, RenderedObject}
+import draw.data.IconState
 import draw.data.drawcommand.{CreateLink, DrawCommand}
+import draw.geom.Point
 import org.scalajs.dom
 
 import DrawingRenderer.{ObjectTarget}
 
 object LinkTool {
-  case class State(src: ObjectTarget, pos: dom.SVGPoint, dst: Option[ObjectTarget])
+  case class State(srcId: String, srcPos: Point, pos: dom.SVGPoint, dst: Option[ObjectTarget])
 
-  def apply(drawing: Drawing): UIO[Modifier[Unit]] = for {
+  def apply(drawing: Drawing): URIO[RenderState, Modifier[Unit]] = for {
     state <- SubscriptionRef.make[Option[State]](None)
+    renderState <- ZIO.service[RenderState]
   } yield SVGHelper { helper =>
     Modifier.all(
       Alternative.option(state) { s =>
+        // Quick hack so we don't mouseover the target lineTo
+        val dx = if (s.srcPos.x < s.pos.x) -1 else 1
+        val dy = if (s.srcPos.y < s.pos.y) -1 else 1
         path(
           cls := "link-preview",
-          d := PathData.render(Seq(PathData.MoveTo(s.src.position.x, s.src.position.y), PathData.LineTo(s.pos.x, s.pos.y)))
+          d := PathData.render(Seq(PathData.MoveTo(s.srcPos.x, s.srcPos.y), PathData.LineTo(s.pos.x + dx, s.pos.y + dy)))
         )
       },
       onMouseDown(_
         .filter(_.button == 0)
-        .map(e => (e, DrawingRenderer.getSelectTargetObject(e)))
-        .collectF { case (e, Some(obj)) => (e, obj) }
-        .flatMap { (e, obj) =>
+        .flatMap(e => renderState.lookupForSelect(e).map((e, _)))
+        .collectF { case (e, Some(RenderedObject(id, IconState(pos, _, _), _))) => (e, id, pos) }
+        .flatMap { (e, srcId, srcPos) =>
           val pos = helper.screenToSvg(e)
-          state.set(Some(State(obj, pos, None)))
+          state.set(Some(State(srcId, srcPos, pos, None)))
         }
       ),
       onMouseMove(_
@@ -50,13 +56,13 @@ object LinkTool {
       onMouseUp(_
         .zip(state.getAndSet(None))
         .collectF { case (e, Some(s)) => (e, s) }
-        .map((e, s) => (DrawingRenderer.getSelectTargetObject(e), s))
-        .collectF { case (Some(obj), s) if s.src.id != obj.id => (obj, s) } // No link to self!
+        .flatMap((e, s) => renderState.lookupForSelect(e).map((_, s)))
+        .collectF { case (Some(obj), s) if s.srcId != obj.id => (obj, s) } // No link to self!
         .zip(DrawingTools.makeUUID)
-        .flatMap((obj, s, id) =>
-          println("From " + s.src + " to " + obj)
-            drawing.perform(DrawCommand(CreateLink(id, s.src.id, obj.id, None, None)))
-        )
+        .flatMap((obj, s, id) => {
+          println("From " + s.srcId + " to " + obj)
+          drawing.perform(DrawCommand(CreateLink(id, s.srcId, obj.id, None, None)))
+        })
       )
     )
   }

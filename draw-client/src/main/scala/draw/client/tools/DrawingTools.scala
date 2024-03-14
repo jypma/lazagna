@@ -16,11 +16,10 @@ import zio.stream.SubscriptionRef
 import zio.{Clock, Hub, Random, Ref, Scope, UIO, ZIO, ZLayer}
 
 import draw.client.Drawing._
-import draw.client.render.DrawingRenderer
 import draw.client.{Drawing, SymbolIndex}
-import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, MoveObject, StartScribble}
+import draw.data.SymbolRef
+import draw.data.drawcommand.{ContinueScribble, CreateIcon, DrawCommand, StartScribble}
 import draw.data.point.Point
-import draw.data.{Moveable, ObjectState, SymbolRef}
 import org.scalajs.dom
 
 trait DrawingTools {
@@ -62,7 +61,7 @@ object DrawingTools {
     )
   }
 
-  private def keyboardToggle(key: String, description: String, target: SubscriptionRef[Boolean],
+  def keyboardToggle(key: String, description: String, target: SubscriptionRef[Boolean],
     onChange: Boolean => UIO[Any] = {_ => ZIO.unit}): Element[dom.Element] = {
     keyboardAction(key, description, target.update(toB => !toB), Some(target.tap(onChange).map(a => if (a) "active" else "")))
   }
@@ -77,7 +76,7 @@ object DrawingTools {
       keyboard <- Children.make
       iconTool <- icon(drawing, dialogs, keyboard, index)
       labelTool <- LabelTool.make(drawing, dialogs, keyboard)
-      selectTool <- selectTool(drawing, keyboard)
+      selectTool <- SelectTool.make(drawing, keyboard)
       linkTool <- LinkTool(drawing)
       tools = Seq(
         Tool("s", "select", "Select, move and adjust existing objects", "⛶", selectTool),
@@ -178,76 +177,6 @@ object DrawingTools {
       } yield ()
     }
   }
-
-  case class MoveState(selection: Set[ObjectState[Moveable]], start: Point)
-  def selectTool(drawing: Drawing, keyboard: Children): UIO[Modifier[Unit]] = for {
-    moveState <- Ref.make[Option[MoveState]](None)
-    addToSelection <- SubscriptionRef.make(false)
-    removeFromSelection <- SubscriptionRef.make(false)
-  } yield SVGHelper { helper =>
-      def doSelect(event: dom.MouseEvent) = {
-        val pos = helper.screenToSvg(event)
-        val target = DrawingRenderer.getSelectTargetObject(event).map(_.id).toSet
-        addToSelection.get.zip(removeFromSelection.get).flatMap { (adding, removing) =>
-          if (adding) {
-            drawing.selection.update(_ ++ target)
-          } else if (removing) {
-            drawing.selection.update(_ -- target)
-          } else {
-            drawing.selection.set(target)
-          }
-        }
-      }
-
-      Modifier.all(
-        onMouseDown(_
-          .filter { e => (e.buttons & 1) != 0 }
-          .tap(doSelect)
-          .zip(drawing.currentSelectionState.map { _.collect {
-            case s@ObjectState(_,_,_,_: Moveable) => s.asInstanceOf[ObjectState[Moveable]]
-          }})
-          .collectF {
-            case (event, selection) if !selection.isEmpty =>
-              println("Preparing to move.")
-              val pos = helper.screenToSvg(event)
-              Some(MoveState(selection, Point(pos.x, pos.y)))
-          }
-          .flatMap(moveState.set)
-        ),
-        onMouseUp(_.flatMap { _ => moveState.set(None) }),
-        onMouseMove(_
-          .zip(moveState.get)
-          .collectF {
-            case (event, Some(state)) => (state, helper.screenToSvg(event))
-          }
-          .flatMap { (state, pos) =>
-            ZIO.collectAll(state.selection.map { obj =>
-              val x = obj.body.position.x + pos.x - state.start.x
-              val y = obj.body.position.y + pos.y - state.start.y
-              drawing.perform(DrawCommand(MoveObject(obj.id, Some(Point(x, y)))))
-            })
-          }
-        ),
-        keyboard.child { _ =>
-          keyboardToggle("a", "Add to sticky selection", addToSelection, b => removeFromSelection.set(false).when(b))
-        },
-        keyboard.child { _ =>
-          keyboardToggle("r", "Remove from sticky selection", removeFromSelection, b => addToSelection.set(false).when(b))
-        },
-        Alternative.mountOne(drawing.selection) { selection =>
-          if (selection.isEmpty) Modifier.empty else {
-            keyboard.child { _ =>
-              keyboardAction("Delete", "Delete items",
-                ZIO.collectAll(selection.map { id =>
-                  drawing.perform(DrawCommand(DeleteObject(id)))
-                }).unit
-              )
-            }
-          }
-        }
-      )
-    }
-
 
   def pencil(drawing: Drawing): Modifier[Unit] = for {
     currentScribbleId <- Ref.make[Option[String]](None)

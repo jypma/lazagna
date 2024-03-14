@@ -2,10 +2,9 @@ package zio.lazagna.dom
 
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable._
-import zio.{Exit, Queue, Ref, Scope, UIO, ZIO}
+import zio.{Exit, Queue, Ref, Scope, UIO, ZIO, ZLayer}
 
 import org.scalajs.dom
-import zio.ZLayer
 
 import Modifier.MountPoint
 

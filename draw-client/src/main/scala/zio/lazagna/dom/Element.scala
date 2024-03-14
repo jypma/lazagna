@@ -1,10 +1,10 @@
 package zio.lazagna.dom
 
-import zio.{Scope, ZIO}
+import zio.{Scope, ZIO, ZLayer}
 
 import org.scalajs.dom
+
 import Modifier.MountPoint
-import zio.ZLayer
 
 object Element {
   val textContent = TextContent

@@ -1,9 +1,8 @@
 package zio.lazagna.dom
 
-import zio.{Scope, ZIO}
+import zio.{Scope, ZIO, ZLayer}
 
 import org.scalajs.dom
-import zio.ZLayer
 
 /** A modifier is a ZIO that applies certain changes to its mount point, optionally returning a value T (which
   * may be Unit if the Modifier only executes side effects). */

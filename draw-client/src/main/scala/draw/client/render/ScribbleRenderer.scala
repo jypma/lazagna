@@ -11,9 +11,6 @@ import zio.lazagna.dom.{Modifier, MultiUpdate}
 
 import draw.data.{ObjectState, ScribbleState}
 
-import DrawingRenderer.dataX
-import DrawingRenderer.dataY
-
 object ScribbleRenderer {
   def make = for {
     rendered <- ZIO.service[RenderState]
@@ -34,9 +31,7 @@ object ScribbleRenderer {
           id := s"scribble${initial.id}",
           state { s =>
             val p = s.position
-            transform.set(s"translate(${p.x},${p.y})") *>
-            dataX.set(p.x) *>
-            dataY.set(p.y)
+            transform.set(s"translate(${p.x},${p.y})")
           },
           path(
             pointData

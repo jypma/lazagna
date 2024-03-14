@@ -1,7 +1,7 @@
 package draw.data
 
 import draw.data.drawevent.DrawEventBody
-import draw.data.point.Point
+import draw.geom.Point
 import draw.data.drawevent.DrawEvent
 import draw.data.drawevent.ObjectDeleted
 import draw.data.drawevent.ScribbleContinued
@@ -27,7 +27,7 @@ case class ObjectState[+T <: ObjectStateBody](id: String, sequenceNr: Long, dele
 case class ScribbleState(position: Point, points: Seq[Point]) extends ObjectStateBody with Moveable {
   override def update(event: DrawEventBody) = event match {
     case ScribbleContinued(_, addedPoints, _) =>
-      copy(points = points ++ addedPoints)
+      copy(points = points ++ addedPoints.map(Point.fromProtobuf))
     case ObjectMoved(_, Some(newPosition), _) =>
       copy(position = newPosition)
     case _ => this
