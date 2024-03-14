@@ -39,7 +39,7 @@ object LinkTool {
       onMouseDown(_
         .filter(_.button == 0)
         .flatMap(e => renderState.lookupForSelect(e).map((e, _)))
-        .collectF { case (e, Some(RenderedObject(id, IconState(pos, _, _), _))) => (e, id, pos) }
+        .collectF { case (e, Some(RenderedObject(id, IconState(pos, _, _), _, _))) => (e, id, pos) }
         .flatMap { (e, srcId, srcPos) =>
           val pos = helper.screenToSvg(e)
           state.set(Some(State(srcId, srcPos, pos, None)))

@@ -66,35 +66,35 @@ object DrawingRenderer {
             focusNow, // To allow dragging immediately
             SVGHelper { helper =>
               val deps = ZLayer.succeed(renderState) ++ ZLayer.succeed(helper) ++ ZLayer.succeed(drawing)
-              for {
-                scribbleR <- ScribbleRenderer.make.provide(deps)
-                iconR <- IconRenderer.make.provide(deps)
-                linkR <- LinkRenderer.make.provide(deps, ZLayer.succeed(iconR))
-                children <- Children.make
-                _ <- drawing.initialObjectStates.tap(switchWhenReady).mapZIO { initial =>
-                  val furtherEvents = drawing.objectState(initial.id).tap(switchWhenReady).takeUntil(_.deleted).map(_.body)
-                  children.child { destroy =>
-                    g(
-                      cls <-- renderState.selection.map { s => if (s.contains(initial.id)) "selected" else "" },
-                      drawing.objectState(initial.id).filter(_.deleted).mapZIO(_ => destroy).take(1).consume,
-                      initial.body match {
-                        case _:ScribbleState =>
-                          scribbleR.render(initial.asInstanceOf[ObjectState[ScribbleState]], furtherEvents.asInstanceOf[Consumeable[ScribbleState]])
+              g(
+                cls := "drawing",
+                for {
+                  scribbleR <- ScribbleRenderer.make.provide(deps)
+                  iconR <- IconRenderer.make.provide(deps)
+                  linkR <- LinkRenderer.make.provide(deps, ZLayer.succeed(iconR))
+                  children <- Children.make
+                  _ <- drawing.initialObjectStates.tap(switchWhenReady).mapZIO { initial =>
+                    val furtherEvents = drawing.objectState(initial.id).tap(switchWhenReady).takeUntil(_.deleted).map(_.body)
+                    children.child { destroy =>
+                      g(
+                        cls <-- renderState.selection.map { s => if (s.contains(initial.id)) "selected" else "" },
+                        drawing.objectState(initial.id).filter(_.deleted).mapZIO(_ => destroy).take(1).consume,
+                        initial.body match {
+                          case _:ScribbleState =>
+                            scribbleR.render(initial.asInstanceOf[ObjectState[ScribbleState]], furtherEvents.asInstanceOf[Consumeable[ScribbleState]])
 
-                        case _:IconState =>
-                          iconR.render(initial.asInstanceOf[ObjectState[IconState]], furtherEvents.asInstanceOf[Consumeable[IconState]])
+                          case _:IconState =>
+                            iconR.render(initial.asInstanceOf[ObjectState[IconState]], furtherEvents.asInstanceOf[Consumeable[IconState]])
 
-                        case _:LinkState =>
-                          linkR.render(initial.asInstanceOf[ObjectState[LinkState]], furtherEvents.asInstanceOf[Consumeable[LinkState]])
-                      }
-                    )
-                  }
-                }.consume
-
-                res <- children.render
-
-              } yield res
-
+                          case _:LinkState =>
+                            linkR.render(initial.asInstanceOf[ObjectState[LinkState]], furtherEvents.asInstanceOf[Consumeable[LinkState]])
+                        }
+                      )
+                    }
+                  }.consume
+                  res <- children.render
+                } yield res
+              )
             },
             drawingTools.renderHandlers
           )

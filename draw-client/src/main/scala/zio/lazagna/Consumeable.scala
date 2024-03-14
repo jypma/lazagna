@@ -7,6 +7,7 @@ import zio.{Dequeue, Hub, Promise, Scope, ZIO}
 // TODO: Reconsider if Consumeable is allowed to have an error E, which we ignore when calling consume.
 
 /** A Consumeable is a ZStream that has extra Setup actions, and a Scope for background fibers. */
+type ConsumeableR[R,T] = ZStream[Scope & Setup & R, Nothing, T]
 type Consumeable[T] = ZStream[Scope & Setup, Nothing, T]
 
 object Consumeable {
@@ -28,10 +29,10 @@ object Consumeable {
 
   implicit def queue2consumeable[T](queue: Dequeue[T]): Consumeable[T] = ZStream.fromQueue(queue)
 
-  extension(consumeable: Consumeable[_]) {
+  implicit class ConsumeableOps[R,T](consumeable: ConsumeableR[R,T]) {
     /** Consumes everything of the given consumeable for its side effects only. */
-    def consume: ZIO[Scope, Nothing, Unit] = {
-      Setup.start {
+    def consume: ZIO[Scope & R, Nothing, Unit] = {
+      Setup.start[Scope & R, Nothing, Unit] {
         consumeable.runDrain.forkScoped.unit
       }
     }

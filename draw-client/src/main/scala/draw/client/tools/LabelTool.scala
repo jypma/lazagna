@@ -57,7 +57,7 @@ object LabelTool {
         .filter(_.button == 0)
         .flatMap { e =>
           renderState.lookupForEdit(e).flatMap(o => selected.set(o.collect {
-            case RenderedObject(id, state:IconState, _) => (id, state)
+            case RenderedObject(id, state:IconState, _, _) => (id, state)
           }))
         }
       )

@@ -57,14 +57,14 @@ object IconRenderer {
         thisElementAs { element =>
           furtherEvents
             .via(state.pipeline)
-            .tap { state => rendered.notifyRendered(RenderedObject(initial.id, state, element)) }
+            .tap { state => rendered.notifyRendered(initial.id, state, element) }
             .consume
         }
       )
     } yield res
 
     def getBoundingBoxes(id: String) = rendered.objectState(id).collect {
-      case RenderedObject(id, _:IconState, icon) =>
+      case RenderedObject(id, _:IconState, icon, main) =>
         val main = helper.svgBoundingBox(icon.querySelector(".selectTarget").asInstanceOf[dom.SVGLocatable], 5)
         val label = Option(icon.querySelector(".label"))
           .filter(!_.innerHTML.isEmpty)

@@ -1,6 +1,8 @@
 package draw.geom
 
 case class Point(x: Double, y: Double) {
+  override def toString = f"($x%1.2f,$y%1.2f)"
+
   def move(deltaX: Double, deltaY: Double) = Point(x + deltaX, y + deltaY)
   def move(delta: Point) = Point(x + delta.x, y + delta.y)
   def to(p: Point) = Line(this, p)
@@ -61,14 +63,33 @@ case class Line(from: Point, to: Point) {
 
     (quadrant(from) & quadrant(to)) == 0
   }
+
+  /** Returns the length of this line */
+  def length: Double = Math.pow(Math.pow(to.x - from.x, 2) + Math.pow(to.y - from.y, 2), 0.5)
+
+  /** Returns the angle of this line, in radians */
+  def angle: Double = Math.atan2(to.y - from.y, to.x - from.x)
 }
 
 case class Rectangle(origin: Point, width: Double, height: Double) {
+  override def toString = f"Rectangle($origin, $width%1.2fx$height%1.2f)"
+
   def middle: Point = origin.move(width / 2, height / 2)
   def span: Point = origin.move(width, height)
 
   def intersects(line: Line): Boolean = line.intersects(this)
+  /** Expands the rectangle outwards by the given amount */
   def expand(delta: Double) = Rectangle(origin.move(-delta, -delta), width + 2 * delta, height + 2 * delta)
+  /** Returns the largest rectangle including this and other */
+  def union(other: Rectangle) = {
+    val x1 = Math.min(origin.x, other.origin.x)
+    val y1 = Math.min(origin.y, other.origin.y)
+    val s = span
+    val o = other.span
+    val x2 = Math.max(s.x, o.x)
+    val y2 = Math.max(s.y, o.y)
+    Rectangle(Point(x1, y1), x2 - x1, y2 - y1)
+  }
 }
 
 object Rectangle {

@@ -36,6 +36,10 @@ object DrawingTools {
       case "Escape" => "⎋"
       case "Enter" => "↵"
       case "Delete" => "⌦"
+      case "ArrowLeft" => "⇦"
+      case "ArrowRight" => "⇨"
+      case "ArrowUp" => "⇧"
+      case "ArrowDown" => "⇩"
       case s => s.toUpperCase()
     }
 

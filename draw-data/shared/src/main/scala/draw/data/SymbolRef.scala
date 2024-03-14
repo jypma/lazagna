@@ -13,6 +13,7 @@ case class SymbolRef(category: SymbolCategory, name: String) {
 
 object SymbolRef {
   val person = SymbolRef(SymbolCategory("elusive"), "elusive-person")
+  val plus = SymbolRef(SymbolCategory("ant"), "ant-plus")
 
   private val regex = "/symbols/(.*).svg#si-(.*)".r
   def parse(s: String): Option[SymbolRef] = {

@@ -7,7 +7,7 @@ import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element._
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.svg.PathData
-import zio.lazagna.dom.{Modifier, MultiUpdate}
+import zio.lazagna.dom.{MultiUpdate}
 
 import draw.data.{ObjectState, ScribbleState}
 
@@ -43,7 +43,7 @@ object ScribbleRenderer {
           thisElementAs { element =>
             furtherEvents
               .via(state.pipeline)
-              .tap { state => rendered.notifyRendered(RenderedObject(initial.id, state, element)) }
+              .tap { state => rendered.notifyRendered(initial.id, state, element) }
               .consume
           }
         )

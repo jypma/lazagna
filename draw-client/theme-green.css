@@ -11,3 +11,8 @@
 g.icon text.label, div.label-input input {
     font-family: indie_flowerregular;
 }
+
+/* https://codepen.io/sosuke/pen/Pjoqqp for other colors  */
+g.selection-crosshair {
+    filter: invert(96%) sepia(60%) saturate(580%) hue-rotate(321deg) brightness(107%) contrast(108%); opacity(50%);
+}

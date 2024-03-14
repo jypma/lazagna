@@ -4,6 +4,7 @@ import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.tags._
+import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element._
 import zio.lazagna.dom.Events._
 import zio.lazagna.dom.Modifier._
@@ -15,12 +16,13 @@ import zio.{URIO, ZIO}
 import draw.client.Drawing
 import draw.client.render.{RenderState, DrawingRenderer, RenderedObject}
 import draw.data.drawcommand.{DeleteObject, DrawCommand, MoveObject}
-import draw.data.point.Point
+import draw.geom.Point
 import draw.data.{IconState, Moveable}
 import org.scalajs.dom
 
 import DrawingRenderer.{iconSize}
 import draw.data.drawcommand.LabelObject
+import draw.data.SymbolRef
 
 object SelectTool {
   private case class State(selection: Set[(String, Moveable)], dragStart: Point)
@@ -32,23 +34,56 @@ object SelectTool {
     removeFromSelection <- SubscriptionRef.make(false)
     renderState <- ZIO.service[RenderState]
   } yield SVGHelper { helper =>
-    def doSelect(event: dom.MouseEvent) = {
-      val pos = helper.screenToSvg(event)
-      for {
-        target <- renderState.lookupForSelect(event).map(_.map(_.id).toSet)
-        _ <- addToSelection.get.zip(removeFromSelection.get).flatMap { (adding, removing) =>
-          if (adding) {
-            renderState.selection.update(_ ++ target)
-          } else if (removing) {
-            renderState.selection.update(_ -- target)
+    def doSelect(targets: Set[String]) = addToSelection.get.zip(removeFromSelection.get).flatMap { (adding, removing) =>
+      if (adding) {
+        renderState.selection.update(_ ++ targets)
+      } else if (removing) {
+        renderState.selection.update(_ -- targets)
           } else {
-            renderState.selection.set(target)
-          }
-        }
-      } yield ()
+        renderState.selection.set(targets)
+      }
     }
 
+    def handleSelect(event: dom.MouseEvent) = {
+      val pos = helper.screenToSvg(event)
+      renderState.lookupForSelect(event).map(_.map(_.id).toSet).flatMap(doSelect)
+    }
+
+    def expandSelect(direction: Double => Boolean) = for {
+      newSelection <- renderState.expandSelection(direction).map(_.map(_.id).toSet)
+      adding <- addToSelection.get
+      removing <- removeFromSelection.get
+      _ <- if (adding || removing || !newSelection.isEmpty) doSelect(newSelection) else ZIO.unit
+    } yield ()
+
     Modifier.all(
+      g(
+        cls := "selection-crosshair",
+        renderState.selectionBoundingBox.mapZIO { box =>
+          val pos = box.map(_.middle).getOrElse(Point(-100000,100000))
+          println("box: " + box)
+          transform := s"translate(${pos.x},${pos.y})"
+        }.consume,
+        use(
+          href := SymbolRef.plus.href,
+          width := 10,
+          height := 10,
+          x := -5,
+          y := -5
+        )
+      ),
+      keyboard.child { _ =>
+        DrawingTools.keyboardAction("ArrowLeft", "Select to the left", expandSelect(RenderState.Direction.left))
+      },
+      keyboard.child { _ =>
+        DrawingTools.keyboardAction("ArrowRight", "Select to the right", expandSelect(RenderState.Direction.right))
+      },
+      keyboard.child { _ =>
+        DrawingTools.keyboardAction("ArrowUp", "Select upwards", expandSelect(RenderState.Direction.up))
+      },
+      keyboard.child { _ =>
+        DrawingTools.keyboardAction("ArrowDown", "Select downwards", expandSelect(RenderState.Direction.down))
+      },
       Alternative.mountOne(editingLabel) {
         case Some(target) =>
           dialogs.child { _ =>
@@ -89,9 +124,11 @@ object SelectTool {
       },
       onMouseDown(_
         .filter { e => (e.buttons & 1) != 0 }
-        .tap(doSelect)
+        .tap(handleSelect)
         .zip(renderState.currentSelectionState.map { _.collect {
-          case RenderedObject(id, state:Moveable, _) => (id, state)
+          case RenderedObject(id, state:Moveable, _, bbox) =>
+            println(s"$id: $bbox")
+            (id, state)
         }})
         .collectF {
           case (event, selection) if !selection.isEmpty =>
@@ -113,7 +150,7 @@ object SelectTool {
           ZIO.collectAll(state.selection.map { (id, obj) =>
             val x = obj.position.x + pos.x - state.dragStart.x
             val y = obj.position.y + pos.y - state.dragStart.y
-            drawing.perform(DrawCommand(MoveObject(id, Some(Point(x, y)))))
+            drawing.perform(DrawCommand(MoveObject(id, Some(draw.data.point.Point(x, y)))))
           })
         }
       ),
