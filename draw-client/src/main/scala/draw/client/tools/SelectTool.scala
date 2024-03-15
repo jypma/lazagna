@@ -61,7 +61,6 @@ object SelectTool {
         cls := "selection-crosshair",
         renderState.selectionBoundingBox.mapZIO { box =>
           val pos = box.map(_.middle).getOrElse(Point(-100000,100000))
-          println("box: " + box)
           transform := s"translate(${pos.x},${pos.y})"
         }.consume,
         use(
@@ -127,7 +126,6 @@ object SelectTool {
         .tap(handleSelect)
         .zip(renderState.currentSelectionState.map { _.collect {
           case RenderedObject(id, state:Moveable, _, bbox) =>
-            println(s"$id: $bbox")
             (id, state)
         }})
         .collectF {

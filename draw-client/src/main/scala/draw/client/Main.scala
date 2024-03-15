@@ -11,6 +11,7 @@ import zio.lazagna.dom.indexeddb.Schema.CreateObjectStore
 import zio.lazagna.dom.indexeddb.{IndexedDB, Schema, ValueCodec}
 import zio.lazagna.dom.weblocks.Lock
 import zio.lazagna.dom.{Children, Modifier}
+import zio.lazagna.location.Location
 import zio.lazagna.eventstore.{CachedEventStore, EventStore, IndexedDBEventStore, PrunedEventStore}
 import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Chunk, Exit, ExitCode, Fiber, Schedule, Scope, ZIO, ZIOAppDefault, ZLayer, durationInt}
@@ -21,6 +22,7 @@ import draw.data.drawevent.DrawEvent
 import org.scalajs.dom
 
 import scalajs.js.typedarray._
+import scala.util.Try
 
 object Main extends ZIOAppDefault {
 
@@ -46,21 +48,27 @@ object Main extends ZIOAppDefault {
     override def decode(b: ArrayBuffer): DrawEvent = DrawEvent.parseFrom(new Int8Array(b).toArray)
   }
 
-  val drawingId = UUID.fromString("0314aaab-684c-49c6-bd29-0921a3897ce5") // TODO: Drawing selector
+  val drawingId = Try(UUID.fromString(Location.fragment.parameters("id"))).getOrElse(
+    UUID.fromString("0314aaab-684c-49c6-bd29-0921a3897ce5") // TODO: Drawing selector
+  )
+  println("Drawing is " + drawingId)
 
   def printContents[Err](store: EventStore[DrawEvent,Err]) = for {
     last <- store.latestSequenceNr
-    _ <- store.events.takeUntil(e => e.sequenceNr >= last).debug.runDrain
+    _ <- store.events.takeUntil(e => e.sequenceNr >= last).debug.runDrain.unless(last <= 0)
   } yield ()
 
   val eventStore = ZLayer.fromZIO {
     for {
       lock <- ZIO.service[SubscriptionRef[Boolean]]
+      _ = println("Creating store")
       store <- IndexedDBEventStore.make[DrawEvent,ArrayBuffer](s"events", lock, _.sequenceNr)
       prunedStore <- IndexedDBEventStore.make[DrawEvent,ArrayBuffer](s"events-pruned", lock, _.sequenceNr)
       pruned <- PrunedEventStore.make(store, prunedStore, lock, Pruned.State())(_.prune(_))(_.recover(_))
+      _ = println("Printing store")
       _ <- printContents(pruned)
       cached <- CachedEventStore.make(pruned)
+      _ = println("Done")
     } yield cached
   }
 
@@ -97,6 +105,7 @@ object Main extends ZIOAppDefault {
       _ <- (for {
         client <- ZIO.service[DrawingClient]
         dialogs <- Children.make
+        _ = println("Logging in")
         drawing <- client.login("jan", "jan", drawingId)
         _ <- main.provideSome[Scope](
           ZLayer.succeed(drawing),

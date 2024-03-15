@@ -65,7 +65,6 @@ object IconRenderer {
 
     def getBoundingBoxes(id: String) = rendered.objectState(id).collect {
       case RenderedObject(id, _:IconState, icon, main) =>
-        val main = helper.svgBoundingBox(icon.querySelector(".selectTarget").asInstanceOf[dom.SVGLocatable], 5)
         val label = Option(icon.querySelector(".label"))
           .filter(!_.innerHTML.isEmpty)
           .map(e => helper.svgBoundingBox(e.asInstanceOf[dom.SVGLocatable], 0))

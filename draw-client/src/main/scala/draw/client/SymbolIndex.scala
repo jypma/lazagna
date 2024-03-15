@@ -9,6 +9,7 @@ import zio.{UIO, ZIO}
 import draw.data.{SymbolCategory, SymbolRef}
 
 trait SymbolIndex {
+  def completionList: UIO[Seq[String]]
   def lookup(text: String): UIO[SymbolIndex.Result]
 }
 
@@ -20,15 +21,19 @@ object SymbolIndex {
   def make = for {
     data <- Request.GET(JSONAs[js.Object], "/symbol-index.json")
   } yield new SymbolIndex {
+    def completionList: UIO[Seq[String]] = ZIO.succeed {
+      js.Object.keys(data).toSeq
+    }
+
     def lookup(text: String) = ZIO.succeed {
       data.asInstanceOf[js.Dynamic].selectDynamic(text) match {
         case _ if text == "" =>
           Result(js.Object.keys(data).toSeq.sorted, Seq.empty)
         case v if js.isUndefined(v) =>
-          val suggestions = js.Object.keys(data).filter(_.startsWith(text)).toSeq.sorted
+          val suggestions = js.Object.keys(data).view.filter(_.startsWith(text)).take(100).toSeq.sorted
           Result(suggestions, Seq.empty)
         case exactMatch =>
-          val suggestions = js.Object.keys(data).filter(_.startsWith(text)).toSeq.sorted
+          val suggestions = js.Object.keys(data).view.filter(_.startsWith(text)).take(100).toSeq.sorted
           val matches = exactMatch.asInstanceOf[js.Array[js.Dynamic]]
           Result(suggestions, matches.toSeq.map(toSymbolRef))
       }

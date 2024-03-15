@@ -12,6 +12,7 @@ import zio.Scope
 import zio.lazagna.Setup
 import zio.lazagna.dom.svg.SVGHelper
 import draw.geom.Rectangle
+import zio.durationInt
 
 case class RenderedObject(id: String, state: ObjectStateBody, element: dom.Element, boundingBox: Rectangle)
 
@@ -98,16 +99,26 @@ object RenderState {
       }
     }
 
-    def notifyRendered(id: String, body: ObjectStateBody, element: dom.Element) = semaphore.withPermit {
+    def notifyRendered(id: String, body: ObjectStateBody, element: dom.Element): UIO[Unit] =
+      notifyRendered(id, body, element, 10)
+
+    def notifyRendered(id: String, body: ObjectStateBody, element: dom.Element, retries: Int): UIO[Unit] = {
       val target = Option(element.querySelector(".selectTarget")).getOrElse(element)
       val bbox = new SVGHelper(element.asInstanceOf[dom.SVGElement].ownerSVGElement).svgBoundingBox(target.asInstanceOf[dom.SVGLocatable], 5)
-      val rendered = RenderedObject(id, body, element, bbox)
+      if (retries > 0 && bbox.width == 10 && bbox.height == 10) {
+        // We're not done rendering yet. Probably a <use> external icon is still being loaded.
+        ZIO.suspendSucceed(notifyRendered(id, body, element, retries - 1)).delay(100.milliseconds)
+      } else {
+        val rendered = RenderedObject(id, body, element, bbox)
 
-      state.modify { s =>
-        val existing = s.get(rendered.id)
-        (existing.isEmpty, s + rendered)
-      }.flatMap { isNew =>
-        newObjects.publish(rendered).when(isNew) *> stateChanges.publish(rendered).unit
+        semaphore.withPermit {
+          state.modify { s =>
+            val existing = s.get(rendered.id)
+            (existing.isEmpty, s + rendered)
+          }.flatMap { isNew =>
+            newObjects.publish(rendered).when(isNew) *> stateChanges.publish(rendered).unit
+          }
+        }
       }
     }
 

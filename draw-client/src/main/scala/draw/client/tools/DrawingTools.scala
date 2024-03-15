@@ -14,6 +14,7 @@ import zio.lazagna.dom.svg.SVGHelper
 import zio.lazagna.dom.{Alternative, Children, Element, Modifier}
 import zio.stream.SubscriptionRef
 import zio.{Clock, Hub, Random, Ref, Scope, UIO, ZIO, ZLayer}
+import zio.durationInt
 
 import draw.client.Drawing._
 import draw.client.{Drawing, SymbolIndex}
@@ -234,8 +235,8 @@ object DrawingTools {
         div(
           div(
             cls := "results",
-            Alternative.mountOne(searchResult) {
-              _.symbols.map { symbol =>
+            Alternative.mountOne(searchResult) { s =>
+              s.symbols.map { symbol =>
                 svg(
                   cls := "result",
                   tabindex := 0,
@@ -248,7 +249,7 @@ object DrawingTools {
                   ),
                   onClick.merge(onKeyDown(_.filter(_.key == "Enter")))(_.flatMap { _ =>
                     selectedIcon.set(symbol) *> close
-                  })
+                   })
                     // TODO: "Enter" on the input itself switches focus to the first icon, and activates letter-overlay shortcuts for the first 36 matches.
                 )
               }
@@ -260,9 +261,13 @@ object DrawingTools {
                 index.lookup(text).flatMap(searchResult.publish)
               })
             ),
+            // No datalist for now. Has crazy high CPU usage if replacing values after input...
+            /*
             datalist(id := "icon-dialog-list",
-              Alternative.mountOne(searchResult) { _.completions.map { s => option(value := s) } }
-            )
+              // Alternative.mountOne(searchResult.debounce(1.second)) { _.completions.map { s => option(value := s) } }
+              // index.completionList.flatMap(_.map(s => option(value := s)))
+             )
+             */
           ),
         ),
         keyboard.child { _ =>

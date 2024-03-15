@@ -4,6 +4,7 @@ import java.util.UUID
 
 import zio.stream.ZStream
 import zio.{IO, ZIO}
+import zio.schema.{DeriveSchema, Schema}
 
 import draw.data.drawcommand.DrawCommand
 import draw.data.drawevent.DrawEvent
@@ -19,9 +20,13 @@ trait Drawing {
 
 trait Drawings {
   def getDrawing(id: UUID): IO[DrawingError, Drawing]
+  def list: ZStream[Any, DrawingError, UUID]
 }
 
 object Drawings {
   case class DrawingError(message: String)
+  object DrawingError {
+   implicit val schema: Schema[DrawingError] = DeriveSchema.gen[DrawingError]
+  }
 
 }

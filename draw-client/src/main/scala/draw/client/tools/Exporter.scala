@@ -26,6 +26,7 @@ object Exporter {
           })
           theme <- GET(AsString, "/theme-green.css")
         } yield {
+          // FIXME: Only use drawing viewport here
           val viewBox = Drawing.Viewport.fit(svg.getBBox()).toSvgViewBox
 
           val icons = symbols.flatMap { s =>
@@ -53,6 +54,9 @@ object Exporter {
             s"#$r$g$b"
           })
 
+          // FIXME: Remove selection crosshair
+          // FIXME: For all text, add direct styling for inkscape (or investigate CSS more):
+          // style="-inkscape-font-specification:'Indie Flower';font-family:'Indie Flower';font-weight:normal;font-style:normal;font-stretch:normal;font-variant:normal"
           val data = new dom.XMLSerializer().serializeToString(svg)
             .replaceFirst("viewBox=\"(.*?)\"", s"viewBox=\"${viewBox}\"")
             .replace("<style/>", s"<style>${style2}</style>${icons}")

@@ -18,8 +18,35 @@ object CassandraDrawings {
 
   val make = for {
     session <- ZIO.service[ZCqlSession]
+    layer = ZLayer.succeed(session)
+    initialDrawings <- {
+      def firstDrawing: IO[DrawingError, Option[UUID]] = ZCqlSession.executeHeadOption(
+        "SELECT drawingId FROM drawingEvents LIMIT 1"
+          .toStatement
+          .decodeAttempt(_.getUuid("drawingId"))
+      ).mapError(toError).provide(layer)
+
+      def nextDrawing(after: UUID): IO[DrawingError, Option[UUID]] = ZCqlSession.executeHeadOption(
+        "SELECT drawingId FROM drawingEvents WHERE drawingId > ? AND sequenceNr = 0 LIMIT 1 ALLOW FILTERING"
+          .toStatement
+          .bind(after)
+          .decodeAttempt(_.getUuid("drawingId"))
+      ).mapError(toError).provide(layer)
+
+      def drawingsAfter(after: UUID): IO[DrawingError, Seq[UUID]] =
+        nextDrawing(after).flatMap {
+          case None => ZIO.succeed(Seq.empty)
+          case Some(id) => drawingsAfter(id).map(id +: _)
+        }
+
+      firstDrawing.flatMap {
+          case None => ZIO.succeed(Seq.empty)
+          case Some(id) => drawingsAfter(id).map(id +: _)
+        }
+    }
+    drawings <- Ref.make[Set[UUID]](initialDrawings.toSet)
   } yield new Drawings {
-    val layer = ZLayer.succeed(session)
+    def list = ZStream.unwrap(drawings.get.map(ZStream.fromIterable(_)))
 
     def getDrawing(id: UUID): IO[DrawingError, Drawing] = for {
       startState <- currentDrawingEventsAfter(id, 0).runFold(DrawingState())((s,e) => s.update(e)._2)
@@ -31,6 +58,7 @@ object CassandraDrawings {
         events <- Clock.instant.map(startState.handleCreate)
         _ <- ZIO.collectAll(events.map(emit(_)))
       } yield ()
+      _ <- drawings.update(_ + id)
     } yield new Drawing {
       override def perform(command: DrawCommand): ZIO[Any, DrawingError, Unit] = {
         semaphore.withPermit {

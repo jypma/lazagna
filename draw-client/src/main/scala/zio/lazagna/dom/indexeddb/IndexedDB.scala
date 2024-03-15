@@ -138,6 +138,7 @@ private[indexeddb] case class ObjectStoreImpl[T, TV <: js.Any, K](db: dom.IDBDat
 }
 
 private[indexeddb] case class DatabaseImpl(db: dom.IDBDatabase) extends Database {
+  println("Opened: " + db)
   override def version = db.version.toInt
   override def objectStoreNames = db.objectStoreNames.toSeq
   override def objectStore[T, TV <: js.Any, K](name: String)(using keyCodec: KeyCodec[K], valueCodec: ValueCodec[T,TV]) = ObjectStoreImpl(db, name)

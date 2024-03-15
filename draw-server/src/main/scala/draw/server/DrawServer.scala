@@ -17,6 +17,7 @@ import draw.server.Users.User
 import draw.server.drawing.{CassandraDrawings, Drawing, Drawings}
 import palanga.zio.cassandra.CassandraException.SessionOpenException
 import palanga.zio.cassandra.{ZCqlSession, session}
+import draw.server.drawing.Drawings.DrawingError
 
 object DrawServer extends ZIOAppDefault {
   // Create CORS configuration
@@ -77,6 +78,10 @@ object DrawServer extends ZIOAppDefault {
       .implement(Handler.fromFunctionZIO((username: String, password: String) =>
           users.login(username, password)
       )),
+    Endpoint(Method.GET / "drawings")
+      .outError[DrawingError](Status.BadRequest)
+      .out[Chunk[UUID]](MediaType.application.json)
+      .implement(Handler.fromFunctionZIO(_ => drawings.list.runCollect)),
     Method.HEAD / "drawings" / uuid("drawing") -> handler { (drawing: UUID, request: Request) =>
       for {
         token <- request.url.queryParams.getAsZIO[String]("token")

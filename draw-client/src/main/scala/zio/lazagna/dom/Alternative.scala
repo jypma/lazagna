@@ -30,9 +30,14 @@ object Alternative {
           .mapZIO { (t, rendered) =>
             for {
               state <- current.get
+              start = System.currentTimeMillis()
               _ <- state.map(_.scope.close(Exit.unit)).getOrElse(ZIO.unit)
+              clean = System.currentTimeMillis()
               newScope <- Scope.make
+              // FIXME: Start new element in separate fiber, and interrupt if a new value comes in.
               _ <- rendered.provide(ZLayer.succeed(newScope), ZLayer.succeed(MountPoint(parent)))
+              stop = System.currentTimeMillis()
+              _ = if ((clean - start) > 1000 || (stop - clean) > 1000) { println(s"Closing took ${clean - start}ms, starting took ${stop - clean}ms") }
               _ <- current.set(Some(State(t, newScope)))
             } yield ()
           }
