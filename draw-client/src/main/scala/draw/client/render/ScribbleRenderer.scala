@@ -15,11 +15,11 @@ object ScribbleRenderer {
   def make = for {
     rendered <- ZIO.service[RenderState]
   } yield new ObjectRenderer[ScribbleState] {
-    override def render(initial: ObjectState[ScribbleState], furtherEvents: Consumeable[ScribbleState]) = for {
-      state <- MultiUpdate.make[ScribbleState]
+    override def render(initial: ObjectState[ScribbleState], furtherEvents: Consumeable[ObjectState[ScribbleState]]) = for {
+      state <- MultiUpdate.make[ObjectState[ScribbleState]]
       res <- {
         def pointData = state { s =>
-          val p = s.points
+          val p = s.body.points
           d := PathData.render(
             p.headOption.map(start => PathData.MoveTo(start.x, start.y)) ++
               p.tail.map(pos => PathData.LineTo(pos.x, pos.y))
@@ -30,7 +30,7 @@ object ScribbleRenderer {
           cls := "scribble",
           id := s"scribble${initial.id}",
           state { s =>
-            val p = s.position
+            val p = s.body.position
             transform.set(s"translate(${p.x},${p.y})")
           },
           path(
@@ -43,7 +43,7 @@ object ScribbleRenderer {
           thisElementAs { element =>
             furtherEvents
               .via(state.pipeline)
-              .tap { state => rendered.notifyRendered(initial.id, state, element) }
+              .tap { state => rendered.notifyRendered(state, element) }
               .consume
           }
         )

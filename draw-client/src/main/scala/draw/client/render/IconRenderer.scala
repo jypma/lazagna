@@ -25,13 +25,13 @@ object IconRenderer {
     rendered <- ZIO.service[RenderState]
     helper <- ZIO.service[SVGHelper]
   } yield new IconRenderer {
-    override def render(initial: ObjectState[IconState], furtherEvents: Consumeable[IconState]) = for {
-      state <- MultiUpdate.make[IconState]
+    override def render(initial: ObjectState[IconState], furtherEvents: Consumeable[ObjectState[IconState]]) = for {
+      state <- MultiUpdate.make[ObjectState[IconState]]
       res <- g(
         id := s"icon${initial.id}",
         cls := "icon editTarget",
         state { s =>
-          val p = s.position
+          val p = s.body.position
           transform.set(s"translate(${p.x},${p.y})")
         },
         g(
@@ -51,20 +51,20 @@ object IconRenderer {
           x := 0,
           y := iconSize / 2,
           state { s =>
-            textContent := s.label
+            textContent := s.body.label
           }
         ),
         thisElementAs { element =>
           furtherEvents
             .via(state.pipeline)
-            .tap { state => rendered.notifyRendered(initial.id, state, element) }
+            .tap { s => rendered.notifyRendered(s, element) }
             .consume
         }
       )
     } yield res
 
     def getBoundingBoxes(id: String) = rendered.objectState(id).collect {
-      case RenderedObject(id, _:IconState, icon, main) =>
+      case RenderedObject(_, icon, main) =>
         val label = Option(icon.querySelector(".label"))
           .filter(!_.innerHTML.isEmpty)
           .map(e => helper.svgBoundingBox(e.asInstanceOf[dom.SVGLocatable], 0))

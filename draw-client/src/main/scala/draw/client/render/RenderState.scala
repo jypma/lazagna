@@ -5,7 +5,6 @@ import zio.lazagna.Consumeable.given
 import zio.stream.ZStream
 import zio.{Hub, Ref, Semaphore, UIO, ZIO, ZLayer}
 
-import draw.data.ObjectStateBody
 import org.scalajs.dom
 import zio.stream.SubscriptionRef
 import zio.Scope
@@ -13,13 +12,19 @@ import zio.lazagna.Setup
 import zio.lazagna.dom.svg.SVGHelper
 import draw.geom.Rectangle
 import zio.durationInt
+import draw.data.ObjectState
 
-case class RenderedObject(id: String, state: ObjectStateBody, element: dom.Element, boundingBox: Rectangle)
+case class RenderedObject(state: ObjectState[_], element: dom.Element, boundingBox: Rectangle) {
+  def id = state.id
+}
 
 trait RenderState {
+  /** Emits a new element for each new object */
   def initialObjectStates: Consumeable[RenderedObject]
   def objectState(id: String): Consumeable[RenderedObject]
-  def notifyRendered(id: String, state: ObjectStateBody, element: dom.Element): UIO[Unit]
+  /** Emits a new element for any state change */
+  def allObjectStates: Consumeable[RenderedObject]
+  def notifyRendered(state: ObjectState[_], element: dom.Element): UIO[Unit]
 
   /** Returns information about an object that might have been clicked to select it */
   def lookupForSelect(event: dom.MouseEvent): UIO[Option[RenderedObject]] = {
@@ -82,6 +87,8 @@ object RenderState {
   } yield new RenderState {
     def selection = selectionRef
 
+    def allObjectStates: Consumeable[RenderedObject] = stateChanges
+
     def initialObjectStates = ZStream.unwrapScoped {
       semaphore.withPermit {
         state.get.map(_.all).flatMap { initial =>
@@ -99,17 +106,17 @@ object RenderState {
       }
     }
 
-    def notifyRendered(id: String, body: ObjectStateBody, element: dom.Element): UIO[Unit] =
-      notifyRendered(id, body, element, 10)
+    def notifyRendered(objState: ObjectState[_], element: dom.Element): UIO[Unit] =
+      notifyRendered(objState, element, 10)
 
-    def notifyRendered(id: String, body: ObjectStateBody, element: dom.Element, retries: Int): UIO[Unit] = {
+    def notifyRendered(objState: ObjectState[_], element: dom.Element, retries: Int): UIO[Unit] = {
       val target = Option(element.querySelector(".selectTarget")).getOrElse(element)
       val bbox = new SVGHelper(element.asInstanceOf[dom.SVGElement].ownerSVGElement).svgBoundingBox(target.asInstanceOf[dom.SVGLocatable], 5)
       if (retries > 0 && bbox.width == 10 && bbox.height == 10) {
         // We're not done rendering yet. Probably a <use> external icon is still being loaded.
-        ZIO.suspendSucceed(notifyRendered(id, body, element, retries - 1)).delay(100.milliseconds)
+        ZIO.suspendSucceed(notifyRendered(objState, element, retries - 1)).delay(100.milliseconds)
       } else {
-        val rendered = RenderedObject(id, body, element, bbox)
+        val rendered = RenderedObject(objState, element, bbox)
 
         semaphore.withPermit {
           state.modify { s =>

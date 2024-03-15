@@ -14,7 +14,7 @@ import zio.stream.SubscriptionRef
 import zio.{URIO, ZIO}
 
 import draw.client.Drawing
-import draw.client.render.{RenderState, DrawingRenderer, RenderedObject}
+import draw.client.render.{RenderState, DrawingRenderer}
 import draw.data.drawcommand.{DeleteObject, DrawCommand, MoveObject}
 import draw.geom.Point
 import draw.data.{IconState, Moveable}
@@ -23,6 +23,7 @@ import org.scalajs.dom
 import DrawingRenderer.{iconSize}
 import draw.data.drawcommand.LabelObject
 import draw.data.SymbolRef
+import draw.data.ObjectState
 
 object SelectTool {
   private case class State(selection: Set[(String, Moveable)], dragStart: Point)
@@ -124,8 +125,8 @@ object SelectTool {
       onMouseDown(_
         .filter { e => (e.buttons & 1) != 0 }
         .tap(handleSelect)
-        .zip(renderState.currentSelectionState.map { _.collect {
-          case RenderedObject(id, state:Moveable, _, bbox) =>
+        .zip(renderState.currentSelectionState.map { _.map(_.state).collect {
+          case ObjectState(id,_,_,state:Moveable) =>
             (id, state)
         }})
         .collectF {

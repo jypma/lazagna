@@ -12,11 +12,12 @@ import zio.stream.SubscriptionRef
 import zio.{URIO, ZIO}
 
 import draw.client.Drawing
-import draw.client.render.{DrawingRenderer, RenderState, RenderedObject}
+import draw.client.render.{DrawingRenderer, RenderState}
 import draw.data.IconState
 import draw.data.drawcommand.{DrawCommand, LabelObject}
 
 import DrawingRenderer.{iconSize}
+import draw.data.ObjectState
 
 object LabelTool {
   def make(drawing: Drawing, dialogs: Children, keyboard: Children): URIO[RenderState, Modifier[Unit]] = for {
@@ -56,8 +57,8 @@ object LabelTool {
       onMouseDown(_
         .filter(_.button == 0)
         .flatMap { e =>
-          renderState.lookupForEdit(e).flatMap(o => selected.set(o.collect {
-            case RenderedObject(id, state:IconState, _, _) => (id, state)
+          renderState.lookupForEdit(e).flatMap(o => selected.set(o.map(_.state).collect {
+            case ObjectState(id,_,_,state:IconState) => (id, state)
           }))
         }
       )

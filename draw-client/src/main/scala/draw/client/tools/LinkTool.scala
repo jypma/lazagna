@@ -18,6 +18,7 @@ import draw.geom.Point
 import org.scalajs.dom
 
 import DrawingRenderer.{ObjectTarget}
+import draw.data.ObjectState
 
 object LinkTool {
   case class State(srcId: String, srcPos: Point, pos: dom.SVGPoint, dst: Option[ObjectTarget])
@@ -38,8 +39,8 @@ object LinkTool {
       },
       onMouseDown(_
         .filter(_.button == 0)
-        .flatMap(e => renderState.lookupForSelect(e).map((e, _)))
-        .collectF { case (e, Some(RenderedObject(id, IconState(pos, _, _), _, _))) => (e, id, pos) }
+        .flatMap(e => renderState.lookupForSelect(e).map(s => (e, s.map(_.state))))
+        .collectF { case (e, Some(ObjectState(id,_,_,IconState(pos, _, _)))) => (e, id, pos) }
         .flatMap { (e, srcId, srcPos) =>
           val pos = helper.screenToSvg(e)
           state.set(Some(State(srcId, srcPos, pos, None)))
@@ -60,7 +61,6 @@ object LinkTool {
         .collectF { case (Some(obj), s) if s.srcId != obj.id => (obj, s) } // No link to self!
         .zip(DrawingTools.makeUUID)
         .flatMap((obj, s, id) => {
-          println("From " + s.srcId + " to " + obj)
           drawing.perform(DrawCommand(CreateLink(id, s.srcId, obj.id, None, None)))
         })
       )

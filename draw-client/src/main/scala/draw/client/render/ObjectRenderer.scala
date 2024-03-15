@@ -7,5 +7,5 @@ import draw.data.{ObjectState, ObjectStateBody}
 import org.scalajs.dom
 
 trait ObjectRenderer[T <: ObjectStateBody] {
-  def render(initial: ObjectState[T], furtherEvents: Consumeable[T]): Modifier[dom.SVGElement]
+  def render(initial: ObjectState[T], furtherEvents: Consumeable[ObjectState[T]]): Modifier[dom.SVGElement]
 }

@@ -17,7 +17,7 @@ object LinkRenderer {
     renderState <- ZIO.service[RenderState]
     iconRenderer <- ZIO.service[IconRenderer]
   } yield new ObjectRenderer[LinkState] {
-    override def render(initial: ObjectState[LinkState], furtherEvents: Consumeable[LinkState]) = for {
+    override def render(initial: ObjectState[LinkState], furtherEvents: Consumeable[ObjectState[LinkState]]) = for {
       pointsUpdate <- MultiUpdate.make[String]
       res <- {
         val srcBoxes = iconRenderer.getBoundingBoxes(initial.body.src)
@@ -55,7 +55,7 @@ object LinkRenderer {
             }
           ),
           thisElementAs { element =>
-            points.via(pointsUpdate.pipeline).tap(_ => renderState.notifyRendered(initial.id, initial.body, element)).consume
+            points.via(pointsUpdate.pipeline).tap(_ => renderState.notifyRendered(initial, element)).consume
           }
         )
       }

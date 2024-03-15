@@ -1,6 +1,5 @@
 package zio.lazagna
 
-import zio.lazagna.dom.Modifier
 import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Dequeue, Hub, Promise, Scope, ZIO}
 

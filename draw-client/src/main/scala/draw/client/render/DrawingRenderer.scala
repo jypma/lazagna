@@ -20,7 +20,7 @@ import org.scalajs.dom
 import Drawing._
 
 trait DrawingRenderer {
-  def render: Modifier[dom.HTMLElement]
+  def render: Modifier[Any]
 }
 
 object DrawingRenderer {
@@ -51,8 +51,6 @@ object DrawingRenderer {
     } yield new DrawingRenderer {
       println("Rendering up to event " + drawing.initialVersion + " in background.")
       val start = System.currentTimeMillis()
-      var eventCountDebug = 0
-      var switchedReady = false
 
       def render = {
         val svgMain = div(
@@ -72,21 +70,21 @@ object DrawingRenderer {
                   iconR <- IconRenderer.make.provide(deps)
                   linkR <- LinkRenderer.make.provide(deps, ZLayer.succeed(iconR))
                   children <- Children.make
-                  _ <- drawing.initialObjectStates.tap(switchWhenReady).mapZIO { initial =>
-                    val furtherEvents = drawing.objectState(initial.id).tap(switchWhenReady).takeUntil(_.deleted).map(_.body)
+                  _ <- drawing.initialObjectStates.mapZIO { initial =>
+                    val furtherEvents = drawing.objectState(initial.id).takeUntil(_.deleted)
                     children.child { destroy =>
                       g(
                         cls <-- renderState.selection.map { s => if (s.contains(initial.id)) "selected" else "" },
                         drawing.objectState(initial.id).filter(_.deleted).mapZIO(_ => destroy).take(1).consume,
                         initial.body match {
                           case _:ScribbleState =>
-                            scribbleR.render(initial.asInstanceOf[ObjectState[ScribbleState]], furtherEvents.asInstanceOf[Consumeable[ScribbleState]])
+                            scribbleR.render(initial.asInstanceOf[ObjectState[ScribbleState]], furtherEvents.asInstanceOf[Consumeable[ObjectState[ScribbleState]]])
 
                           case _:IconState =>
-                            iconR.render(initial.asInstanceOf[ObjectState[IconState]], furtherEvents.asInstanceOf[Consumeable[IconState]])
+                            iconR.render(initial.asInstanceOf[ObjectState[IconState]], furtherEvents.asInstanceOf[Consumeable[ObjectState[IconState]]])
 
                           case _:LinkState =>
-                            linkR.render(initial.asInstanceOf[ObjectState[LinkState]], furtherEvents.asInstanceOf[Consumeable[LinkState]])
+                            linkR.render(initial.asInstanceOf[ObjectState[LinkState]], furtherEvents.asInstanceOf[Consumeable[ObjectState[LinkState]]])
                         }
                       )
                     }
@@ -111,19 +109,22 @@ object DrawingRenderer {
           )
         )
 
-        Alternative.showOne(currentView.merge(drawing.connectionStatus.collect {
-          case Drawing.Disconnected => 2
-        }), alternatives, Some(initialView))
-      }
-
-      def switchWhenReady(state: ObjectState[_]) = {
-        eventCountDebug += 1
-        if (switchedReady || (state.sequenceNr < drawing.initialVersion)) ZIO.unit else {
-          switchedReady = true
-          val time = System.currentTimeMillis() - start
-          println(s"Processed ${eventCountDebug} events, until sequence nr ${drawing.initialVersion}, in ${time}ms")
-          currentView.set(1)
-        }
+        var eventCountDebug = 0
+        var switchedReady = false
+        Modifier.all(
+          Alternative.showOne(currentView.merge(drawing.connectionStatus.collect {
+            case Drawing.Disconnected => 2
+          }), alternatives, Some(initialView)),
+          renderState.allObjectStates.tap { s =>
+            eventCountDebug += 1
+            if (switchedReady || (s.state.sequenceNr < drawing.initialVersion)) ZIO.unit else {
+              switchedReady = true
+              val time = System.currentTimeMillis() - start
+              println(s"Processed ${eventCountDebug} events, until sequence nr ${drawing.initialVersion}, in ${time}ms")
+              currentView.set(1)
+            }
+          }.takeUntil(_.state.sequenceNr >= drawing.initialVersion).consume
+        )
       }
     }
   }
