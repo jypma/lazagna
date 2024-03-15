@@ -17,6 +17,10 @@ html {
     background-color: var(--bg-color);
 }
 
+svg {
+    background: var(--bg-color);
+}
+
 body {
     margin: 0;
 }

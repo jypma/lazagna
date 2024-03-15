@@ -8,6 +8,7 @@ import draw.data.SymbolRef
 import org.scalajs.dom
 
 import scalajs.js
+import draw.client.render.RenderState
 
 trait Exporter {
   def triggerExport: ZIO[Any, RequestError, Unit]
@@ -17,17 +18,18 @@ object Exporter {
   def make(svg: dom.svg.SVG) = {
     for {
       drawing <- ZIO.service[Drawing]
+      renderState <- ZIO.service[RenderState]
     } yield new Exporter {
       def triggerExport: ZIO[Any, RequestError, Unit] = {
         val symbols = svg.querySelectorAll("g.icon use").map(_.getAttribute("href")).flatMap(SymbolRef.parse).toSet
         for {
+          _ <- renderState.selection.set(Set.empty)
           svgSymbols <- ZIO.collectAll(symbols.map(_.category).map { category =>
             GET(AsDocument, category.href).map((category, _))
           })
-          theme <- GET(AsString, "/theme-green.css")
+          theme <- GET(AsString, "/theme-green.css") // TODO: Use querySelectorAll("html > head > style")(1), so we actually apply the current theme.
         } yield {
-          // FIXME: Only use drawing viewport here
-          val viewBox = Drawing.Viewport.fit(svg.getBBox()).toSvgViewBox
+          val viewBox = Drawing.Viewport.fit(svg.querySelector(".drawing").asInstanceOf[dom.SVGLocatable].getBBox(), 1.333).toSvgViewBox(1.333)
 
           val icons = symbols.flatMap { s =>
             svgSymbols.find(_._1 == s.category)
@@ -39,11 +41,14 @@ object Exporter {
           // so we'll apply a fixed theme.
           val cssVars = (for {
              m <- "(--.*?):(.*?);".r.findAllMatchIn(theme)
-          } yield (m.group(1), m.group(2))).toSeq
-          println(cssVars)
-          val style = cssVars.foldLeft(dom.document.querySelector("html > head > style").innerHTML) { case (s, (key, value)) =>
+          } yield (m.group(1), m.group(2).trim())).toSeq
+          val bgColor = cssVars.toMap.getOrElse("--bg-color", "#FFFFFF")
+
+          val style = cssVars.foldLeft(dom.document.querySelectorAll("html > head > style").map(_.innerHTML).mkString("\n")) { case (s, (key, value)) =>
             s.replace(s"var($key)", value)
-          }
+          }.replaceAll("--.*?;", "") // Remove the variable declarations themselves, now that we've replaced everything.
+            // TODO: Use proper SVG filters and export them
+            .replaceAll("filter:.*?;\n", "\n") // Inkscape doesn't do CSS filters anyway.
 
           // Inkscape doesn't understand rgba() either, so we'll do hex values instead.
           // https://gitlab.com/inkscape/inbox/-/issues/1195
@@ -54,13 +59,15 @@ object Exporter {
             s"#$r$g$b"
           })
 
-          // FIXME: Remove selection crosshair
-          // FIXME: For all text, add direct styling for inkscape (or investigate CSS more):
-          // style="-inkscape-font-specification:'Indie Flower';font-family:'Indie Flower';font-weight:normal;font-style:normal;font-stretch:normal;font-variant:normal"
           val data = new dom.XMLSerializer().serializeToString(svg)
             .replaceFirst("viewBox=\"(.*?)\"", s"viewBox=\"${viewBox}\"")
+            .replaceFirst("<svg(.*?)>", "<svg$1 xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\" xmlns:sodipodi=\"http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd\">\n" +
+              s"""<sodipodi:namedview id="namedview44" pagecolor="${bgColor}" inkscape:export-bgcolor="${bgColor}FF"/>""")
             .replace("<style/>", s"<style>${style2}</style>${icons}")
             .replaceAll("<use href=\"/symbols/(.*?)\\.svg#", "<use href=\"#")
+            .replaceAll("indie_flowerregular", "Indie Flower") // TTF font name is different from OTF
+
+          // We now have proper background, but command-line inkscape ignores the document background when exporting. It'll need to be explicitly set.
 
           val options = new dom.BlobPropertyBag {}
           options.`type` = "image/svg+xml;charset=utf-8"

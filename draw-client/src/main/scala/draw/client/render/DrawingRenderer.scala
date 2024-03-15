@@ -1,7 +1,6 @@
 package draw.client.render
 
 import zio.lazagna.Consumeable
-import zio.lazagna.Consumeable._
 import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.svgtags._
@@ -60,7 +59,7 @@ object DrawingRenderer {
           svg(
             svgStyleTag(), // No direct style here, stuff is added here when exporting.
             cls <-- drawingTools.currentToolName.map(t => s"main tool-${t}"),
-            viewBox <-- drawing.viewport.map(_.toSvgViewBox),
+            viewBox <-- drawing.viewport.map(_.toSvgViewBox()),
             overflow := "hidden",
             tabindex := 0, // To enable keyboard events
             focusNow, // To allow dragging immediately

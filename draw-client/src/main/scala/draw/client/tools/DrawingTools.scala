@@ -22,6 +22,7 @@ import draw.data.SymbolRef
 import draw.data.drawcommand.{ContinueScribble, CreateIcon, DrawCommand, StartScribble}
 import draw.data.point.Point
 import org.scalajs.dom
+import draw.client.render.RenderState
 
 trait DrawingTools {
   def renderKeyboard: Modifier[dom.Element]
@@ -135,10 +136,11 @@ object DrawingTools {
 
   private def commonTools(drawing: Drawing, keyboard: Children, selectedTool: SubscriptionRef[Tool], tools:Seq[Tool]) = for {
     dragStart <- Ref.make(Point(0,0))
+    renderState <- ZIO.service[RenderState]
   } yield {
     SVGHelper { helper =>
       for {
-        exporter <- Exporter.make(helper.svg).provideLayer(ZLayer.succeed(drawing))
+        exporter <- Exporter.make(helper.svg).provide(ZLayer.succeed(drawing), ZLayer.succeed(renderState))
         _ <- Modifier.combine(
           onMouseDown(_
             .filter { e => (e.buttons & 4) != 0 }

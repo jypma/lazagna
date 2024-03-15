@@ -44,15 +44,21 @@ object Drawing {
     }
 
     /** Renders this Viewport as an SVG tag "viewBox" attribute value */
-    def toSvgViewBox: String = {
+    def toSvgViewBox(aspectRatio: Double = windowAspectRatio): String = {
       s"${left} ${top} ${factor * 1000.0} ${factor / aspectRatio * 1000.0}"
     }
   }
 
   object Viewport {
-    private def aspectRatio = dom.window.innerWidth / dom.window.innerHeight
+    private def windowAspectRatio = dom.window.innerWidth / dom.window.innerHeight
 
-    def fit(rect: dom.SVGRect): Viewport = {
+    def fit(rect: dom.SVGRect, aspectRatio: Double = windowAspectRatio): Viewport = {
+      // Add a bit of margin
+      rect.x -= 20
+      rect.y -= 20
+      rect.width += 40
+      rect.height += 40
+
       val xFactor = rect.width / 1000.0
       val yFactor = rect.height / (1000.0 / aspectRatio)
       val factor = Math.max(0.1, Math.max(xFactor, yFactor))

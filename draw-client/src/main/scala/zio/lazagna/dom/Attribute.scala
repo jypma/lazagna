@@ -19,6 +19,7 @@ case class Attribute(name: String) {
   def :=(value: String): Modifier[Unit] = set(value)
   def set(value: String): Modifier[Unit] = Modifier { parent =>
     ZIO.succeed {
+      // FIXME: Consider removing the attribute when scope ends, if it wasn't set before
       parent.setAttribute(name, value)
     }
   }
@@ -119,4 +120,5 @@ object Attribute {
   val overflow = Attribute("overflow")
   val preserveAspectRatio = Attribute("preserveAspectRatio")
   val transform = Attribute("transform")
+  val visibility = Attribute("visibility")
 }

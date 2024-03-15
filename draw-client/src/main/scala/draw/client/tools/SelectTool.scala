@@ -60,8 +60,8 @@ object SelectTool {
       g(
         cls := "selection-crosshair",
         renderState.selectionBoundingBox.mapZIO { box =>
-          val pos = box.map(_.middle).getOrElse(Point(-100000,100000))
-          transform := s"translate(${pos.x},${pos.y})"
+          val pos = box.map(_.middle).getOrElse(Point(100,100))
+          (transform := s"translate(${pos.x},${pos.y})") *> (visibility := (if (box.isEmpty) "hidden" else "visible"))
         }.consume,
         use(
           href := SymbolRef.plus.href,
