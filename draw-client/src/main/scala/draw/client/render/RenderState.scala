@@ -3,7 +3,7 @@ package draw.client.render
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable.given
 import zio.stream.ZStream
-import zio.{Hub, Ref, Semaphore, UIO, ZIO, ZLayer}
+import zio.{Hub, Semaphore, UIO, ZIO, ZLayer}
 
 import org.scalajs.dom
 import zio.stream.SubscriptionRef
@@ -37,12 +37,16 @@ trait RenderState {
   }
 
   /** The set of currently selected object IDs */
-  def selection: SubscriptionRef[Set[String]]
+  def selectionIds: Consumeable[Set[String]]
+  def selectAlso(ids: Set[String]): UIO[Unit]
+  def unselect(ids: Set[String]): UIO[Unit]
+  def selectOnly(ids: Set[String]): UIO[Unit]
+  def selection: Consumeable[Set[RenderedObject]]
 
   def selectionBoundingBox: Consumeable[Option[Rectangle]]
 
   def currentSelectionState: ZIO[Scope & Setup, Nothing, Set[RenderedObject]] =
-    selection.get.flatMap(s => ZIO.collectAll(s.map(id => objectState(id).runHead))).map(_.flatten)
+    selection.runHead.map(_.toSet.flatten)
 
   protected def getTargetObject(event: dom.MouseEvent, className: String): UIO[Option[RenderedObject]]
 
@@ -52,7 +56,8 @@ trait RenderState {
 object RenderState {
   private case class State(
     val byId: Map[String, RenderedObject] = Map.empty,
-    val byElement: Map[dom.Element, RenderedObject] = Map.empty
+    val byElement: Map[dom.Element, RenderedObject] = Map.empty,
+    val selection: Set[String] = Set.empty
   ) {
     def all: Seq[RenderedObject] = byId.values.toSeq
 
@@ -76,16 +81,21 @@ object RenderState {
       }
       Option.when(isselectTarget)(elem).flatMap(byElement.get)
     }
+
+    def selected: Set[RenderedObject] = selection.map(byId.get).collect { case Some(o) => o }
   }
 
   def make = for {
-    state <- Ref.make(State())
+    state <- SubscriptionRef.make(State())
     semaphore <- Semaphore.make(1)
     stateChanges <- Hub.bounded[RenderedObject](16)
     newObjects <- Hub.bounded[RenderedObject](16)
-    selectionRef <- SubscriptionRef.make(Set.empty[String])
   } yield new RenderState {
-    def selection = selectionRef
+    def selectionIds: Consumeable[Set[String]] = state.map(_.selection).changes
+    def selectAlso(ids: Set[String]): UIO[Unit] = state.update(s => s.copy(selection = s.selection ++ ids))
+    def unselect(ids: Set[String]): UIO[Unit] = state.update(s => s.copy(selection = s.selection -- ids))
+    def selectOnly(ids: Set[String]): UIO[Unit] = state.update(_.copy(selection = ids))
+    def selection: Consumeable[Set[RenderedObject]] = state.map(_.selected)
 
     def allObjectStates: Consumeable[RenderedObject] = stateChanges
 
@@ -138,25 +148,22 @@ object RenderState {
         .flatMap { e => s.lookupParent(e, className) }
     }
 
-    def selectionBoundingBox =
-      // We also update the bounding box whenever there's a state change (since that might have consequences)
-      selectionRef.zipLatest(stateChanges).mapZIO { (ids, _) =>
-        state.get.map { s => ids.toSeq.map(s.byId) }
-      }.map { selectedObjects =>
-        if (selectedObjects.isEmpty) None else Some(
-          selectedObjects.tail.foldLeft(selectedObjects.head.boundingBox)(_ union _.boundingBox)
-        )
-      }
+    // We also update the bounding box whenever there's a state change (since that might have consequences)
+    // TODO: Remember bounding boxes of objects, so we don't have to use the DOM on just moving them
+    def selectionBoundingBox = selection.map { selectedObjects =>
+      if (selectedObjects.isEmpty) None else Some(
+        selectedObjects.tail.foldLeft(selectedObjects.head.boundingBox)(_ union _.boundingBox)
+      )
+    }
 
     def expandSelection(direction: Double => Boolean): UIO[Option[RenderedObject]] = for {
-      selected <- selection.get
       objects <- state.get
     } yield {
-      if (selected.isEmpty) objects.all.headOption else {
-        val selectedObjects = selected.map(objects.byId).toSeq
+      if (objects.selected.isEmpty) objects.all.headOption else {
+        val selectedObjects = objects.selected.toSeq
         val origin = selectedObjects.tail.foldLeft(selectedObjects.head.boundingBox)(_ union _.boundingBox).middle
 
-        val candidates = (objects.byId.keySet -- selected).map(objects.byId).filter { c =>
+        val candidates = (objects.byId.keySet -- objects.selection).map(objects.byId).filter { c =>
           val angle = c.boundingBox.middle.to(origin).angle
           direction(angle)
         }

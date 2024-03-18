@@ -6,6 +6,7 @@ import zio.stream.ZStream
 import zio.{Hub, IO, Ref, Semaphore, UIO}
 
 import org.scalajs.dom
+import zio.ZIO
 
 
 /** An EventStore implementation that caches events in memory. */
@@ -108,8 +109,10 @@ object CachedEventStore {
 
       def events = eventsAfter(0)
 
-      def publish(event: E): IO[Err, Unit] = semaphore.withPermit {
-        state.update(_.publish(event)) <* store.publish(event) <* hub.publish(event)
+      def publish(event: E): IO[Err, Unit] = {
+        semaphore.withPermit {
+          state.update(_.publish(event)) *> store.publish(event) *> hub.publish(event).unit
+        }
       }
 
       def latestSequenceNr: IO[Err, Long] = store.latestSequenceNr

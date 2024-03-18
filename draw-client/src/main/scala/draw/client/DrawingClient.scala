@@ -20,6 +20,7 @@ import org.scalajs.dom
 import scalajs.js.typedarray._
 import scalajs.js
 import DrawingClient._
+import draw.data.drawevent.ObjectMoved
 
 trait DrawingClient {
   def login(user: String, password: String, drawingId: UUID): ZIO[Scope, ClientError | RequestError, Drawing]
@@ -35,6 +36,11 @@ object DrawingClient {
     private def ws = if (tls) "wss" else "ws"
     def baseUrl = s"${http}://${server}:${port}/${path}"
     def baseWs = s"${ws}://${server}:${port}/${path}"
+  }
+
+  def isUpdate(a: DrawEvent, b: DrawEvent) = (a.body, b.body) match {
+    case (ObjectMoved(id1, _, _), ObjectMoved(id2, Some(_), _)) if id1 == id2 => true
+    case _ => false
   }
 
   val configTest = ZLayer.succeed {
@@ -53,6 +59,12 @@ object DrawingClient {
       stateChanges <- Hub.bounded[ObjectState[_]](16)
       newObjects <- Hub.bounded[ObjectState[_]](16)
       latencyHub <- Hub.bounded[Long](1)
+      eventFilter <- EventFilter.make { (e: DrawEvent) =>
+        store.publish(e).catchAll { err => ZIO.succeed {
+          dom.console.log("Error publishing " + e)
+          dom.console.log(err)
+        }}
+      }(isUpdate)
     } yield new DrawingClient {
       var lastCommandTime: Long = 0
 
@@ -77,10 +89,7 @@ object DrawingClient {
               if (event.sequenceNr <= latestInStore) {
                 println(s"WARN: Event not later than requested sequencrNr $latestSeen: $event")
               }
-              store.publish(event).catchAll { err => ZIO.succeed {
-                dom.console.log("Error publishing " + event)
-                dom.console.log(err)
-              }}
+              eventFilter.publish(event)
             case _ => ZIO.unit
           }
         }, onClose = connStatus.set(Drawing.Disconnected))

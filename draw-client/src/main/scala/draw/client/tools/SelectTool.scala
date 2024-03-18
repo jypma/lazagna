@@ -37,11 +37,11 @@ object SelectTool {
   } yield SVGHelper { helper =>
     def doSelect(targets: Set[String]) = addToSelection.get.zip(removeFromSelection.get).flatMap { (adding, removing) =>
       if (adding) {
-        renderState.selection.update(_ ++ targets)
+        renderState.selectAlso(targets)
       } else if (removing) {
-        renderState.selection.update(_ -- targets)
+        renderState.unselect(targets)
           } else {
-        renderState.selection.set(targets)
+        renderState.selectOnly(targets)
       }
     }
 
@@ -153,13 +153,16 @@ object SelectTool {
           })
         }
       ),
+      onMouseUp(_
+        .tap(_ => state.set(None))
+      ),
       keyboard.child { _ =>
         DrawingTools.keyboardToggle("a", "Add to sticky selection", addToSelection, b => removeFromSelection.set(false).when(b))
       },
       keyboard.child { _ =>
         DrawingTools.keyboardToggle("r", "Remove from sticky selection", removeFromSelection, b => addToSelection.set(false).when(b))
       },
-      Alternative.mountOne(renderState.selection) {
+      Alternative.mountOne(renderState.selectionIds) {
         case selection if !(selection.isEmpty) =>
           keyboard.child { _ =>
             DrawingTools.keyboardAction("Delete", "Delete items",

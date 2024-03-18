@@ -23,7 +23,7 @@ object Exporter {
       def triggerExport: ZIO[Any, RequestError, Unit] = {
         val symbols = svg.querySelectorAll("g.icon use").map(_.getAttribute("href")).flatMap(SymbolRef.parse).toSet
         for {
-          _ <- renderState.selection.set(Set.empty)
+          _ <- renderState.selectOnly(Set.empty)
           svgSymbols <- ZIO.collectAll(symbols.map(_.category).map { category =>
             GET(AsDocument, category.href).map((category, _))
           })

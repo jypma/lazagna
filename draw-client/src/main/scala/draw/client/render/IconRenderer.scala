@@ -14,6 +14,7 @@ import draw.geom.Rectangle
 import org.scalajs.dom
 
 import DrawingRenderer.iconSize
+import zio.Chunk
 
 trait IconRenderer extends ObjectRenderer[IconState] {
   /** Returns the icon and (optional) label bounding boxes, updating as the icon is edited */
@@ -26,12 +27,12 @@ object IconRenderer {
     helper <- ZIO.service[SVGHelper]
   } yield new IconRenderer {
     override def render(initial: ObjectState[IconState], furtherEvents: Consumeable[ObjectState[IconState]]) = for {
-      state <- MultiUpdate.make[ObjectState[IconState]]
+      state <- MultiUpdate.make[Chunk[ObjectState[IconState]]]
       res <- g(
         id := s"icon${initial.id}",
         cls := "icon editTarget",
         state { s =>
-          val p = s.body.position
+          val p = s.last.body.position
           transform.set(s"translate(${p.x},${p.y})")
         },
         g(
@@ -51,13 +52,16 @@ object IconRenderer {
           x := 0,
           y := iconSize / 2,
           state { s =>
-            textContent := s.body.label
+            textContent := s.last.body.label
           }
         ),
         thisElementAs { element =>
           furtherEvents
+            .bufferUnbounded
+            .chunks
+            .filter(!_.isEmpty)
             .via(state.pipeline)
-            .tap { s => rendered.notifyRendered(s, element) }
+            .tap { s => rendered.notifyRendered(s.last, element) }
             .consume
         }
       )
