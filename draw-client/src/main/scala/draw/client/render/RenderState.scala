@@ -13,6 +13,7 @@ import zio.lazagna.dom.svg.SVGHelper
 import draw.geom.Rectangle
 import zio.durationInt
 import draw.data.ObjectState
+import zio.Ref
 
 case class RenderedObject(state: ObjectState[_], element: dom.Element, boundingBox: Rectangle) {
   def id = state.id
@@ -55,6 +56,7 @@ object RenderState {
   private case class State(
     val byId: Map[String, RenderedObject] = Map.empty,
     val byElement: Map[dom.Element, RenderedObject] = Map.empty,
+    val hubs: Map[String, Hub[RenderedObject]] = Map.empty
   ) {
     def all: Seq[RenderedObject] = byId.values.toSeq
 
@@ -130,20 +132,30 @@ object RenderState {
 
     def objectState(id: String) = ZStream.unwrapScoped {
       semaphore.withPermit {
-        state.get.map(_.get(id).toSeq)
-          .map(ZStream.fromIterable(_) ++ stateChanges.filter(_.id == id))
+        hub(id).flatMap { hub =>
+          state.get
+            .map(_.get(id).toSeq)
+            .map(ZStream.fromIterable(_) ++ hub)
+        }
       }
     }
 
+    private def hub(id: String) = state.updateSomeAndGetZIO {
+      case s if !s.hubs.contains(id) =>
+        Hub.bounded[RenderedObject](16).map { hub =>
+          s.copy(hubs = s.hubs + (id -> hub))
+        }
+    }.map(_.hubs(id))
+
     def notifyRendered(objState: ObjectState[_], element: dom.Element): UIO[Unit] =
-      notifyRendered(objState, element, 10)
+      notifyRendered(objState, element, 20)
 
     def notifyRendered(objState: ObjectState[_], element: dom.Element, retries: Int): UIO[Unit] = {
       val target = Option(element.querySelector(".selectTarget")).getOrElse(element)
       val bbox = new SVGHelper(element.asInstanceOf[dom.SVGElement].ownerSVGElement).svgBoundingBox(target.asInstanceOf[dom.SVGLocatable], 5)
       if (retries > 0 && bbox.width == 10 && bbox.height == 10) {
         // We're not done rendering yet. Probably a <use> external icon is still being loaded.
-        ZIO.suspendSucceed(notifyRendered(objState, element, retries - 1)).delay(100.milliseconds)
+        ZIO.suspendSucceed(notifyRendered(objState, element, retries - 1)).delay(250.milliseconds)
       } else {
         if (bbox.width == 10 && bbox.height == 10) {
           println(s"Warning, ${objState.id} did not render in time.")
@@ -155,7 +167,9 @@ object RenderState {
             val existing = s.get(rendered.id)
             (existing.isEmpty, s + rendered)
           }.flatMap { isNew =>
-            newObjects.publish(rendered).when(isNew) *> stateChanges.publish(rendered).unit
+            hub(rendered.id).flatMap { hub =>
+              newObjects.publish(rendered).when(isNew) *> stateChanges.publish(rendered) *> hub.publish(rendered).unit
+            }
           }
         }
       }
