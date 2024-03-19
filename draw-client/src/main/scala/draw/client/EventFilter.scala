@@ -13,9 +13,22 @@ object EventFilter {
   private case class State[E](
     busy: Boolean = false,
     queue: Chunk[E] = Chunk.empty
-  )
+  ) {
+    // precondition: queue is not empty
+    def mergeAndEmit(merge: (E,E) => Option[E]): (State[E], E) = {
+      if (queue.size == 1) {
+        (copy(queue = Chunk.empty), queue.head)
+      } else merge(queue(0), queue(1)) match {
+        case None =>
+          (copy(queue = queue.tail), queue.head)
+        case Some(merged) =>
+          println("Merged an event.")
+          copy(queue = merged +: queue.drop(2)).mergeAndEmit(merge)
+      }
+    }
+  }
 
-  def make[E](emit: E => ZIO[Any, Nothing, Unit])(isUpdate: (E,E) => Boolean) = for {
+  def make[E](emit: E => ZIO[Any, Nothing, Unit])(mergeFn: (E,E) => Option[E]) = for {
     scope <- ZIO.scope
     state <- Ref.make(State[E]())
     semaphore <- Semaphore.make(1)
@@ -24,14 +37,10 @@ object EventFilter {
       state.get.flatMap {
         case s@State(_, q) if q.isEmpty =>
           state.set(s.copy(busy = false))
-        case s@State(_, q) =>
-          var queue = q
-          while (queue.size > 1 && isUpdate(queue(0), queue(1))) {
-            //println("Filtering an event.")
-            queue = queue.tail
-          }
+        case s =>
+          val (newState, e) = s.mergeAndEmit(mergeFn)
           // We need to re-fork on emit to release the semaphore.
-          state.set(s.copy(queue = queue.tail)) <* (emit(queue.head) *> emitQueue).forkIn(scope)
+          state.set(newState) <* (emit(e) *> emitQueue).forkIn(scope)
       }
     }
 

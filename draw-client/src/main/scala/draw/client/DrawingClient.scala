@@ -21,6 +21,7 @@ import scalajs.js.typedarray._
 import scalajs.js
 import DrawingClient._
 import draw.data.drawevent.ObjectMoved
+import draw.data.drawevent.ScribbleContinued
 
 trait DrawingClient {
   def login(user: String, password: String, drawingId: UUID): ZIO[Scope, ClientError | RequestError, Drawing]
@@ -38,9 +39,12 @@ object DrawingClient {
     def baseWs = s"${ws}://${server}:${port}/${path}"
   }
 
-  def isUpdate(a: DrawEvent, b: DrawEvent) = (a.body, b.body) match {
-    case (ObjectMoved(id1, _, _), ObjectMoved(id2, Some(_), _)) if id1 == id2 => true
-    case _ => false
+  def merge(a: DrawEvent, b: DrawEvent) = (a.body, b.body) match {
+    case (ObjectMoved(id1, _, _), ObjectMoved(id2, Some(_), _)) if id1 == id2 =>
+      Some(b)
+    case (ScribbleContinued(id1, points1, _), ScribbleContinued(id2, points2, _)) if id1 == id2 =>
+      Some(b.copy(body = ScribbleContinued(id2, points1 ++ points2)))
+    case _ => None
   }
 
   val configTest = ZLayer.succeed {
@@ -64,7 +68,7 @@ object DrawingClient {
           dom.console.log("Error publishing " + e)
           dom.console.log(err)
         }}
-      }(isUpdate)
+      }(merge)
     } yield new DrawingClient {
       var lastCommandTime: Long = 0
 

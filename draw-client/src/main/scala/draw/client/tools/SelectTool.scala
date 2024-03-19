@@ -113,9 +113,9 @@ object SelectTool {
             )
           }
       },
-      Alternative.mountOne(state) {
-        _.flatMap(_.selection.headOption) match {
-          case Some((id, icon:IconState)) =>
+      Alternative.mountOne(renderState.selection) {
+        _.headOption.map(_.state) match {
+          case Some(ObjectState(id,_,_,icon:IconState)) =>
             keyboard.child { _ =>
               DrawingTools.keyboardAction("t", "Edit label", editingLabel.set(Some(id, icon)))
             }

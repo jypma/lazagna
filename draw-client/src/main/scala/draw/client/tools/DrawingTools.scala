@@ -185,6 +185,8 @@ object DrawingTools {
     }
   }
 
+  var lastPencil: Long = 0
+  var pencilTimes: Seq[Long] = Seq.empty
   def pencil(drawing: Drawing): Modifier[Unit] = for {
     currentScribbleId <- Ref.make[Option[String]](None)
     startPoint <- Ref.make[Option[Point]](None)
@@ -208,6 +210,12 @@ object DrawingTools {
           .collectF { case (id, ev, count) if count < 200 => (id, ev) }
           .flatMap((id, ev) => startPoint.get.map((id, _, ev)))
           .flatMap { (id, start, event) =>
+            val now = System.currentTimeMillis()
+            if (lastPencil != 0) {
+              pencilTimes = (pencilTimes :+ (now - lastPencil)).takeRight(20)
+              //println("p:" + pencilTimes.sum / pencilTimes.size)
+            }
+            lastPencil = now
             val pos = helper.screenToSvg(event)
             val point = Point(pos.x, pos.y)
 
