@@ -14,15 +14,14 @@ import zio.lazagna.dom.svg.SVGHelper
 import zio.lazagna.dom.{Alternative, Children, Element, Modifier}
 import zio.stream.SubscriptionRef
 import zio.{Clock, Hub, Random, Ref, Scope, UIO, ZIO, ZLayer}
-import zio.durationInt
 
 import draw.client.Drawing._
+import draw.client.render.RenderState
 import draw.client.{Drawing, SymbolIndex}
 import draw.data.SymbolRef
 import draw.data.drawcommand.{ContinueScribble, CreateIcon, DrawCommand, StartScribble}
 import draw.data.point.Point
 import org.scalajs.dom
-import draw.client.render.RenderState
 
 trait DrawingTools {
   def renderKeyboard: Modifier[dom.Element]

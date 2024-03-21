@@ -2,18 +2,13 @@ package draw.client.render
 
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable.given
-import zio.stream.ZStream
-import zio.{Hub, Semaphore, UIO, ZIO, ZLayer}
-
-import org.scalajs.dom
-import zio.stream.SubscriptionRef
-import zio.Scope
-import zio.lazagna.Setup
 import zio.lazagna.dom.svg.SVGHelper
-import draw.geom.Rectangle
-import zio.durationInt
+import zio.stream.{SubscriptionRef, ZStream}
+import zio.{Hub, Semaphore, UIO, ZIO, ZLayer, durationInt}
+
 import draw.data.ObjectState
-import zio.Ref
+import draw.geom.Rectangle
+import org.scalajs.dom
 
 case class RenderedObject(state: ObjectState[_], element: dom.Element, boundingBox: Rectangle) {
   def id = state.id
@@ -148,17 +143,19 @@ object RenderState {
     }.map(_.hubs(id))
 
     def notifyRendered(objState: ObjectState[_], element: dom.Element): UIO[Unit] =
-      notifyRendered(objState, element, 20)
+      notifyRendered(objState, element, 10)
 
     def notifyRendered(objState: ObjectState[_], element: dom.Element, retries: Int): UIO[Unit] = {
       val target = Option(element.querySelector(".selectTarget")).getOrElse(element)
       val bbox = new SVGHelper(element.asInstanceOf[dom.SVGElement].ownerSVGElement).svgBoundingBox(target.asInstanceOf[dom.SVGLocatable], 5)
       if (retries > 0 && bbox.width == 10 && bbox.height == 10) {
         // We're not done rendering yet. Probably a <use> external icon is still being loaded.
-        ZIO.suspendSucceed(notifyRendered(objState, element, retries - 1)).delay(250.milliseconds)
+        ZIO.suspendSucceed(notifyRendered(objState, element, retries - 1)).delay(100.milliseconds)
       } else {
         if (bbox.width == 10 && bbox.height == 10) {
-          println(s"Warning, ${objState.id} did not render in time.")
+          println(s"Warning, ${objState.id} did not render in time for ${objState.body}.")
+        } else {
+          println(s"Box for ${objState.body}: ${bbox.width}x${bbox.height}")
         }
         val rendered = RenderedObject(objState, element, bbox)
 

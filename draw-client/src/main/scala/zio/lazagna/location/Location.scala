@@ -1,7 +1,9 @@
 package zio.lazagna.location
 
 import java.net.URLDecoder
+
 import org.scalajs.dom
+
 import Location._
 
 /** Provides access to the current document's URL location */

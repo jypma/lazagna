@@ -1,10 +1,8 @@
 package zio.lazagna.dom
 
+import zio.ZIO
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable._
-import zio.{Scope, ZIO}
-
-import org.scalajs.dom
 
 object TextContent {
   def :=(value: String) = Modifier { parent =>

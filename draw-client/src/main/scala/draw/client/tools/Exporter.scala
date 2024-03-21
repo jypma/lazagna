@@ -4,11 +4,11 @@ import zio.ZIO
 import zio.lazagna.dom.http.Request._
 
 import draw.client.Drawing
+import draw.client.render.RenderState
 import draw.data.SymbolRef
 import org.scalajs.dom
 
 import scalajs.js
-import draw.client.render.RenderState
 
 trait Exporter {
   def triggerExport: ZIO[Any, RequestError, Unit]

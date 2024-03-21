@@ -6,8 +6,8 @@ import zio.lazagna.Consumeable._
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element._
 import zio.lazagna.dom.Element.svgtags._
+import zio.lazagna.dom.MultiUpdate
 import zio.lazagna.dom.svg.PathData
-import zio.lazagna.dom.{MultiUpdate}
 
 import draw.data.{ObjectState, ScribbleState}
 

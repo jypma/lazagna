@@ -6,11 +6,11 @@ import zio.lazagna.Consumeable._
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.{_}
 import zio.lazagna.dom.Element.svgtags._
+import zio.lazagna.dom.MultiUpdate
 import zio.lazagna.dom.svg.PathData
 
 import draw.data.{LinkState, ObjectState}
 import draw.geom.{Point, Rectangle}
-import zio.lazagna.dom.MultiUpdate
 
 object LinkRenderer {
   def make = for {

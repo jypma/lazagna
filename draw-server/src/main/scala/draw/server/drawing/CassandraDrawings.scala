@@ -44,11 +44,17 @@ object CassandraDrawings {
           case Some(id) => drawingsAfter(id).map(id +: _)
         }
     }
-    drawings <- Ref.make[Set[UUID]](initialDrawings.toSet)
+    knownDrawings <- Ref.make[Set[UUID]](initialDrawings.toSet)
+    activeDrawings <- Ref.Synchronized.make[Map[UUID, Drawing]](Map.empty)
   } yield new Drawings {
-    def list = ZStream.unwrap(drawings.get.map(ZStream.fromIterable(_)))
+    def list = ZStream.unwrap(knownDrawings.get.map(ZStream.fromIterable(_)))
 
-    def getDrawing(id: UUID): IO[DrawingError, Drawing] = for {
+    def getDrawing(id: UUID) = activeDrawings.updateSomeAndGetZIO {
+      case m if !m.contains(id) =>
+        makeDrawing(id).map(drawing => m + (id -> drawing))
+    }.map(_(id))
+
+    private def makeDrawing(id: UUID): IO[DrawingError, Drawing] = for {
       startState <- currentDrawingEventsAfter(id, 0).runFold(DrawingState())((s,e) => s.update(e)._2)
       state <- Ref.make(startState)
       semaphore <- Semaphore.make(1)
@@ -58,7 +64,7 @@ object CassandraDrawings {
         events <- Clock.instant.map(startState.handleCreate)
         _ <- ZIO.collectAll(events.map(emit(_)))
       } yield ()
-      _ <- drawings.update(_ + id)
+      _ <- knownDrawings.update(_ + id)
     } yield new Drawing {
       override def perform(command: DrawCommand): ZIO[Any, DrawingError, Unit] = {
         semaphore.withPermit {

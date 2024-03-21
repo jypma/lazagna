@@ -12,13 +12,12 @@ import zio.{URIO, ZIO}
 
 import draw.client.Drawing
 import draw.client.render.{DrawingRenderer, RenderState, RenderedObject}
-import draw.data.IconState
 import draw.data.drawcommand.{CreateLink, DrawCommand}
+import draw.data.{IconState, ObjectState}
 import draw.geom.Point
 import org.scalajs.dom
 
 import DrawingRenderer.{ObjectTarget}
-import draw.data.ObjectState
 
 object LinkTool {
   case class State(srcId: String, srcPos: Point, pos: dom.SVGPoint, dst: Option[ObjectTarget])

@@ -3,9 +3,9 @@ package draw.client.tools
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.Attribute._
-import zio.lazagna.dom.Element.tags._
-import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element._
+import zio.lazagna.dom.Element.svgtags._
+import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Events._
 import zio.lazagna.dom.Modifier._
 import zio.lazagna.dom.svg.SVGHelper
@@ -14,16 +14,13 @@ import zio.stream.SubscriptionRef
 import zio.{URIO, ZIO}
 
 import draw.client.Drawing
-import draw.client.render.{RenderState, DrawingRenderer}
-import draw.data.drawcommand.{DeleteObject, DrawCommand, MoveObject}
+import draw.client.render.{DrawingRenderer, RenderState}
+import draw.data.drawcommand.{DeleteObject, DrawCommand, LabelObject, MoveObject}
+import draw.data.{IconState, Moveable, ObjectState, SymbolRef}
 import draw.geom.Point
-import draw.data.{IconState, Moveable}
 import org.scalajs.dom
 
 import DrawingRenderer.{iconSize}
-import draw.data.drawcommand.LabelObject
-import draw.data.SymbolRef
-import draw.data.ObjectState
 
 object SelectTool {
   private case class State(selection: Set[(String, Moveable)], dragStart: Point)

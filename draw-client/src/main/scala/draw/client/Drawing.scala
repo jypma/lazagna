@@ -1,8 +1,8 @@
 package draw.client
 
-import zio.lazagna.{Consumeable}
+import zio.UIO
+import zio.lazagna.Consumeable
 import zio.stream.SubscriptionRef
-import zio.{UIO}
 
 import draw.data.ObjectState
 import draw.data.drawcommand.DrawCommand

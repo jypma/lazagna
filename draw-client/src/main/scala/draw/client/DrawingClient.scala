@@ -13,15 +13,13 @@ import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Hub, Ref, Scope, Semaphore, ZIO, ZLayer}
 
 import draw.data.drawcommand.DrawCommand
-import draw.data.drawevent.DrawEvent
+import draw.data.drawevent.{DrawEvent, ObjectMoved, ScribbleContinued}
 import draw.data.{DrawingState, ObjectState}
 import org.scalajs.dom
 
 import scalajs.js.typedarray._
 import scalajs.js
 import DrawingClient._
-import draw.data.drawevent.ObjectMoved
-import draw.data.drawevent.ScribbleContinued
 
 trait DrawingClient {
   def login(user: String, password: String, drawingId: UUID): ZIO[Scope, ClientError | RequestError, Drawing]

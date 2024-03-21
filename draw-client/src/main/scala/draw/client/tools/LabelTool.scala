@@ -13,11 +13,10 @@ import zio.{URIO, ZIO}
 
 import draw.client.Drawing
 import draw.client.render.{DrawingRenderer, RenderState}
-import draw.data.IconState
 import draw.data.drawcommand.{DrawCommand, LabelObject}
+import draw.data.{IconState, ObjectState}
 
 import DrawingRenderer.{iconSize}
-import draw.data.ObjectState
 
 object LabelTool {
   def make(drawing: Drawing, dialogs: Children, keyboard: Children): URIO[RenderState, Modifier[Unit]] = for {

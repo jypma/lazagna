@@ -1,9 +1,6 @@
 package draw.client
 
-import zio.ZIO
-import zio.Ref
-import zio.Semaphore
-import zio.Chunk
+import zio.{Chunk, Ref, Semaphore, ZIO}
 
 trait EventFilter[E] {
   def publish(event: E): ZIO[Any, Nothing, Unit]
