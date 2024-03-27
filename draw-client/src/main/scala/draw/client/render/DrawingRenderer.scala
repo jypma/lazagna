@@ -13,7 +13,7 @@ import zio.{ZIO, ZLayer}
 
 import draw.client.Drawing
 import draw.client.tools.DrawingTools
-import draw.data.{IconState, LinkState, ObjectState, ScribbleState}
+import draw.data.{IconState, LinkState, ScribbleState}
 import draw.geom.Point
 import org.scalajs.dom
 
@@ -71,20 +71,22 @@ object DrawingRenderer {
                   linkR <- LinkRenderer.make.provide(deps, ZLayer.succeed(iconR))
                   children <- Children.make
                   _ <- drawing.initialObjectStates.mapZIO { initial =>
-                    val furtherEvents = drawing.objectState(initial.id).takeUntil(_.deleted)
+                    val renderer = (initial.body match {
+                      case _:ScribbleState => scribbleR
+                      case _:IconState => iconR
+                      case _:LinkState => linkR
+                    }).asInstanceOf[ObjectRenderer[initial.Body]]
+
                     children.child { destroy =>
                       g(
                         cls <-- renderState.selectionIds.map { s => if (s.contains(initial.id)) "selected" else "" }.changes,
-                        drawing.objectState(initial.id).filter(_.deleted).mapZIO(_ => destroy).take(1).consume,
-                        initial.body match {
-                          case _:ScribbleState =>
-                            scribbleR.render(initial.asInstanceOf[ObjectState[ScribbleState]], furtherEvents.asInstanceOf[Consumeable[ObjectState[ScribbleState]]])
-
-                          case _:IconState =>
-                            iconR.render(initial.asInstanceOf[ObjectState[IconState]], furtherEvents.asInstanceOf[Consumeable[ObjectState[IconState]]])
-
-                          case _:LinkState =>
-                            linkR.render(initial.asInstanceOf[ObjectState[LinkState]], furtherEvents.asInstanceOf[Consumeable[ObjectState[LinkState]]])
+                        renderer.render(initial).flatMap { case (elem, pipeline)  =>
+                          drawing.objectState(initial)
+                            .tap(s => ZIO.when(s.deleted)(destroy *> renderState.notifyDeleted(s)))
+                            .via(pipeline)
+                            .tap(s => ZIO.when(!s.deleted)(renderState.notifyRendered(s, elem)))
+                            .takeUntil(_.deleted)
+                            .consume
                         }
                       )
                     }

@@ -7,6 +7,8 @@ import draw.data.drawevent.ObjectDeleted
 import draw.data.drawevent.ScribbleContinued
 import draw.data.drawevent.ObjectMoved
 import draw.data.drawevent.ObjectLabelled
+import draw.geom.Bounds
+import draw.geom.Rectangle
 
 sealed trait ObjectStateBody {
   def update(event: DrawEventBody) = this
@@ -16,7 +18,9 @@ sealed trait ObjectStateBody {
 sealed trait Moveable extends ObjectStateBody {
   def position: Point
 }
-case class ObjectState[+T <: ObjectStateBody](id: String, sequenceNr: Long, deleted: Boolean, body: T) {
+case class ObjectState[T <: ObjectStateBody](id: String, sequenceNr: Long, deleted: Boolean, body: T) {
+  type Body = T
+
   def update(event: DrawEvent): ObjectState[T] = copy(
     sequenceNr = event.sequenceNr,
     deleted = event.body.isInstanceOf[ObjectDeleted],
@@ -35,7 +39,7 @@ case class ScribbleState(position: Point, points: Seq[Point]) extends ObjectStat
 
 }
 
-case class IconState(position: Point, symbol: SymbolRef, label: String) extends ObjectStateBody with Moveable {
+case class IconState(position: Point, symbol: SymbolRef, label: String, bounds: Option[Bounds] = None) extends ObjectStateBody with Moveable {
   override def update(event: DrawEventBody) = event match {
     case ObjectMoved(_, Some(newPosition), _) =>
       copy(position = newPosition)
@@ -43,6 +47,14 @@ case class IconState(position: Point, symbol: SymbolRef, label: String) extends 
       copy(label = newLabel)
     case _ => this
   }
+
+  def withBounds(width: Option[Double], height:Option[Double]): IconState = {
+    width.zip(height).map { (w,h) => copy(
+      bounds = Some(Bounds(w, h))
+    )}.getOrElse(this)
+  }
+
+  def iconBoundingBox: Option[Rectangle] = bounds.map(_.middleAt(position))
 }
 
 case class LinkState(src: String, dest: String, preferredDistance: Option[Int], preferredAngle: Option[Int]) extends ObjectStateBody {

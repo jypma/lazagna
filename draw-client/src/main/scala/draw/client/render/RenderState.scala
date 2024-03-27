@@ -9,6 +9,8 @@ import zio.{Hub, Semaphore, UIO, ZIO, ZLayer, durationInt}
 import draw.data.ObjectState
 import draw.geom.Rectangle
 import org.scalajs.dom
+import draw.data.IconState
+import draw.geom.Point
 
 case class RenderedObject(state: ObjectState[_], element: dom.Element, boundingBox: Rectangle) {
   def id = state.id
@@ -21,6 +23,7 @@ trait RenderState {
   /** Emits a new element for any state change */
   def allObjectStates: Consumeable[RenderedObject]
   def notifyRendered(state: ObjectState[_], element: dom.Element): UIO[Unit]
+  def notifyDeleted(state: ObjectState[_]): UIO[Unit]
 
   /** Returns information about an object that might have been clicked to select it */
   def lookupForSelect(event: dom.MouseEvent): UIO[Option[RenderedObject]] = {
@@ -37,6 +40,8 @@ trait RenderState {
   def selectAlso(ids: Set[String]): UIO[Unit]
   def unselect(ids: Set[String]): UIO[Unit]
   def selectOnly(ids: Set[String]): UIO[Unit]
+
+  /** The set of currently selected objects, and their (changing) state */
   def selection: Consumeable[Set[RenderedObject]]
   def currentSelectionState: ZIO[Any, Nothing, Set[RenderedObject]]
 
@@ -57,10 +62,20 @@ object RenderState {
 
     def get(id: String) = byId.get(id)
 
-    def + (obj: RenderedObject) = copy(
-      byId = byId + (obj.id -> obj),
-      byElement = byElement + (obj.element -> obj)
-    )
+    def + (obj: RenderedObject) = {
+      copy(
+        byId = byId + (obj.id -> obj),
+        byElement = byElement + (obj.element -> obj)
+      )
+    }
+
+    def -(id: String) = {
+      copy(
+        byId = byId - id,
+        byElement = byElement - byId.get(id).map(_.element).getOrElse(null),
+        hubs = hubs - id
+      )
+    }
 
     def lookupParent(e: dom.Element, className: String): Option[RenderedObject] = {
       var elem = e
@@ -84,6 +99,10 @@ object RenderState {
     stateChanges <- Hub.bounded[RenderedObject](16)
     newObjects <- Hub.bounded[RenderedObject](16)
   } yield new RenderState {
+    def notifyDeleted(objState: ObjectState[_]): UIO[Unit] = {
+      unselect(Set(objState.id)) *> state.update(_ - objState.id)
+    }
+
     def selectionIds: Consumeable[Set[String]] = selectionState
     def selectAlso(ids: Set[String]): UIO[Unit] = {
       if (ids.isEmpty) ZIO.unit else {
@@ -106,9 +125,11 @@ object RenderState {
         case s if s != ids => ids
       }
     }
-    def selection: Consumeable[Set[RenderedObject]] = selectionState.mapZIO { ids =>
-      state.get.map(s => ids.map(s.byId.get).flatMap(_.toSet))
-    }
+    def selection: Consumeable[Set[RenderedObject]] =
+      selectionState.zipLatest(state).map { (ids, s) =>
+        ids.map(s.byId.get).flatMap(_.toSet)
+      }
+
     def currentSelectionState: ZIO[Any, Nothing, Set[RenderedObject]] = selectionState.get.flatMap { ids =>
       state.get.map(s => ids.map(s.byId.get).flatMap(_.toSet))
     }
@@ -142,20 +163,23 @@ object RenderState {
         }
     }.map(_.hubs(id))
 
-    def notifyRendered(objState: ObjectState[_], element: dom.Element): UIO[Unit] =
-      notifyRendered(objState, element, 10)
+    private def getBBox(objState: ObjectState[_], element: dom.Element): UIO[Rectangle] = {
+      val padding = 5
 
-    def notifyRendered(objState: ObjectState[_], element: dom.Element, retries: Int): UIO[Unit] = {
-      val target = Option(element.querySelector(".selectTarget")).getOrElse(element)
-      val bbox = new SVGHelper(element.asInstanceOf[dom.SVGElement].ownerSVGElement).svgBoundingBox(target.asInstanceOf[dom.SVGLocatable], 5)
-      if (retries > 0 && bbox.width == 10 && bbox.height == 10) {
-        // We're not done rendering yet. Probably a <use> external icon is still being loaded.
-        ZIO.suspendSucceed(notifyRendered(objState, element, retries - 1)).delay(100.milliseconds)
-      } else {
+      objState.body match {
+        case i:IconState if i.iconBoundingBox.isDefined =>
+          ZIO.succeed(i.iconBoundingBox.get.expand(padding))
+        case _ =>
+          val target = Option(element.querySelector(".selectTarget")).getOrElse(element)
+          val bbox = new SVGHelper(element.asInstanceOf[dom.SVGElement].ownerSVGElement).svgBoundingBox(target.asInstanceOf[dom.SVGLocatable], padding)
+          ZIO.succeed(bbox)
+      }
+    }
+
+    def notifyRendered(objState: ObjectState[_], element: dom.Element): UIO[Unit] = {
+      getBBox(objState, element).flatMap { bbox =>
         if (bbox.width == 10 && bbox.height == 10) {
-          println(s"Warning, ${objState.id} did not render in time for ${objState.body}.")
-        } else {
-          println(s"Box for ${objState.body}: ${bbox.width}x${bbox.height}")
+          println(s"Warning, object ${objState.id} did not render in time for ${objState.body}.")
         }
         val rendered = RenderedObject(objState, element, bbox)
 
@@ -181,8 +205,6 @@ object RenderState {
         .flatMap { e => s.lookupParent(e, className) }
     }
 
-    // We also update the bounding box whenever there's a state change (since that might have consequences)
-    // TODO: Remember bounding boxes of objects, so we don't have to use the DOM on just moving them
     def selectionBoundingBox = selection.map { selectedObjects =>
       if (selectedObjects.isEmpty) None else Some(
         selectedObjects.tail.foldLeft(selectedObjects.head.boundingBox)(_ union _.boundingBox)
@@ -201,7 +223,6 @@ object RenderState {
           val angle = c.boundingBox.middle.to(origin).angle
           direction(angle)
         }
-
         val candidateDistances = candidates.map { c =>
           val distance = c.boundingBox.middle.to(origin).length
           (c, distance)

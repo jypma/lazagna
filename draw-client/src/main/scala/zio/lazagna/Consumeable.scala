@@ -35,5 +35,16 @@ object Consumeable {
         consumeable.runDrain.forkScoped.unit
       }
     }
+
+    /** Consumes everything of the given consumeable for its side effects only, waiting for the first element to
+      * be consumed before completing this ZIO. */
+    def consumeAndAwaitFirst: ZIO[Scope & R, Nothing, Unit] = {
+      Setup.start[Scope & R, Nothing, Unit] {
+        Promise.make[Nothing, Unit].flatMap { promise =>
+          consumeable.tap(_ => promise.completeWith(ZIO.unit)).runDrain.forkScoped.unit *> promise.await
+        }
+      }
+    }
+
   }
 }

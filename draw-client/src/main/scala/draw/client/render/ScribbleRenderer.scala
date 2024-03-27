@@ -1,8 +1,6 @@
 package draw.client.render
 
 import zio.ZIO
-import zio.lazagna.Consumeable
-import zio.lazagna.Consumeable._
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element._
 import zio.lazagna.dom.Element.svgtags._
@@ -15,7 +13,7 @@ object ScribbleRenderer {
   def make = for {
     rendered <- ZIO.service[RenderState]
   } yield new ObjectRenderer[ScribbleState] {
-    override def render(initial: ObjectState[ScribbleState], furtherEvents: Consumeable[ObjectState[ScribbleState]]) = for {
+    override def render(initial: ObjectState[ScribbleState]) = for {
       state <- MultiUpdate.make[ObjectState[ScribbleState]]
       res <- {
         def pointData = state { s =>
@@ -40,13 +38,7 @@ object ScribbleRenderer {
             cls := "selectTarget editTarget",
             pointData
           ),
-          thisElementAs { element =>
-            furtherEvents
-              .via(state.pipeline)
-              .tap { state => rendered.notifyRendered(state, element) }
-              .consume
-          }
-        )
+        ).map((_, state.pipeline))
       }
     } yield res
   }

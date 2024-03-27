@@ -7,7 +7,7 @@ import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.{textContent, _}
 import zio.lazagna.dom.MultiUpdate
 import zio.lazagna.dom.svg.SVGHelper
-import zio.{Chunk, ZIO}
+import zio.{ZIO}
 
 import draw.data.{IconState, ObjectState}
 import draw.geom.Rectangle
@@ -25,13 +25,12 @@ object IconRenderer {
     rendered <- ZIO.service[RenderState]
     helper <- ZIO.service[SVGHelper]
   } yield new IconRenderer {
-    override def render(initial: ObjectState[IconState], furtherEvents: Consumeable[ObjectState[IconState]]) = for {
-      state <- MultiUpdate.make[Chunk[ObjectState[IconState]]]
-      res <- g(
+    override def render(initial: ObjectState[IconState]) = MultiUpdate.make[ObjectState[IconState]].flatMap { state =>
+      g(
         id := s"icon${initial.id}",
         cls := "icon editTarget",
         state { s =>
-          val p = s.last.body.position
+          val p = s.body.position
           transform.set(s"translate(${p.x},${p.y})")
         },
         g(
@@ -51,20 +50,11 @@ object IconRenderer {
           x := 0,
           y := iconSize / 2,
           state { s =>
-            textContent := s.last.body.label
+            textContent := s.body.label
           }
         ),
-        thisElementAs { element =>
-          furtherEvents
-            .bufferUnbounded
-            .chunks
-            .filter(!_.isEmpty)
-            .via(state.pipeline)
-            .tap { s => rendered.notifyRendered(s.last, element) }
-            .consume
-        }
-      )
-    } yield res
+      ).map((_, state.pipeline))
+    }
 
     def getBoundingBoxes(id: String) = rendered.objectState(id).collect {
       case RenderedObject(_, icon, main) =>

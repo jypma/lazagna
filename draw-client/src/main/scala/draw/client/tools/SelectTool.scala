@@ -96,7 +96,7 @@ object SelectTool {
                 typ := "text",
                 placeholder := "Enter label...",
                 focusNow,
-                value <-- drawing.objectState(target._1).map(_.body).collect { case IconState(_,_,label) => label },
+                value <-- drawing.objectState(target._1).map(_.body).collect { case IconState(_,_,label,_) => label },
                 onInput.asTargetValue(_.flatMap { text =>
                   drawing.perform(DrawCommand(LabelObject(target._1, text)))
                 })

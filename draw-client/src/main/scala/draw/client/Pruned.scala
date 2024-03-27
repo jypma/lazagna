@@ -103,7 +103,7 @@ object Pruned {
           this
         case ScribbleStarted(scribbleId, _, _)  =>
           update(scribbleId, ScribbleState(event))
-        case IconCreated(id, _, _, _, _) =>
+        case IconCreated(id, _, _, _, _, _, _) =>
           update(id, IconState(event))
         case LinkCreated(id, _, _, _, _, _) =>
           update(id, LinkState(event))
@@ -130,7 +130,7 @@ object Pruned {
         case ScribbleStarted(scribbleId, startPoints, _) =>
           storage.publish(event).as(update(scribbleId, ScribbleState(event)))
 
-        case IconCreated(id, _, _, _, _) =>
+        case IconCreated(id, _, _, _, _, _, _) =>
           storage.publish(event).as(update(id, IconState(event)))
 
         case LinkCreated(id, _, _, _, _, _) =>

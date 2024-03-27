@@ -71,8 +71,17 @@ case class Line(from: Point, to: Point) {
   def angle: Double = Math.atan2(to.y - from.y, to.x - from.x)
 }
 
+case class Bounds(width: Double, height: Double) {
+  def at(x: Double, y: Double): Rectangle = Rectangle(Point(x,y), width, height)
+  def middleAt(x: Double, y: Double): Rectangle = Rectangle(Point(x - 0.5 * width, y - 0.5 * height), width, height)
+  def middleAt(p: Point): Rectangle = middleAt(p.x, p.y)
+}
+
 case class Rectangle(origin: Point, width: Double, height: Double) {
   override def toString = f"Rectangle($origin, $width%1.2fx$height%1.2f)"
+
+  def moveTo(position: Point) = copy(origin = position)
+  def move(deltaX: Double, deltaY: Double) = copy(origin = origin.move(deltaX, deltaY))
 
   def middle: Point = origin.move(width / 2, height / 2)
   def span: Point = origin.move(width, height)

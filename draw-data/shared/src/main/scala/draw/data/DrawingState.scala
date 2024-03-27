@@ -53,11 +53,11 @@ case class DrawingState(
     event.body match {
       case ScribbleStarted(id, points, _) =>
         create(id, ScribbleState(Point(0,0), points.map(Point.fromProtobuf)))
-      case IconCreated(id, optPos, category, name, _) =>
+      case IconCreated(id, optPos, category, name, width, height, _) =>
         create(id, IconState(
           optPos.map(Point.fromProtobuf).getOrElse(Point(0,0)),
-          category.zip(name).map((c,n) => SymbolRef(SymbolCategory(c), n)).getOrElse(SymbolRef.person), ""
-        ))
+          category.zip(name).map((c,n) => SymbolRef(SymbolCategory(c), n)).getOrElse(SymbolRef.person), "",
+        ).withBounds(width, height))
       case LinkCreated(id, src, dest, preferredDistance, preferredAngle, _) =>
         create(id, LinkState(src, dest, preferredDistance, preferredAngle),
           newLinks = objectLinks.add(src, id).add(dest, id))
@@ -93,13 +93,14 @@ case class DrawingState(
         emit(ScribbleContinued(id, points.map { p => Point(p.x, p.y) }))
       case DeleteObject(id, _) =>
         // TODO: Verify scribble OR icon exists
+        // TEST: Verify links are deleted with object (and emitted events have different sequence numbers)
         val deleteLinks = objectLinks.getOrElse(id, Set.empty).map(ObjectDeleted(_)).toSeq
         this.emit(now, deleteLinks :+ ObjectDeleted(id))
       case MoveObject(id, Some(position), _) =>
         // TODO: Verify scribble OR icon exists
         emit(ObjectMoved(id, Some(position)))
-      case CreateIcon(id, position, category, name, _) =>
-        emit(IconCreated(id, Some(position), Some(category), Some(name)))
+      case CreateIcon(id, position, category, name, width, height, _) =>
+        emit(IconCreated(id, Some(position), Some(category), Some(name), Some(width), Some(height)))
       case LabelObject(id, label, _) =>
         // TODO: verify icon exists
         emit(ObjectLabelled(id, label))
@@ -130,8 +131,8 @@ case class DrawingState(
   /** Returns the events to emit in case this drawing is completely new (doesn't exist) */
   def handleCreate(now: Instant): Seq[DrawEvent] = emit(now, Seq(DrawingCreated()))
 
-  private def emit(now: Instant, bodies: Seq[DrawEventBody]) = bodies.map { body =>
-    DrawEvent(lastSequenceNr + 1, body, Some(now.toEpochMilli()))
+  private def emit(now: Instant, bodies: Seq[DrawEventBody]) = bodies.zipWithIndex.map { (body, idx) =>
+    DrawEvent(lastSequenceNr + 1 + idx, body, Some(now.toEpochMilli()))
   }
 
   def links: Iterable[ObjectState[LinkState]] = objects.values.filter(_.body.isInstanceOf[LinkState]).asInstanceOf[Iterable[ObjectState[LinkState]]]

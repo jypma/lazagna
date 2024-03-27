@@ -8,6 +8,7 @@ import draw.data.ObjectState
 import draw.data.drawcommand.DrawCommand
 import org.scalajs.dom
 import org.scalajs.dom.SVGRect
+import draw.data.ObjectStateBody
 
 trait Drawing {
   import Drawing._
@@ -19,6 +20,8 @@ trait Drawing {
   def viewport: SubscriptionRef[Drawing.Viewport]
   def initialObjectStates: Consumeable[ObjectState[_]] // Returns initial object state for each object
   def objectState(id: String): Consumeable[ObjectState[_]] // Returns state for that object
+  def objectState[T <: ObjectStateBody](initial: ObjectState[T]): Consumeable[ObjectState[T]] =
+    objectState(initial.id).asInstanceOf[Consumeable[ObjectState[T]]]
   def latency: Consumeable[Long]
 }
 

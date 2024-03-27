@@ -300,7 +300,8 @@ object DrawingTools {
               symbol <- selectedIcon.get
               id <- makeUUID
               pos = helper.screenToSvg(e)
-              _ <- drawing.perform(DrawCommand(CreateIcon(id, Point(pos.x, pos.y), symbol.category.name, symbol.name)))
+              bounds = helper.svgBoundingBox(helper.svg.querySelector(".icon-preview").asInstanceOf[dom.SVGLocatable])
+              _ <- drawing.perform(DrawCommand(CreateIcon(id, Point(pos.x, pos.y), symbol.category.name, symbol.name, bounds.width, bounds.height)))
             } yield {}
           }),
         use(

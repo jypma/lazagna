@@ -43,6 +43,9 @@ message CreateIcon {
     required Point position = 2;
     required string category = 3;
     required string name = 4;
+    required double width = 5;
+    required double height = 6;
+
 }
 
 message LabelObject {

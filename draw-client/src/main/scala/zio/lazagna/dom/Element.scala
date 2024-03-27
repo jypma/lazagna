@@ -11,9 +11,8 @@ object Element {
   val children = Children
 
   // TODO: Consider making MountPoint generic, so we can get a concrete type here
-  def thisElementAs[T](fn: dom.Element => Modifier[T]): Modifier[T] = Modifier { parent =>
-    fn.apply(parent)
-  }
+  def thisElementAs[R,E,T](fn: dom.Element => ZIO[R,E,T]): ZIO[R & MountPoint,E,T] =
+    ZIO.service[MountPoint].flatMap { p => fn(p.parent) }
 
   /** Sets keyboard focus on the parent element directly after creating it (by calling element.focus()) */
   def focusNow: Modifier[Unit] = Modifier {
