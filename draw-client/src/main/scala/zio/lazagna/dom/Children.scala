@@ -47,7 +47,10 @@ object Children {
     /** Also returns the Scope to close */
     def delete(elmt: Element[_]): (Scope.Closeable, State) = {
       children.get(elmt) match {
-        case None => (Scope.global, this)
+        case None =>
+          println("Warning: couldn't find child element to delete")
+          dom.console.log(elmt)
+          (Scope.global, this)
         case Some((_, scope)) => (scope, State(
           children = children - elmt
         ))

@@ -4,13 +4,12 @@ import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.svg.SVGHelper
 import zio.stream.{SubscriptionRef, ZStream}
-import zio.{Hub, Semaphore, UIO, ZIO, ZLayer, durationInt}
+import zio.{Hub, Semaphore, UIO, ZIO, ZLayer}
 
 import draw.data.ObjectState
 import draw.geom.Rectangle
 import org.scalajs.dom
 import draw.data.IconState
-import draw.geom.Point
 
 case class RenderedObject(state: ObjectState[_], element: dom.Element, boundingBox: Rectangle) {
   def id = state.id
@@ -20,10 +19,8 @@ trait RenderState {
   /** Emits a new element for each new object */
   def initialObjectStates: Consumeable[RenderedObject]
   def objectState(id: String): Consumeable[RenderedObject]
-  /** Emits a new element for any state change */
-  def allObjectStates: Consumeable[RenderedObject]
+  def latestSequenceNr: Consumeable[Long]
   def notifyRendered(state: ObjectState[_], element: dom.Element): UIO[Unit]
-  def notifyDeleted(state: ObjectState[_]): UIO[Unit]
 
   /** Returns information about an object that might have been clicked to select it */
   def lookupForSelect(event: dom.MouseEvent): UIO[Option[RenderedObject]] = {
@@ -54,26 +51,21 @@ trait RenderState {
 
 object RenderState {
   private case class State(
-    val byId: Map[String, RenderedObject] = Map.empty,
-    val byElement: Map[dom.Element, RenderedObject] = Map.empty,
-    val hubs: Map[String, Hub[RenderedObject]] = Map.empty
+    byId: Map[String, RenderedObject] = Map.empty,
+    byElement: Map[dom.Element, RenderedObject] = Map.empty,
+    hubs: Map[String, Hub[RenderedObject]] = Map.empty,
+    selection: Set[String] = Set.empty
   ) {
-    def all: Seq[RenderedObject] = byId.values.toSeq
+    def all: Seq[RenderedObject] = byId.values.filter(!_.state.deleted).toSeq
 
     def get(id: String) = byId.get(id)
 
     def + (obj: RenderedObject) = {
+      println("Rendered: " + obj.id + ", deleted: " + obj.state.deleted)
       copy(
         byId = byId + (obj.id -> obj),
-        byElement = byElement + (obj.element -> obj)
-      )
-    }
-
-    def -(id: String) = {
-      copy(
-        byId = byId - id,
-        byElement = byElement - byId.get(id).map(_.element).getOrElse(null),
-        hubs = hubs - id
+        byElement = byElement + (obj.element -> obj),
+        selection = if (obj.state.deleted) selection - obj.id else selection
       )
     }
 
@@ -90,51 +82,57 @@ object RenderState {
       }
       Option.when(isselectTarget)(elem).flatMap(byElement.get)
     }
+
+    def selectAlso(ids: Set[String]) = copy(
+      selection = selection ++ ids
+    )
+
+    def selectOnly(ids: Set[String]) = copy(
+      selection = ids
+    )
+
+    def unselect(ids: Set[String]) = copy(
+      selection = selection -- ids
+    )
   }
 
   def make = for {
     state <- SubscriptionRef.make(State())
-    selectionState <- SubscriptionRef.make[Set[String]](Set.empty)
     semaphore <- Semaphore.make(1)
-    stateChanges <- Hub.bounded[RenderedObject](16)
+    sequenceNr <- SubscriptionRef.make(1L)
     newObjects <- Hub.bounded[RenderedObject](16)
   } yield new RenderState {
-    def notifyDeleted(objState: ObjectState[_]): UIO[Unit] = {
-      unselect(Set(objState.id)) *> state.update(_ - objState.id)
+    def seen(nr: Long) = sequenceNr.updateSome {
+      case n if n <= nr => nr
     }
 
-    def selectionIds: Consumeable[Set[String]] = selectionState
+    def selectionIds: Consumeable[Set[String]] = state.map(_.selection)
+
     def selectAlso(ids: Set[String]): UIO[Unit] = {
       if (ids.isEmpty) ZIO.unit else {
-        selectionState.updateSome {
-          case s if (s ++ ids).size != s.size =>
-            s ++ ids
-        }
+        state.update(_.selectAlso(ids))
       }
     }
     def unselect(ids: Set[String]): UIO[Unit] = {
       if (ids.isEmpty) ZIO.unit else {
-        selectionState.updateSome {
-          case s if (s -- ids).size != s.size =>
-            s -- ids
-        }
+        state.update(_.unselect(ids))
       }
     }
     def selectOnly(ids: Set[String]): UIO[Unit] = {
-      selectionState.updateSome {
-        case s if s != ids => ids
-      }
+      state.update(_.selectOnly(ids))
     }
+
     def selection: Consumeable[Set[RenderedObject]] =
-      selectionState.zipLatest(state).map { (ids, s) =>
-        ids.map(s.byId.get).flatMap(_.toSet)
+      state.map { s =>
+        s.selection.map(s.byId.get).flatMap(_.toSet)
       }
 
-    def currentSelectionState: ZIO[Any, Nothing, Set[RenderedObject]] = selectionState.get.flatMap { ids =>
-      state.get.map(s => ids.map(s.byId.get).flatMap(_.toSet))
-    }
+    def currentSelectionState: ZIO[Any, Nothing, Set[RenderedObject]] =
+      state.get.map { s =>
+        s.selection.map(s.byId.get).flatMap(_.toSet)
+      }
 
-    def allObjectStates: Consumeable[RenderedObject] = stateChanges
+    def latestSequenceNr: Consumeable[Long] = sequenceNr
 
     def initialObjectStates = ZStream.unwrapScoped {
       semaphore.withPermit {
@@ -182,6 +180,7 @@ object RenderState {
           println(s"Warning, object ${objState.id} did not render in time for ${objState.body}.")
         }
         val rendered = RenderedObject(objState, element, bbox)
+        println("rendered: " + rendered)
 
         semaphore.withPermit {
           state.modify { s =>
@@ -189,7 +188,7 @@ object RenderState {
             (existing.isEmpty, s + rendered)
           }.flatMap { isNew =>
             hub(rendered.id).flatMap { hub =>
-              newObjects.publish(rendered).when(isNew) *> stateChanges.publish(rendered) *> hub.publish(rendered).unit
+              newObjects.publish(rendered).when(isNew) *> seen(objState.sequenceNr) *> hub.publish(rendered).unit
             }
           }
         }
@@ -213,13 +212,14 @@ object RenderState {
 
     def expandSelection(direction: Double => Boolean): UIO[Option[RenderedObject]] = for {
       objects <- state.get
-      selected <- selectionState.get
     } yield {
+      val selected = objects.selection
+
       if (selected.isEmpty) objects.all.headOption else {
         val selectedObjects = selected.toSeq.flatMap(objects.byId.get)
         val origin = selectedObjects.tail.foldLeft(selectedObjects.head.boundingBox)(_ union _.boundingBox).middle
 
-        val candidates = (objects.byId.keySet -- selected).map(objects.byId).filter { c =>
+        val candidates = (objects.all.map(_.id).toSet -- selected).map(objects.byId).filter { c =>
           val angle = c.boundingBox.middle.to(origin).angle
           direction(angle)
         }

@@ -82,9 +82,8 @@ object DrawingRenderer {
                         cls <-- renderState.selectionIds.map { s => if (s.contains(initial.id)) "selected" else "" }.changes,
                         renderer.render(initial).flatMap { case (elem, pipeline)  =>
                           drawing.objectState(initial)
-                            .tap(s => ZIO.when(s.deleted)(destroy *> renderState.notifyDeleted(s)))
                             .via(pipeline)
-                            .tap(s => ZIO.when(!s.deleted)(renderState.notifyRendered(s, elem)))
+                            .tap(s => renderState.notifyRendered(s, elem) *> ZIO.when(s.deleted)(destroy))
                             .takeUntil(_.deleted)
                             .consume
                         }
@@ -117,15 +116,15 @@ object DrawingRenderer {
           Alternative.showOne(currentView.merge(drawing.connectionStatus.collect {
             case Drawing.Disconnected => 2
           }), alternatives, Some(initialView)),
-          renderState.allObjectStates.tap { s =>
+          renderState.latestSequenceNr.tap { seqNr =>
             eventCountDebug += 1
-            if (switchedReady || (s.state.sequenceNr < drawing.initialVersion)) ZIO.unit else {
+            if (switchedReady || (seqNr < drawing.initialVersion)) ZIO.unit else {
               switchedReady = true
               val time = System.currentTimeMillis() - start
               println(s"Processed ${eventCountDebug} events, until sequence nr ${drawing.initialVersion}, in ${time}ms")
               currentView.set(1)
             }
-          }.takeUntil(_.state.sequenceNr >= drawing.initialVersion).consume
+          }.takeUntil(_ >= drawing.initialVersion).consume
         )
       }
     }
