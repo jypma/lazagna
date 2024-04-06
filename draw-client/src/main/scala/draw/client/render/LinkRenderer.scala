@@ -44,6 +44,7 @@ object LinkRenderer {
         cls := "link",
         path(
           pointsUpdate { s =>
+            println("points updated for " + initial.id)
             d := s
           }
         ),
@@ -54,7 +55,7 @@ object LinkRenderer {
           }
         ),
         thisElementAs { element =>
-          points.via(pointsUpdate.pipeline).tap(_ => renderState.notifyRendered(initial, element)).consumeAndAwaitFirst
+          points.via(pointsUpdate.pipeline).tap(_ => renderState.notifyRendered(initial, element)).consume
         }
       ).map((_, ZPipeline.identity)) // No updates rendered on Link itself
     }

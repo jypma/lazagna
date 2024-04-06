@@ -61,7 +61,7 @@ path.link-preview {
     stroke-dasharray: 4 1;
 }
 
-g.icon text.label {
+text.label {
     fill: rgba(var(--fg-color-main));
     text-anchor: middle;
     dominant-baseline: hanging;

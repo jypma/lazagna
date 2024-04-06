@@ -80,14 +80,12 @@ object DrawingTools {
       index <- ZIO.service[SymbolIndex]
       keyboard <- Children.make
       iconTool <- icon(drawing, dialogs, keyboard, index)
-      labelTool <- LabelTool.make(drawing, dialogs, keyboard)
       selectTool <- SelectTool.make(drawing, dialogs, keyboard)
       linkTool <- LinkTool(drawing)
       tools = Seq(
         Tool("s", "select", "Select, move and adjust existing objects", "⛶", selectTool),
         Tool("p", "pencil", "Add pencil strokes", "✏️", pencil(drawing)),
         Tool("i", "icon", "Add icons", "🚶", iconTool),
-//        Tool("t", "label", "Add labels", "🏷️", labelTool),
         Tool("l", "link", "Add links", "🔗", linkTool),
       )
       selectedTool <- SubscriptionRef.make(tools(0))

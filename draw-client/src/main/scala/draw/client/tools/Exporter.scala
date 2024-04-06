@@ -15,6 +15,7 @@ trait Exporter {
 }
 
 object Exporter {
+  // FIXME: Move all icon labels down by their calculated "yOffset" (they're all too high in Inkscape)
   def make(svg: dom.svg.SVG) = {
     for {
       drawing <- ZIO.service[Drawing]

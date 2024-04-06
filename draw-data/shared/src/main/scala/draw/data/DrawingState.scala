@@ -1,6 +1,6 @@
 package draw.data
 
-import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, LabelObject, MoveObject, StartScribble}
+import draw.data.drawcommand.{ContinueScribble, CreateIcon, DeleteObject, DrawCommand, LabelObject, MoveObject, StartScribble, EditLink}
 import draw.data.drawevent.DrawEvent
 import draw.data.drawevent.ScribbleStarted
 import draw.data.drawevent.IconCreated
@@ -12,6 +12,7 @@ import draw.data.drawevent.ObjectDeleted
 import draw.data.drawevent.DrawEventBody
 import draw.data.drawevent.DrawingCreated
 import draw.data.drawevent.LinkCreated
+import draw.data.drawevent.LinkEdited
 import java.time.Instant
 import draw.data.drawcommand.CreateLink
 
@@ -61,11 +62,13 @@ case class DrawingState(
       case LinkCreated(id, src, dest, preferredDistance, preferredAngle, _) =>
         create(id, LinkState(src, dest, preferredDistance, preferredAngle),
           newLinks = objectLinks.add(src, id).add(dest, id))
+      case LinkEdited(id, _, _, _) =>
+        update(id, event)
       case ScribbleContinued(id, _, _) =>
         update(id, event)
       case ObjectMoved(id, _, _)  =>
         update(id, event)
-      case ObjectLabelled(id, _, _) =>
+      case ObjectLabelled(id, _, _, _, _, _) =>
         update(id, event)
       case ObjectDeleted(id, _) => alive.get(id).map(_.body) match {
         case Some(LinkState(src, dest, _, _)) =>
@@ -101,9 +104,9 @@ case class DrawingState(
         emit(ObjectMoved(id, Some(position)))
       case CreateIcon(id, position, category, name, width, height, _) =>
         emit(IconCreated(id, Some(position), Some(category), Some(name), Some(width), Some(height)))
-      case LabelObject(id, label, _) =>
+      case LabelObject(id, label, width, height, yOffset, _) =>
         // TODO: verify icon exists
-        emit(ObjectLabelled(id, label))
+        emit(ObjectLabelled(id, label, Some(width), Some(height), Some(yOffset)))
       case CreateLink(id, src, dest, preferredDistance, preferredAngle, _) =>
         // TODO: verify ids exist
         // TEST: Don't allow adding of link between already linked objects
@@ -119,6 +122,15 @@ case class DrawingState(
           Seq.empty
         } else {
           emit(LinkCreated(id, src, dest, preferredDistance, preferredAngle))
+        }
+      case EditLink(id, preferredDistance, preferredAngle, _)  =>
+        objects.get(id) match {
+          case Some(ObjectState(_,_,_,l:LinkState)) =>
+            emit(LinkEdited(id, preferredDistance.orElse(l.preferredDistance),
+              preferredAngle.orElse(l.preferredAngle)))
+          case _ =>
+            println("??? Unknown link " + id)
+            Seq.empty
         }
       case _ =>
         Seq.empty

@@ -61,7 +61,6 @@ object RenderState {
     def get(id: String) = byId.get(id)
 
     def + (obj: RenderedObject) = {
-      println("Rendered: " + obj.id + ", deleted: " + obj.state.deleted)
       copy(
         byId = byId + (obj.id -> obj),
         byElement = byElement + (obj.element -> obj),
@@ -180,7 +179,6 @@ object RenderState {
           println(s"Warning, object ${objState.id} did not render in time for ${objState.body}.")
         }
         val rendered = RenderedObject(objState, element, bbox)
-        println("rendered: " + rendered)
 
         semaphore.withPermit {
           state.modify { s =>

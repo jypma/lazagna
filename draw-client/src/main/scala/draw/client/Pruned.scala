@@ -3,7 +3,7 @@ package draw.client
 import zio.ZIO
 import zio.lazagna.eventstore.EventStore
 
-import draw.data.drawevent.{DrawEvent, DrawingCreated, IconCreated, LinkCreated, ObjectDeleted, ObjectLabelled, ObjectMoved, ScribbleContinued, ScribbleStarted}
+import draw.data.drawevent.{DrawEvent, DrawingCreated, IconCreated, LinkCreated, ObjectDeleted, ObjectLabelled, ObjectMoved, ScribbleContinued, ScribbleStarted, LinkEdited}
 import org.scalajs.dom
 
 object Pruned {
@@ -61,7 +61,21 @@ object Pruned {
   }
 
   case class LinkState(started: DrawEvent) extends ObjectState[LinkState] {
-    def prune(event: DrawEvent): ZIO[Backend, Err, LinkState] = ZIO.succeed(this)
+    def prune(event: DrawEvent): ZIO[Backend, Err, LinkState] = for {
+      storage <- ZIO.service[Backend]
+      res <- event.body match {
+        case e:LinkEdited =>
+          val newEvent = event.copy(
+            body = started.body.asInstanceOf[LinkCreated].copy(
+              preferredDistance = e.preferredDistance,
+              preferredAngle = e.preferredAngle
+            )
+          )
+          storage.delete(started.sequenceNr) *> storage.publish(newEvent).as(copy(started = newEvent))
+
+        case _ => ZIO.succeed(this)
+      }
+    } yield res
 
     def ownedEvents = Seq(started)
   }
@@ -95,6 +109,11 @@ object Pruned {
         _.prune(event).map(newState => copy(icons = icons + (id -> newState)))
       ).getOrElse(ZIO.succeed(this))
 
+    private def updateLink(id: String, event: DrawEvent) =
+      links.get(id).map(
+        _.prune(event).map(newState => copy(links = links + (id -> newState)))
+      ).getOrElse(ZIO.succeed(this))
+
 
     /** Apply an already pruned event from storage */
     def recover(event: DrawEvent): State = {
@@ -111,7 +130,7 @@ object Pruned {
           update(id, scribbles(id).copy(moved = Some(event)))
         case ObjectMoved(id, _, _) if icons.contains(id) =>
           update(id, icons(id).copy(moved = Some(event)))
-        case ObjectLabelled(id, _, _) if icons.contains(id) =>
+        case ObjectLabelled(id, _, _, _, _, _) if icons.contains(id) =>
           update(id, icons(id).copy(labelled = Some(event)))
         case other =>
           println("??? Unexpected recovery event: " + other)
@@ -136,6 +155,12 @@ object Pruned {
         case LinkCreated(id, _, _, _, _, _) =>
           storage.publish(event).as(update(id, LinkState(event)))
 
+        case LinkEdited(id, _, _, _) =>
+          if (links.contains(id))
+            updateLink(id, event)
+          else
+            ZIO.succeed(this)
+
         case ScribbleContinued(id, _, _) =>
           updateScribble(id, event)
 
@@ -154,7 +179,7 @@ object Pruned {
             icons = icons - id
           ))
 
-        case ObjectLabelled(id, _, _) =>
+        case ObjectLabelled(id, _, _, _, _, _) =>
           updateIcon(id, event)
 
         case other =>

@@ -3,7 +3,7 @@
 set -e
 
 FILE=$1
-COLOR=$(grep pagecolor exported.svg |  sed 's/^.*pagecolor="\([^"]*\)".*$/\1/')
+COLOR=$(grep pagecolor $FILE |  sed 's/^.*pagecolor="\([^"]*\)".*$/\1/')
 BASE="${FILE%.svg}"
 
 inkscape $FILE -o $BASE.png -d 300 -b $COLOR

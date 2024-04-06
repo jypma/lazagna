@@ -117,6 +117,7 @@ object DrawingRenderer {
             case Drawing.Disconnected => 2
           }), alternatives, Some(initialView)),
           renderState.latestSequenceNr.tap { seqNr =>
+            println("Seen " + seqNr)
             eventCountDebug += 1
             if (switchedReady || (seqNr < drawing.initialVersion)) ZIO.unit else {
               switchedReady = true

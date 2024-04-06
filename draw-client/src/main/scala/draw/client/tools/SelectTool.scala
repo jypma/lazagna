@@ -15,8 +15,8 @@ import zio.{URIO, ZIO}
 
 import draw.client.Drawing
 import draw.client.render.{DrawingRenderer, RenderState}
-import draw.data.drawcommand.{DeleteObject, DrawCommand, LabelObject, MoveObject}
-import draw.data.{IconState, Moveable, ObjectState, SymbolRef}
+import draw.data.drawcommand.{DeleteObject, DrawCommand, LabelObject, MoveObject, EditLink}
+import draw.data.{IconState, Moveable, ObjectState, SymbolRef, LinkState}
 import draw.geom.Point
 import org.scalajs.dom
 
@@ -28,10 +28,17 @@ object SelectTool {
   def make(drawing: Drawing, dialogs: Children, keyboard: Children): URIO[RenderState,Modifier[Unit]] = for {
     state <- SubscriptionRef.make[Option[State]](None)
     editingLabel <- SubscriptionRef.make[Option[(String, IconState)]](None)
+    editingLink <- SubscriptionRef.make[Option[(String, LinkState)]](None)
     addToSelection <- SubscriptionRef.make(false)
     removeFromSelection <- SubscriptionRef.make(false)
     renderState <- ZIO.service[RenderState]
   } yield SVGHelper { helper =>
+    helper.measurer(
+      text(
+        cls := "label",
+        style := "opacity: 0"
+      )
+    ) { measureLabel =>
     def doSelect(targets: Set[String]) = addToSelection.get.zip(removeFromSelection.get).flatMap { (adding, removing) =>
       if (adding) {
         renderState.selectAlso(targets)
@@ -81,34 +88,67 @@ object SelectTool {
       keyboard.child { _ =>
         DrawingTools.keyboardAction("ArrowDown", "Select downwards", expandSelect(RenderState.Direction.down))
       },
-      Alternative.mountOne(editingLabel) {
-        case Some(target) =>
-          dialogs.child { _ =>
-            val pos = helper.svgToScreen(target._2.position.move(-iconSize / 2, iconSize * 0.45))
-            val bounds = helper.svgToScreen(target._2.position.move(iconSize / 2, -iconSize / 2))
-            val width = bounds.x - pos.x
-            val close = editingLabel.set(None)
+      Alternative.option(editingLabel) { target =>
+        dialogs.child { _ =>
+          val pos = helper.svgToScreen(target._2.position.move(-iconSize / 2, iconSize * 0.45))
+          val bounds = helper.svgToScreen(target._2.position.move(iconSize / 2, -iconSize / 2))
+          val width = bounds.x - pos.x
+          val close = editingLabel.set(None)
+          div(
+            cls := "label-input",
+            style := s"left: ${pos.x - width * 1}px; top: ${pos.y}px;",
+            input(
+              style := s"width: ${width * 3}px; font-size:${width * 45 / 178}px",
+              typ := "text",
+              placeholder := "Enter label...",
+              focusNow,
+              value <-- drawing.objectState(target._1).map(_.body).collect { case IconState(_,_,label,_) => label },
+              onInput.asTargetValue(_.flatMap { text =>
+                measureLabel.boundingBox(textContent := text).flatMap { box =>
+                  drawing.perform(DrawCommand(LabelObject(target._1, text, box.width, box.height, box.origin.y)))
+                }
+              })
+            ),
+            keyboard.child { _ =>
+              DrawingTools.keyboardAction("Escape", "Close dialog", close)
+            },
+            keyboard.child { _ =>
+              DrawingTools.keyboardAction("Enter", "Close dialog", close)
+            }
+          )
+        }
+      },
+      Alternative.option(editingLink) { (linkId, state) =>
+        val lengths = Seq(
+          ("∅", "Manual"),
+          ("⎼", "Short"),
+          ("⎯", "Medium"),
+          ("⎯⎯", "Long")
+        )
+        dialogs.child { destroy =>
+          div(
+            cls := "dialog link-dialog",
+            div(textContent := "Length:"),
             div(
-              cls := "label-input",
-              style := s"left: ${pos.x - width * 1}px; top: ${pos.y}px;",
-              input(
-                style := s"width: ${width * 3}px; font-size:${width * 45 / 178}px",
-                typ := "text",
-                placeholder := "Enter label...",
-                focusNow,
-                value <-- drawing.objectState(target._1).map(_.body).collect { case IconState(_,_,label,_) => label },
-                onInput.asTargetValue(_.flatMap { text =>
-                  drawing.perform(DrawCommand(LabelObject(target._1, text)))
-                })
-              ),
-              keyboard.child { _ =>
-                DrawingTools.keyboardAction("Escape", "Close dialog", close)
-              },
-              keyboard.child { _ =>
-                DrawingTools.keyboardAction("Enter", "Close dialog", close)
+              cls := "lengths",
+              lengths.zipWithIndex.map { case ((icon, desc), idx) =>
+
+                div(
+                  cls := "length",
+                  input(typ := "radio", name := "length", id := s"length${idx}",
+                    checked := state.preferredDistance.contains(idx)
+                  ),
+                  div(
+                    label(`for` := s"length${idx}", textContent := icon, title := desc),
+                    onClick.tap { _ =>
+                      drawing.perform(DrawCommand(EditLink(linkId, preferredDistance = Some(idx))))
+                    }
+                  )
+                )
               }
             )
-          }
+          )
+        }
       },
       Alternative.mountOne(renderState.selection) {
         _.headOption.map(_.state) match {
@@ -170,5 +210,6 @@ object SelectTool {
           }
       }
     )
+    }
   }
 }

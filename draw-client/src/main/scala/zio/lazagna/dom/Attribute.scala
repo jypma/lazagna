@@ -10,17 +10,12 @@ import org.scalajs.dom
 case class Attribute(name: String) {
   import Attribute._
 
-  def :=(value: Double): Modifier[Unit] = set(value)
-  def set(value: Double): Modifier[Unit] = :=(value.toString)
+  def :=[T](value: T)(implicit ev: AttributeType[T]): Modifier[Unit] = set(value)
 
-  def :=(value: Int): Modifier[Unit] = set(value)
-  def set(value: Int): Modifier[Unit] = :=(value.toString)
-
-  def :=(value: String): Modifier[Unit] = set(value)
-  def set(value: String): Modifier[Unit] = Modifier { parent =>
+  def set[T](value: T)(implicit ev: AttributeType[T]): Modifier[Unit] = Modifier { parent =>
     ZIO.succeed {
+      ev.setTo(parent, name, value)
       // FIXME: Consider removing the attribute when scope ends, if it wasn't set before
-      parent.setAttribute(name, value)
     }
   }
 

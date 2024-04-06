@@ -5,6 +5,8 @@ import zio.lazagna.dom.{Element, Modifier}
 
 import draw.geom.{Point, Rectangle}
 import org.scalajs.dom
+import zio.ZIO
+import zio.ZLayer
 
 class SVGHelper(val svg: dom.svg.SVG) {
   import SVGHelper._
@@ -43,6 +45,24 @@ class SVGHelper(val svg: dom.svg.SVG) {
     pt.y = point.y;
     pt.matrixTransform(svg.getScreenCTM())
   }
+
+  def measurer[E <: dom.SVGLocatable with dom.Element, T](elem: Modifier[E])(fn: SVGMeasurer[E] => Modifier[T]) = {
+    ZIO.scope.flatMap { scope =>
+      elem.flatMap { e =>
+        val layer = ZLayer.succeed(scope) ++ ZLayer.succeed(Modifier.MountPoint(e))
+
+        fn(new SVGMeasurer[E] {
+          def boundingBox(modifiers: Modifier[_]*) = {
+            ZIO.collectAll(modifiers.map(_.provideLayer(layer))) *> ZIO.succeed(svgBoundingBox(e))
+          }
+        })
+      }
+    }
+  }
+}
+
+trait SVGMeasurer[E] {
+  def boundingBox(modifiers: Modifier[_]*): ZIO[Any, Nothing, Rectangle]
 }
 
 object SVGHelper {

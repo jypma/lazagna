@@ -20,6 +20,7 @@ message DrawEventBody {
         IconCreated iconCreated = 6;
         ObjectLabelled objectLabelled = 7;
         LinkCreated linkCreated = 8;
+        LinkEdited linkEdited = 9;
     }
 }
 
@@ -58,12 +59,21 @@ message IconCreated {
 message ObjectLabelled {
     required string id = 1;
     required string label = 2;
+    optional double width = 3;
+    optional double height = 4;
+    optional double yOffset = 5;
 }
 
 message LinkCreated {
     required string id = 1;
     required string src = 2;
     required string dest = 3;
+    optional int32 preferredDistance = 4; // Currently 1 = small, 2 = medium, 3 = large. Experiment with adding "elasticity" here as well to tweak the weight?
+    optional sint32 preferredAngle = 5; // As seen from id1 to id2
+}
+
+message LinkEdited {
+    required string id = 1;
     optional int32 preferredDistance = 4; // Currently 1 = small, 2 = medium, 3 = large. Experiment with adding "elasticity" here as well to tweak the weight?
     optional sint32 preferredAngle = 5; // As seen from id1 to id2
 }

@@ -16,6 +16,7 @@ message DrawCommandBody {
         CreateIcon createIcon = 5;
         LabelObject labelObject = 6;
         CreateLink createLink = 7;
+        EditLink editLink = 8;
     }
 }
 
@@ -51,12 +52,21 @@ message CreateIcon {
 message LabelObject {
     required string id = 1;
     required string label = 2;
+    required double width = 3;
+    required double height = 4;
+    required double yOffset = 5;
 }
 
 message CreateLink {
     required string id = 1;
     required string src = 2;
     required string dest = 3;
+    optional int32 preferredDistance = 4; // Currently 1 = small, 2 = medium, 3 = large. Experiment with adding "elasticity" here as well to tweak the weight?
+    optional sint32 preferredAngle = 5; // As seen from id1 to id2
+}
+
+message EditLink {
+    required string id = 1;
     optional int32 preferredDistance = 4; // Currently 1 = small, 2 = medium, 3 = large. Experiment with adding "elasticity" here as well to tweak the weight?
     optional sint32 preferredAngle = 5; // As seen from id1 to id2
 }

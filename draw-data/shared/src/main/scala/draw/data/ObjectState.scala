@@ -9,6 +9,7 @@ import draw.data.drawevent.ObjectMoved
 import draw.data.drawevent.ObjectLabelled
 import draw.geom.Bounds
 import draw.geom.Rectangle
+import draw.data.drawevent.LinkEdited
 
 sealed trait ObjectStateBody {
   def update(event: DrawEventBody) = this
@@ -43,7 +44,7 @@ case class IconState(position: Point, symbol: SymbolRef, label: String, bounds: 
   override def update(event: DrawEventBody) = event match {
     case ObjectMoved(_, Some(newPosition), _) =>
       copy(position = newPosition)
-    case ObjectLabelled(_, newLabel, _) =>
+    case ObjectLabelled(_, newLabel, _, _, _, _) =>
       copy(label = newLabel)
     case _ => this
   }
@@ -58,5 +59,9 @@ case class IconState(position: Point, symbol: SymbolRef, label: String, bounds: 
 }
 
 case class LinkState(src: String, dest: String, preferredDistance: Option[Int], preferredAngle: Option[Int]) extends ObjectStateBody {
-
+  override def update(event: DrawEventBody) = event match {
+    case LinkEdited(_, distance, angle, _) =>
+      copy(preferredDistance = distance, preferredAngle = angle)
+    case _ => this
+  }
 }
