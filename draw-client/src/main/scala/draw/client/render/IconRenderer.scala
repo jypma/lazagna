@@ -33,6 +33,28 @@ object IconRenderer {
           val p = s.body.position
           transform.set(s"translate(${p.x},${p.y})")
         },
+        /* bounds
+        rect(
+          cls := "bounds",
+          state { s =>
+            (width := s.body.bounds.map(_.width).getOrElse(10.0)) *>
+            (height := s.body.bounds.map(_.height).getOrElse(10.0)) *>
+            (x := s.body.bounds.map(_.width / -2).getOrElse(0.0)) *>
+            (y := s.body.bounds.map(_.height / -2).getOrElse(0.0))
+          }
+        ),
+        rect(
+          cls := "bounds",
+          state { s =>
+            s.body.labelBounds.map { l =>
+              val r = l.move(0, DrawingRenderer.iconSize / 2)
+              (width := r.width) *>
+              (height := r.height) *>
+              (x := r.origin.x) *>
+              (y := r.origin.y)
+            }.getOrElse(ZIO.unit)
+          }
+        ), */
         g(
           cls := "selectTarget",
           use(

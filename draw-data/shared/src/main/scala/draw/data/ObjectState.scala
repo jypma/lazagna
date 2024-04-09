@@ -40,10 +40,12 @@ case class ScribbleState(position: Point, points: Seq[Point]) extends ObjectStat
 
 }
 
-case class IconState(position: Point, symbol: SymbolRef, label: String, bounds: Option[Bounds] = None) extends ObjectStateBody with Moveable {
+case class IconState(position: Point, symbol: SymbolRef, label: String, bounds: Option[Bounds] = None, labelBounds: Option[Rectangle] = None) extends ObjectStateBody with Moveable {
   override def update(event: DrawEventBody) = event match {
     case ObjectMoved(_, Some(newPosition), _) =>
       copy(position = newPosition)
+    case ObjectLabelled(_, newLabel, Some(width), Some(height), Some(yOffset), _) =>
+      copy(label = newLabel, labelBounds = Some(Rectangle(Point(-width / 2, yOffset), width, height)))
     case ObjectLabelled(_, newLabel, _, _, _, _) =>
       copy(label = newLabel)
     case _ => this

@@ -8,7 +8,7 @@ html, svg {
     --fg-color-selected: 255, 255, 255;
 }
 
-g.icon text.label, div.label-input input {
+text.label, div.label-input input {
     font-family: indie_flowerregular;
 }
 

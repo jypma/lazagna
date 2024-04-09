@@ -18,6 +18,7 @@ import draw.geom.Point
 import org.scalajs.dom
 
 import Drawing._
+import zio.lazagna.Setup
 
 trait DrawingRenderer {
   def render: Modifier[Any]
@@ -48,6 +49,7 @@ object DrawingRenderer {
       renderState <- ZIO.service[RenderState]
       initialView = if (drawing.initialVersion <= 1) 1 else 0
       currentView <- SubscriptionRef.make(initialView)
+      awaiting <- SubscriptionRef.make(Set.empty[String])
     } yield new DrawingRenderer {
       println("Rendering up to event " + drawing.initialVersion + " in background.")
       val start = System.currentTimeMillis()
@@ -77,12 +79,14 @@ object DrawingRenderer {
                       case _:LinkState => linkR
                     }).asInstanceOf[ObjectRenderer[initial.Body]]
 
+                    awaiting.update(_ + initial.id) *> // FIXME only if event < drawing.initialVersion
                     children.child { destroy =>
                       g(
                         cls <-- renderState.selectionIds.map { s => if (s.contains(initial.id)) "selected" else "" }.changes,
                         renderer.render(initial).flatMap { case (elem, pipeline)  =>
                           drawing.objectState(initial)
                             .via(pipeline)
+                            .tap{_ => awaiting.update{_ - initial.id}}
                             .tap(s => renderState.notifyRendered(s, elem) *> ZIO.when(s.deleted)(destroy))
                             .takeUntil(_.deleted)
                             .consume
@@ -116,16 +120,16 @@ object DrawingRenderer {
           Alternative.showOne(currentView.merge(drawing.connectionStatus.collect {
             case Drawing.Disconnected => 2
           }), alternatives, Some(initialView)),
-          renderState.latestSequenceNr.tap { seqNr =>
-            println("Seen " + seqNr)
+          awaiting.changes.zipLatest(renderState.latestSequenceNr).tap { (notready, seqNr) =>
+            println("Seen " + seqNr + ", awaiting " + notready.mkString(","))
             eventCountDebug += 1
-            if (switchedReady || (seqNr < drawing.initialVersion)) ZIO.unit else {
+            if (switchedReady || (seqNr < drawing.initialVersion) || !notready.isEmpty) ZIO.unit else {
               switchedReady = true
               val time = System.currentTimeMillis() - start
               println(s"Processed ${eventCountDebug} events, until sequence nr ${drawing.initialVersion}, in ${time}ms")
               currentView.set(1)
             }
-          }.takeUntil(_ >= drawing.initialVersion).consume
+          }.takeUntil((notready, seqNr) => seqNr >= drawing.initialVersion && notready.isEmpty).consume
         )
       }
     }

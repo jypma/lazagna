@@ -9,25 +9,41 @@ import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.MultiUpdate
 import zio.lazagna.dom.svg.PathData
 
-import draw.data.{LinkState, ObjectState}
+import draw.data.{LinkState, ObjectState, IconState}
 import draw.geom.{Point, Rectangle}
 import zio.stream.ZPipeline
+import zio.Promise
+import draw.client.Drawing
 
 object LinkRenderer {
+  private val margin = 4
+
   def make = for {
     renderState <- ZIO.service[RenderState]
     iconRenderer <- ZIO.service[IconRenderer]
+    ready <- Promise.make[Nothing,Unit]
+    drawing <- ZIO.service[Drawing]
   } yield new ObjectRenderer[LinkState] {
+    def getBoundingBoxes(iconId: String): Consumeable[(Rectangle, Option[Rectangle])] =
+      drawing.objectState(iconId).map(_.body).collect {
+        case IconState(position, _, _, Some(bounds), Some(labelBounds)) =>
+          // FIXME: No label if no label?
+          (bounds.middleAt(position).expand(margin),
+            Some(labelBounds.move(position.x, position.y + DrawingRenderer.iconSize / 2).expand(margin)))
+      }
+
     override def render (initial: ObjectState[LinkState]) = MultiUpdate.make[String].flatMap { pointsUpdate =>
-      val srcBoxes = iconRenderer.getBoundingBoxes(initial.body.src)
-      val destBoxes = iconRenderer.getBoundingBoxes(initial.body.dest)
+      val srcBoxes = getBoundingBoxes(initial.body.src)
+      val destBoxes = getBoundingBoxes(initial.body.dest)
 
       val points = srcBoxes.zipLatestWith(destBoxes)((_, _)).map { case ((src, srcLabel), (dst, dstLabel)) =>
         val fullLine = src.middle.to(dst.middle)
 
         def intersect(icon: Rectangle, label: Option[Rectangle]) = label.filter(_.intersects(fullLine)).map { r =>
           Rectangle(Point(r.origin.x, icon.origin.y), r.width, r.origin.y - icon.origin.y + r.height)
-        }.getOrElse(icon)
+        }.getOrElse {
+          icon
+        }
 
         val srcBox = intersect(src, srcLabel)
         val dstBox = intersect(dst, dstLabel)
@@ -55,9 +71,11 @@ object LinkRenderer {
           }
         ),
         thisElementAs { element =>
-          points.via(pointsUpdate.pipeline).tap(_ => renderState.notifyRendered(initial, element)).consume
+          points.via(pointsUpdate.pipeline).tap { _ =>
+            renderState.notifyRendered(initial, element) *> ready.completeWith(ZIO.unit)
+          }.consume
         }
-      ).map((_, ZPipeline.identity)) // No updates rendered on Link itself
+      ).map((_, ZPipeline.tap(_ => ready.await))) // No updates rendered on Link itself
     }
   }
 }

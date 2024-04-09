@@ -174,6 +174,7 @@ object RenderState {
     }
 
     def notifyRendered(objState: ObjectState[_], element: dom.Element): UIO[Unit] = {
+      println("Rendered: " + objState.id)
       getBBox(objState, element).flatMap { bbox =>
         if (bbox.width == 10 && bbox.height == 10) {
           println(s"Warning, object ${objState.id} did not render in time for ${objState.body}.")

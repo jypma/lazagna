@@ -54,6 +54,12 @@ g.link path.selectTarget {
     stroke-dasharray: 0;
 }
 
+rect.bounds {
+    fill: none;
+    stroke-width: 2px;
+    stroke: red;
+}
+
 path.link-preview {
     stroke: rgba(var(--fg-color-highlight));
     opacity: 0.4;

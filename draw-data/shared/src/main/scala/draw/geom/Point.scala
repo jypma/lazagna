@@ -4,6 +4,8 @@ case class Point(x: Double, y: Double) {
   override def toString = f"($x%1.2f,$y%1.2f)"
 
   def move(deltaX: Double, deltaY: Double) = Point(x + deltaX, y + deltaY)
+  def moveX(deltaX: Double) = Point(x + deltaX, y)
+  def moveY(deltaY: Double) = Point(x, y + deltaY)
   def move(delta: Point) = Point(x + delta.x, y + delta.y)
   def to(p: Point) = Line(this, p)
 
@@ -44,24 +46,40 @@ object Point {
 case class Line(from: Point, to: Point) {
   def reverse = Line(to, from)
 
-  def intersects(rect: Rectangle): Boolean = {
-    def quadrant(p: Point) = {
-      if (p.x < rect.origin.x) {
-        if (p.y < rect.origin.y) "1001".b
-        else if (p.y > rect.origin.y + rect.height) "1010".b
-        else "1000".b
-      } else if (p.x > rect.origin.x + rect.width) {
-        if (p.y < rect.origin.y) "0101".b
-        else if (p.y > rect.origin.y + rect.height) "0110".b
-        else "0100".b
-      } else {
-        if (p.y < rect.origin.y) "0001".b
-        else if (p.y > rect.origin.y + rect.height) "0010".b
-        else "0000".b
+  def intersects(other: Line): Boolean = {
+    val s10_x = to.x - from.x;
+    val s10_y = to.y - from.y;
+    val s32_x = other.to.x - other.from.x;
+    val s32_y = other.to.y - other.from.y;
+
+    val denom = s10_x * s32_y - s32_x * s10_y;
+    if (denom == 0) /* Collinear */ false else {
+      val denomPositive = denom > 0;
+
+      val s02_x = from.x - other.from.x
+      val s02_y = from.y - other.from.y
+      val s_numer = s10_x * s02_y - s10_y * s02_x;
+      if ((s_numer < 0) == denomPositive) false else {
+        val t_numer = s32_x * s02_y - s32_y * s02_x;
+        if ((t_numer < 0) == denomPositive) false else {
+          if (((s_numer > denom) == denomPositive) || ((t_numer > denom) == denomPositive)) false else {
+            // Collision detected
+            /*
+            t = t_numer / denom;
+            if (i_x != NULL)
+              *i_x = p0_x + (t * s10_x);
+            if (i_y != NULL)
+              *i_y = p0_y + (t * s10_y);
+             */
+            true
+          }
+        }
       }
     }
+  }
 
-    (quadrant(from) & quadrant(to)) == 0
+  def intersects(rect: Rectangle): Boolean = {
+    intersects(rect.leftBorder) || intersects(rect.topBorder) || intersects(rect.rightBorder) || intersects(rect.bottomBorder)
   }
 
   /** Returns the length of this line */
@@ -72,6 +90,7 @@ case class Line(from: Point, to: Point) {
 }
 
 case class Bounds(width: Double, height: Double) {
+  def at(p: Point): Rectangle = Rectangle(p, width, height)
   def at(x: Double, y: Double): Rectangle = Rectangle(Point(x,y), width, height)
   def middleAt(x: Double, y: Double): Rectangle = Rectangle(Point(x - 0.5 * width, y - 0.5 * height), width, height)
   def middleAt(p: Point): Rectangle = middleAt(p.x, p.y)
@@ -85,6 +104,17 @@ case class Rectangle(origin: Point, width: Double, height: Double) {
 
   def middle: Point = origin.move(width / 2, height / 2)
   def span: Point = origin.move(width, height)
+
+  def leftBorder: Line = origin.to(origin.moveY(height))
+  def topBorder: Line = origin.to(origin.moveX(width))
+  def rightBorder: Line = {
+    val topRight = origin.moveX(width)
+    topRight.to(topRight.moveY(height))
+  }
+  def bottomBorder: Line = {
+    val bottomLeft = origin.moveY(height)
+    bottomLeft.to(bottomLeft.moveX(width))
+  }
 
   def intersects(line: Line): Boolean = line.intersects(this)
   /** Expands the rectangle outwards by the given amount */
