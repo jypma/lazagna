@@ -2,17 +2,16 @@ package draw.client.render
 
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable.given
-import zio.lazagna.dom.svg.SVGHelper
 import zio.stream.{SubscriptionRef, ZStream}
 import zio.{Hub, Semaphore, UIO, ZIO, ZLayer}
 
 import draw.data.ObjectState
 import draw.geom.Rectangle
 import org.scalajs.dom
-import draw.data.IconState
 
-case class RenderedObject(state: ObjectState[_], element: dom.Element, boundingBox: Rectangle) {
+case class RenderedObject(state: ObjectState[_], element: dom.Element) {
   def id = state.id
+  def boundingBox = state.body.boundingBox
 }
 
 trait RenderState {
@@ -160,35 +159,16 @@ object RenderState {
         }
     }.map(_.hubs(id))
 
-    private def getBBox(objState: ObjectState[_], element: dom.Element): UIO[Rectangle] = {
-      val padding = 5
-
-      objState.body match {
-        case i:IconState if i.iconBoundingBox.isDefined =>
-          ZIO.succeed(i.iconBoundingBox.get.expand(padding))
-        case _ =>
-          val target = Option(element.querySelector(".selectTarget")).getOrElse(element)
-          val bbox = new SVGHelper(element.asInstanceOf[dom.SVGElement].ownerSVGElement).svgBoundingBox(target.asInstanceOf[dom.SVGLocatable], padding)
-          ZIO.succeed(bbox)
-      }
-    }
-
     def notifyRendered(objState: ObjectState[_], element: dom.Element): UIO[Unit] = {
-      println("Rendered: " + objState.id)
-      getBBox(objState, element).flatMap { bbox =>
-        if (bbox.width == 10 && bbox.height == 10) {
-          println(s"Warning, object ${objState.id} did not render in time for ${objState.body}.")
-        }
-        val rendered = RenderedObject(objState, element, bbox)
+      val rendered = RenderedObject(objState, element)
 
-        semaphore.withPermit {
-          state.modify { s =>
-            val existing = s.get(rendered.id)
-            (existing.isEmpty, s + rendered)
-          }.flatMap { isNew =>
-            hub(rendered.id).flatMap { hub =>
-              newObjects.publish(rendered).when(isNew) *> seen(objState.sequenceNr) *> hub.publish(rendered).unit
-            }
+      semaphore.withPermit {
+        state.modify { s =>
+          val existing = s.get(rendered.id)
+          (existing.isEmpty, s + rendered)
+        }.flatMap { isNew =>
+          hub(rendered.id).flatMap { hub =>
+            newObjects.publish(rendered).when(isNew) *> seen(objState.sequenceNr) *> hub.publish(rendered).unit
           }
         }
       }

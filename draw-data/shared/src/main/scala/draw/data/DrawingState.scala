@@ -25,13 +25,15 @@ case class DrawingState(
 ) {
   import DrawingState._
 
+  private def getMoveable(id: String): Moveable = objects(id).body.asInstanceOf[Moveable]
+
   private def alive = objects.view.filter(!_._2.deleted)
 
-  private def set(state: ObjectState[_], isNew: Boolean, newLinks: Links) = (
+  private def set(state: ObjectState[_], isNew: Boolean, newLinks: Links, extraUpdates: Iterable[(String, ObjectState[_])] = Nil) = (
     (Some(state), isNew),
     copy(
       // TEST: Deletes objects stick around in state (so we know they've been deleted asynchronously). It's OK, they won't be in pruned event storage.
-      objects = objects + (state.id -> state),
+      objects = objects + (state.id -> state) ++ extraUpdates,
       lastSequenceNr = state.sequenceNr,
       objectLinks = newLinks
     )
@@ -40,9 +42,14 @@ case class DrawingState(
   private def unaffected(event: DrawEvent) =
     ((None, false), copy(lastSequenceNr = event.sequenceNr))
 
+  // TEST: Links follow updates to their dependencies when they are moved
   private def update(id: String, event: DrawEvent, newLinks: Links = objectLinks) = {
     objects.get(id).map { state =>
-      set(state.update(event), false, newLinks)
+      val newState = state.update(event, getMoveable)
+      val linkIds = newLinks.getOrElse(id, Set.empty)
+      val updatedLinks = linkIds.map { linkId => linkId -> objects(linkId).update(event, depId =>
+        if (depId == id) newState.body.asInstanceOf[Moveable] else getMoveable(depId)) }
+      set(newState, false, newLinks, updatedLinks)
     }.getOrElse(unaffected(event))
   }
 
@@ -60,7 +67,8 @@ case class DrawingState(
           category.zip(name).map((c,n) => SymbolRef(SymbolCategory(c), n)).getOrElse(SymbolRef.person), "",
         ).withBounds(width, height))
       case LinkCreated(id, src, dest, preferredDistance, preferredAngle, _) =>
-        create(id, LinkState(src, dest, preferredDistance, preferredAngle),
+        create(id, LinkState(src, dest, preferredDistance, preferredAngle,
+          getMoveable(src), getMoveable(dest)),
           newLinks = objectLinks.add(src, id).add(dest, id))
       case LinkEdited(id, _, _, _) =>
         update(id, event)
@@ -71,7 +79,7 @@ case class DrawingState(
       case ObjectLabelled(id, _, _, _, _, _) =>
         update(id, event)
       case ObjectDeleted(id, _) => alive.get(id).map(_.body) match {
-        case Some(LinkState(src, dest, _, _)) =>
+        case Some(LinkState(src, dest, _, _, _, _)) =>
           update(id, event, newLinks = objectLinks.remove(src, id).remove(dest, id))
         case _ =>
           update(id, event, newLinks = objectLinks - id)
@@ -114,7 +122,7 @@ case class DrawingState(
           println("!!! Invalid link")
           Seq.empty
         } else if (alive.values.map(_.body).exists {
-          case LinkState(s,d,_,_) if (s == src && d == dest) || (s == dest && d == src) => true
+          case LinkState(s,d,_,_,_,_) if (s == src && d == dest) || (s == dest && d == src) => true
           case _ => false
         }) {
           println("!!! Duplicate link")

@@ -14,13 +14,13 @@ import zio.stream.SubscriptionRef
 import zio.{URIO, ZIO}
 
 import draw.client.Drawing
-import draw.client.render.{DrawingRenderer, RenderState}
+import draw.client.render.{RenderState}
 import draw.data.drawcommand.{DeleteObject, DrawCommand, LabelObject, MoveObject, EditLink}
 import draw.data.{IconState, Moveable, ObjectState, SymbolRef, LinkState}
 import draw.geom.Point
 import org.scalajs.dom
 
-import DrawingRenderer.{iconSize}
+import IconState.mediumSize
 
 object SelectTool {
   private case class State(selection: Set[(String, Moveable)], dragStart: Point)
@@ -90,8 +90,8 @@ object SelectTool {
       },
       Alternative.option(editingLabel) { target =>
         dialogs.child { _ =>
-          val pos = helper.svgToScreen(target._2.position.move(-iconSize / 2, iconSize * 0.45))
-          val bounds = helper.svgToScreen(target._2.position.move(iconSize / 2, -iconSize / 2))
+          val pos = helper.svgToScreen(target._2.position.move(-mediumSize / 2, mediumSize * 0.45))
+          val bounds = helper.svgToScreen(target._2.position.move(mediumSize / 2, -mediumSize / 2))
           val width = bounds.x - pos.x
           val close = editingLabel.set(None)
           div(

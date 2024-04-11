@@ -40,8 +40,6 @@ object DrawingRenderer {
     }
   }
 
-  val iconSize = 64
-
   val live = ZLayer.fromZIO {
     for {
       drawingTools <- ZIO.service[DrawingTools]
@@ -121,7 +119,6 @@ object DrawingRenderer {
             case Drawing.Disconnected => 2
           }), alternatives, Some(initialView)),
           awaiting.changes.zipLatest(renderState.latestSequenceNr).tap { (notready, seqNr) =>
-            println("Seen " + seqNr + ", awaiting " + notready.mkString(","))
             eventCountDebug += 1
             if (switchedReady || (seqNr < drawing.initialVersion) || !notready.isEmpty) ZIO.unit else {
               switchedReady = true

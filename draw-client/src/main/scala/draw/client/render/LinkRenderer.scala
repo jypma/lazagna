@@ -9,7 +9,7 @@ import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.MultiUpdate
 import zio.lazagna.dom.svg.PathData
 
-import draw.data.{LinkState, ObjectState, IconState}
+import draw.data.{LinkState, ObjectState}
 import draw.geom.{Point, Rectangle}
 import zio.stream.ZPipeline
 import zio.Promise
@@ -25,11 +25,9 @@ object LinkRenderer {
     drawing <- ZIO.service[Drawing]
   } yield new ObjectRenderer[LinkState] {
     def getBoundingBoxes(iconId: String): Consumeable[(Rectangle, Option[Rectangle])] =
-      drawing.objectState(iconId).map(_.body).collect {
-        case IconState(position, _, _, Some(bounds), Some(labelBounds)) =>
-          // FIXME: No label if no label?
-          (bounds.middleAt(position).expand(margin),
-            Some(labelBounds.move(position.x, position.y + DrawingRenderer.iconSize / 2).expand(margin)))
+      drawing.objectState(iconId).map(_.body).collect { state =>
+        val boxes = state.boundingBoxes
+        (boxes.head.expand(margin), boxes.lastOption.map(_.expand(margin)))
       }
 
     override def render (initial: ObjectState[LinkState]) = MultiUpdate.make[String].flatMap { pointsUpdate =>
@@ -60,7 +58,6 @@ object LinkRenderer {
         cls := "link",
         path(
           pointsUpdate { s =>
-            println("points updated for " + initial.id)
             d := s
           }
         ),
