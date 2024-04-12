@@ -49,6 +49,7 @@ object Element {
 
   object tags {
     val div = CreateFn[dom.HTMLElement]("div")
+    val span = CreateFn[dom.HTMLElement]("span")
     val input = CreateFn[dom.HTMLInputElement]("input")
     val textarea = CreateFn[dom.HTMLTextAreaElement]("input")
     val label = CreateFn[dom.HTMLElement]("label")

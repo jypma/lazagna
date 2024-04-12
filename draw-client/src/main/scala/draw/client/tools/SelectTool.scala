@@ -118,35 +118,83 @@ object SelectTool {
           )
         }
       },
-      Alternative.option(editingLink) { (linkId, state) =>
+      Alternative.option(editingLink) { (linkId, s) =>
         val lengths = Seq(
           ("∅", "Manual"),
           ("⎼", "Short"),
           ("⎯", "Medium"),
           ("⎯⎯", "Long")
         )
-        dialogs.child { destroy =>
-          div(
-            cls := "dialog link-dialog",
-            div(textContent := "Length:"),
-            div(
-              cls := "lengths",
-              lengths.zipWithIndex.map { case ((icon, desc), idx) =>
 
-                div(
-                  cls := "length",
-                  input(typ := "radio", name := "length", id := s"length${idx}",
-                    checked := state.preferredDistance.contains(idx)
-                  ),
+        val directions = Seq(
+          ("^", "up", 360),
+          (">", "right", 90),
+          ("v", "down", 180),
+          ("<", "left", 270)
+        )
+        dialogs.child { _ =>
+          div(
+            cls := "dialog",
+            div (
+              cls := "link-dialog",
+              div(textContent := "Length:"),
+              div(
+                cls := "lengths",
+                lengths.zipWithIndex.map { case ((icon, desc), idx) =>
                   div(
-                    label(`for` := s"length${idx}", textContent := icon, title := desc),
-                    onClick.tap { _ =>
-                      drawing.perform(DrawCommand(EditLink(linkId, preferredDistance = Some(idx))))
+                    cls := "length",
+                    input(typ := "radio", name := "length", id := s"length${idx}",
+                      checked <-- drawing.follow[LinkState](linkId).map(_.body.preferredDistance.getOrElse(0) == idx)
+                    ),
+                    div(
+                      label(`for` := s"length${idx}", textContent := icon, title := desc),
+                      onClick(_.tap { _ =>
+                        drawing.perform(DrawCommand(EditLink(linkId, preferredDistance = Some(idx))))
+                      })
+                    )
+                  )
+                }
+              ),
+              div(textContent := "Direction:"),
+              div(
+                cls := "direction",
+                input(
+                  typ := "text",
+                  placeholder := "∅",
+                  title := "Preferred angle, or empty for no preference",
+                  value <-- drawing.follow[LinkState](linkId)
+                    .map(_.body.preferredAngle.filter(_ != 0).map(_.toString).getOrElse("")),
+                  onInput.asTargetValue(_
+                    .map(_.toIntOption)
+                    .collectF {
+                      case Some(i) if i >= 0 && i <= 360 => i
+                      case _ => 0
+                    }
+                    .flatMap { i =>
+                      drawing.perform(DrawCommand(EditLink(linkId, preferredAngle = Some(i))))
                     }
                   )
-                )
-              }
-            )
+                ),
+                span(textContent := " degrees")
+              ),
+              div(),
+              div(
+                cls := "direction-presets",
+                directions.map { case (s, desc, angle) =>
+                  div(
+                    cls := "preset",
+                    textContent := s,
+                    title := s"Set direction to ${desc}",
+                    onClick(_.tap { _ =>
+                      drawing.perform(DrawCommand(EditLink(linkId, preferredAngle = Some(angle))))
+                    })
+                  )
+                }
+              )
+            ),
+            keyboard.child { _ =>
+              DrawingTools.keyboardAction("Escape", "Close dialog", editingLink.set(None))
+            }
           )
         }
       },
@@ -156,7 +204,13 @@ object SelectTool {
             keyboard.child { _ =>
               DrawingTools.keyboardAction("t", "Edit label", editingLabel.set(Some(id, icon)))
             }
-          case _ => Modifier.empty
+          case Some(ObjectState(id,_,_,state:LinkState)) =>
+            keyboard.child { _ =>
+              DrawingTools.keyboardAction("e", "Edit link", editingLink.set(Some(id, state)))
+            }
+          case other =>
+            println("Not editable: " + other)
+            Modifier.empty
         }
       },
       onMouseDown(_

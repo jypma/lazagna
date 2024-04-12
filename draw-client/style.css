@@ -184,6 +184,43 @@ svg.main {
     cursor: pointer;
 }
 
+.link-dialog {
+    display: grid;
+    grid-template-columns:  minmax(100px, auto) 1fr;
+    justify-items: start;
+}
+
+.link-dialog .lengths {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.link-dialog div.length input {
+    display: none;
+}
+
+.link-dialog div.length label, .link-dialog div.length div {
+    cursor: pointer;
+}
+
+.link-dialog .direction input {
+    width: 3em;
+}
+
+.link-dialog input:checked + div {
+    background-color: rgba(var(--fg-color-selected));
+}
+
+.link-dialog .direction-presets {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.link-dialog .direction-presets .preset {
+    width: 2em;
+    cursor: pointer;
+}
+
 .keyboard-hints {
     position: fixed;
     z-index: 3;

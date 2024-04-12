@@ -26,7 +26,7 @@ case class AutoLayoutImpl() {
       val params = stateLinks.map { link =>
         (link, targets.get(link.body.src), targets.get(link.body.dest))
       }.collect {
-        case (link, Some(src), Some(dest)) if link.body.preferredAngle.isDefined || link.body.preferredDistance.isDefined =>
+        case (link, Some(src), Some(dest)) if link.body.preferredAngle.exists(_ != 0) || link.body.preferredDistance.exists(_ != 0) =>
           (link, src, dest)
       }.map(Link(_,_,_))
 

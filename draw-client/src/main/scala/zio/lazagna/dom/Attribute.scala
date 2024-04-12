@@ -46,7 +46,8 @@ object Attribute {
       override def setTo(parent: dom.Element, name: String, value: Boolean): Unit = {
         (name, parent) match {
           // TODO: See if there's a nicer, more generic way to do this
-          case ("checked", e:dom.HTMLInputElement) => e.checked = value
+          case ("checked", e:dom.HTMLInputElement) =>
+            e.checked = value
           case _ =>
             if (value) {
               parent.setAttribute(name, "true")
