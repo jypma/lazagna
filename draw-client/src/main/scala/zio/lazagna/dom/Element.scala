@@ -72,6 +72,8 @@ object Element {
     val text = CreateFn[dom.svg.Text]("text")
     val image = CreateFn[dom.svg.Image]("image")
     val use = CreateFn[dom.svg.Use]("use")
+    val defs = CreateFn[dom.svg.Use]("defs")
+    val marker = CreateFn[dom.svg.Use]("marker")
     /** The "title" tag, aliased to not conflict with the "title" attribute */
     val svgTitle = CreateFn[dom.svg.Use]("title")
     /** The "style" tag, aliased to not conflict with the "style" attribute */

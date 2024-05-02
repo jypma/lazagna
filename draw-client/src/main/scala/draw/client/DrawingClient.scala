@@ -102,8 +102,9 @@ object DrawingClient {
             } else ZIO.unit
 
             state.modify(_.update(event)).flatMap {
-              case (Some(objectState), isNew) =>
-                newObjects.publish(objectState).when(isNew) *> stateChanges.publish(objectState)
+              case (objectStates, isNew) =>
+                ZIO.when(isNew)(ZIO.collectAll(objectStates.map(newObjects.publish))) *>
+                ZIO.collectAll(objectStates.map(stateChanges.publish))
               case _ =>
                 ZIO.unit
             } *> lastEventNr.set(event.sequenceNr) *> publishLatency

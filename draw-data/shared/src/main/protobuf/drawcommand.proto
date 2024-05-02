@@ -17,6 +17,7 @@ message DrawCommandBody {
         LabelObject labelObject = 6;
         CreateLink createLink = 7;
         EditLink editLink = 8;
+        LayoutObjects layoutObjects = 9;
     }
 }
 
@@ -69,4 +70,9 @@ message EditLink {
     required string id = 1;
     optional int32 preferredDistance = 4; // Currently 1 = small, 2 = medium, 3 = large. Experiment with adding "elasticity" here as well to tweak the weight?
     optional sint32 preferredAngle = 5; // As seen from id1 to id2
+}
+
+
+message LayoutObjects {
+    repeated MoveObject moves = 1;
 }

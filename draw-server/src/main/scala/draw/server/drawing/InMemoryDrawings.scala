@@ -33,6 +33,7 @@ case class DrawingStorage(state: DrawingState = DrawingState(), events: Seq[Draw
 }
 
 case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Drawing {
+  override def getState = storage.get.map(_.state)
 
   override def perform(command: DrawCommand): ZIO[Any, DrawingError, Unit] = {
     for {

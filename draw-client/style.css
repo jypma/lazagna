@@ -76,6 +76,7 @@ text.label {
 
 .tool-select path.selectTarget:hover {
     stroke: rgba(var(--fg-color-highlight));
+    marker-end: url(#arrow);
     opacity: 0.4;
 }
 
@@ -86,6 +87,7 @@ text.label {
 
 .tool-select g.selected path.selectTarget:hover {
     stroke: rgba(var(--fg-color-highlight));
+    marker-end: url(#arrow);
     opacity: 0.5;
 }
 
@@ -205,6 +207,10 @@ svg.main {
 
 .link-dialog .direction input {
     width: 3em;
+}
+
+.link-dialog .direction-presets {
+    font-weight: bold;
 }
 
 .link-dialog input:checked + div {

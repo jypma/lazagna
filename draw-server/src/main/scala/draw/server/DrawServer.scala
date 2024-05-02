@@ -104,7 +104,7 @@ object DrawServer extends ZIOAppDefault {
     case other => Response.badRequest(other.toString)
   }.toHttpApp @@ cors(config)
 
-  override val run = app.flatMap(Server.serve).provide(
+  override val run = app.flatMap(Server.serve).provideSome[Scope](
     ZLayer.succeed(Server.Config.default.binding(InetAddress.getByName("0.0.0.0"), 8080)),
     Server.live,
     Users.inMemory,

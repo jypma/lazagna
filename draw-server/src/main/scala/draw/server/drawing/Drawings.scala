@@ -10,12 +10,14 @@ import draw.data.drawcommand.DrawCommand
 import draw.data.drawevent.DrawEvent
 
 import Drawings.DrawingError
+import draw.data.DrawingState
 
 trait Drawing {
   def perform(command: DrawCommand): ZIO[Any, DrawingError, Unit]
   def events: ZStream[Any, DrawingError, DrawEvent]
   def eventsAfter(sequenceNr: Long): ZStream[Any, DrawingError, DrawEvent]
   def version: ZIO[Any, DrawingError, Long]
+  def getState: ZIO[Any, Nothing, DrawingState]
 }
 
 trait Drawings {

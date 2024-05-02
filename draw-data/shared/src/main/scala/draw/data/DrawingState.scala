@@ -12,9 +12,11 @@ import draw.data.drawevent.ObjectDeleted
 import draw.data.drawevent.DrawEventBody
 import draw.data.drawevent.DrawingCreated
 import draw.data.drawevent.LinkCreated
+import draw.data.drawevent.ObjectsLayedOut
 import draw.data.drawevent.LinkEdited
 import java.time.Instant
 import draw.data.drawcommand.CreateLink
+import draw.data.drawcommand.LayoutObjects
 
 
 case class DrawingState(
@@ -30,7 +32,7 @@ case class DrawingState(
   private def alive = objects.view.filter(!_._2.deleted)
 
   private def set(state: ObjectState[_], isNew: Boolean, newLinks: Links, extraUpdates: Iterable[(String, ObjectState[_])] = Nil) = (
-    (Some(state), isNew),
+    (Seq(state), isNew),
     copy(
       // TEST: Deletes objects stick around in state (so we know they've been deleted asynchronously). It's OK, they won't be in pruned event storage.
       objects = objects + (state.id -> state) ++ extraUpdates,
@@ -40,7 +42,7 @@ case class DrawingState(
   )
 
   private def unaffected(event: DrawEvent) =
-    ((None, false), copy(lastSequenceNr = event.sequenceNr))
+    ((Nil, false), copy(lastSequenceNr = event.sequenceNr))
 
   // TEST: Links follow updates to their dependencies when they are moved
   private def update(id: String, event: DrawEvent, newLinks: Links = objectLinks) = {
@@ -53,8 +55,20 @@ case class DrawingState(
     }.getOrElse(unaffected(event))
   }
 
-  /** Returns the new drawing state, new object state, and whether that object is new */
-  def update(event: DrawEvent): ((Option[ObjectState[_]], Boolean), DrawingState) = {
+  // TEST: Links follow updates to their dependencies when they are moved
+  private def updateAll(event: DrawEvent, moved: Seq[ObjectMoved]): ((Seq[ObjectState[_]], Boolean), DrawingState) = {
+    var drawState = this
+    val objStates = Seq.newBuilder[ObjectState[_]]
+    for (move <- moved) {
+      val ((objState, _), s) = drawState.update(event.copy(body = move))
+      objStates.addAll(objState)
+      drawState = s
+    }
+    ((objStates.result(), false), drawState)
+  }
+
+  /** Returns the new drawing state, new object state(s), and whether those objects are new */
+  def update(event: DrawEvent): ((Seq[ObjectState[_]], Boolean), DrawingState) = {
     def create(id: String, body: ObjectStateBody, newLinks: Links = objectLinks) =
       set(ObjectState(id, event.sequenceNr, false, body), true, newLinks)
 
@@ -86,8 +100,10 @@ case class DrawingState(
       }
       case _:DrawingCreated =>
         unaffected(event)
+      case ObjectsLayedOut(moved, _) =>
+        updateAll(event, moved)
       case _ =>
-        println("??? Unhandled: " + event)
+        println("??? Unhandled event: " + event)
         unaffected(event)
     }
   }
@@ -140,7 +156,13 @@ case class DrawingState(
             println("??? Unknown link " + id)
             Seq.empty
         }
-      case _ =>
+      case LayoutObjects(moves, _) =>
+        // TODO: verify IDs exist, and only emit for moves that have a position
+        emit(ObjectsLayedOut(moves.map { m =>
+          ObjectMoved(m.id, m.position)
+        }))
+      case other =>
+        println("Unhandled command: " + other)
         Seq.empty
     }
   }

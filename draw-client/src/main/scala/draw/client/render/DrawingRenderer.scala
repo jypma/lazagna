@@ -61,6 +61,22 @@ object DrawingRenderer {
             overflow := "hidden",
             tabindex := 0, // To enable keyboard events
             focusNow, // To allow dragging immediately
+            defs(
+              marker(
+                id := "arrow",
+                viewBox := "0 0 20 20",
+                refX := 5,
+                refY := 5,
+                markerWidth := 6,
+                markerHeight := 6,
+                orient := "auto-start-reverse",
+                path(
+                  d := "M 0 0 L 10 5 L 0 10 z",
+                  stroke := "none",
+                  fill := "context-stroke"
+                )
+              )
+            ),
             SVGHelper { helper =>
               val deps = ZLayer.succeed(renderState) ++ ZLayer.succeed(helper) ++ ZLayer.succeed(drawing)
               g(

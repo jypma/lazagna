@@ -12,11 +12,13 @@ import draw.data.drawcommand.DrawCommand
 import draw.data.drawevent.DrawEvent
 import palanga.zio.cassandra.ZStatement.StringOps
 import palanga.zio.cassandra.{CassandraException, ZCqlSession}
+import zio.Scope
 
 object CassandraDrawings {
   import Drawings.DrawingError
 
   val make = for {
+    mainScope <- ZIO.scope
     session <- ZIO.service[ZCqlSession]
     layer = ZLayer.succeed(session)
     initialDrawings <- {
@@ -45,14 +47,17 @@ object CassandraDrawings {
         }
     }
     knownDrawings <- Ref.make[Set[UUID]](initialDrawings.toSet)
-    activeDrawings <- Ref.Synchronized.make[Map[UUID, Drawing]](Map.empty)
+    activeDrawings <- Ref.Synchronized.make[Map[UUID, (Scope, Drawing)]](Map.empty)
   } yield new Drawings {
     def list = ZStream.unwrap(knownDrawings.get.map(ZStream.fromIterable(_)))
 
     def getDrawing(id: UUID) = activeDrawings.updateSomeAndGetZIO {
-      case m if !m.contains(id) =>
-        makeDrawing(id).map(drawing => m + (id -> drawing))
-    }.map(_(id))
+      case m if !m.contains(id) => for {
+        subScope <- mainScope.fork
+        drawing <- makeDrawing(id)
+        _ <- AutoLayouter.make(drawing).provide(ZLayer.succeed(subScope))
+      } yield m + (id -> (subScope, drawing))
+    }.map(_(id)._2)
 
     private def makeDrawing(id: UUID): IO[DrawingError, Drawing] = for {
       startState <- currentDrawingEventsAfter(id, 0).runFold(DrawingState())((s,e) => s.update(e)._2)
@@ -66,6 +71,8 @@ object CassandraDrawings {
       } yield ()
       _ <- knownDrawings.update(_ + id)
     } yield new Drawing {
+      override def getState = state.get
+
       override def perform(command: DrawCommand): ZIO[Any, DrawingError, Unit] = {
         semaphore.withPermit {
           for {

@@ -5,6 +5,8 @@ import zio.lazagna.eventstore.EventStore
 
 import draw.data.drawevent.{DrawEvent, DrawingCreated, IconCreated, LinkCreated, ObjectDeleted, ObjectLabelled, ObjectMoved, ScribbleContinued, ScribbleStarted, LinkEdited}
 import org.scalajs.dom
+import draw.data.drawevent.ObjectsLayedOut
+import draw.client.tools.DrawingTools.lastPencil
 
 object Pruned {
   type E = DrawEvent
@@ -42,6 +44,7 @@ object Pruned {
   }
 
   case class IconState(started: DrawEvent, moved: Option[DrawEvent] = None, labelled: Option[DrawEvent] = None) extends ObjectState[IconState] {
+
     def prune(event: DrawEvent): ZIO[Backend, Err, IconState] = for {
       storage <- ZIO.service[Backend]
       res <- event.body match {
@@ -83,7 +86,8 @@ object Pruned {
   case class State(
     scribbles: Map[String, ScribbleState] = Map.empty,
     icons: Map[String, IconState] = Map.empty,
-    links: Map[String, LinkState] = Map.empty
+    links: Map[String, LinkState] = Map.empty,
+    prevLayout: Option[DrawEvent] = None
   ) {
     private def allObjects = scribbles ++ icons ++ links
 
@@ -132,6 +136,8 @@ object Pruned {
           update(id, icons(id).copy(moved = Some(event)))
         case ObjectLabelled(id, _, _, _, _, _) if icons.contains(id) =>
           update(id, icons(id).copy(labelled = Some(event)))
+        case _:ObjectsLayedOut =>
+          copy(prevLayout = Some(event))
         case other =>
           println("??? Unexpected recovery event: " + other)
           this
@@ -182,8 +188,14 @@ object Pruned {
         case ObjectLabelled(id, _, _, _, _, _) =>
           updateIcon(id, event)
 
+          // FIXME: Find out why pruned ObjectLayedOut events don't have timestamp
+        case _:ObjectsLayedOut =>
+          ZIO.collectAll(prevLayout.map(e => storage.delete(e.sequenceNr))) *> storage.publish(event).as(copy(
+            prevLayout = Some(event)
+          ))
+
         case other =>
-          println("??? Ignoring " + other)
+          println("??? Pruning ignoring " + other)
           ZIO.succeed(this)
       }
     } yield res

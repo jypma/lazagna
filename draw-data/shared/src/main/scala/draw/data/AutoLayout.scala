@@ -11,7 +11,7 @@ trait AutoLayout {
   def performLayout(state: DrawingState): UIO[Seq[MoveObject]]
 }
 
-case class AutoLayoutImpl() {
+case class AutoLayoutImpl() extends AutoLayout {
   import AutoLayout._
 
   def performLayout(state: DrawingState): UIO[Seq[MoveObject]] = {
@@ -30,16 +30,25 @@ case class AutoLayoutImpl() {
           (link, src, dest)
       }.map(Link(_,_,_))
 
+      var done = false
       def performStep(stepSize: Double) = {
         val loss = params.foldLeft(Value.zero)(_ + _.loss)
         loss.backward()
         //println("loss: " + loss)
         //targets.values.foreach(t => println(s"id=${t.obj.id} x=${t.x} y=${t.y}"))
-        params.foreach(_.adjust(stepSize))
+        done = true
+        params.foreach { p =>
+          if (p.loss.value > 0.01) {
+            done = false
+          }
+          p.adjust(stepSize)
+        }
       }
 
-      for (i <- 1 to maxSteps) {
+      var steps = maxSteps
+      while (steps > 0 && !done) {
         performStep(stepSize)
+        steps -= 1
       }
 
       targets.values.flatMap(_.toCommand).toSeq
@@ -48,14 +57,18 @@ case class AutoLayoutImpl() {
 }
 
 object AutoLayout {
+  def make: UIO[AutoLayout] = ZIO.succeed(new AutoLayoutImpl())
+
   val epsilon = 0.01
   val stepSize = 0.1
   val angleWeight = 0.03
   val maxSteps = 100
 
   case class Target(obj: ObjectState[Moveable], dx: Double, dy: Double) {
-    val x:Value = obj.body.position.x + dx
-    val y:Value = obj.body.position.y + dy
+    def original: Point = obj.body.position
+
+    val x:Value = original.x + dx
+    val y:Value = original.y + dy
 
     def adjust(stepSize: Double): Unit = {
       x.adjust(stepSize)
@@ -63,7 +76,10 @@ object AutoLayout {
     }
 
     def toCommand: Option[MoveObject] = {
-      if (Math.abs(x.value - obj.body.position.x) > 1 || Math.abs(y.value - obj.body.position.y) > 1) {
+      if (Math.abs(x.value - obj.body.position.x) > 10000 || Math.abs(y.value - obj.body.position.y) > 10000) {
+        println("Safety limit: not applying " + this)
+        None
+      } else if (Math.abs(x.value - obj.body.position.x) > 1 || Math.abs(y.value - obj.body.position.y) > 1) {
         Some(MoveObject(obj.id, Some(Point(x.value, y.value))))
       } else None
     }
@@ -76,16 +92,27 @@ object AutoLayout {
   }
 
   case class Link(link: ObjectState[LinkState], src:Target, dst:Target) {
+    val originalDistance = Math.pow(
+      Math.pow(src.original.x - dst.original.x + epsilon, 2) +
+      Math.pow(src.original.y - dst.original.y + epsilon, 2), 0.5
+    )
+
     def loss: Value = {
       val distance = ((src.x - dst.x + epsilon).pow(2) + (src.y - dst.y + epsilon).pow(2)).pow(0.5)
       val distance_loss = getPreferredDistance(link).map { preferred =>
         (distance - preferred).pow(2)
-      }.getOrElse(Value.zero)
+      }.getOrElse {
+        (distance - originalDistance).pow(2) * 0.1
+      }
       //println(s"${link.id} has distance ${distance} with loss ${distance_loss}")
 
       val angle = (dst.y - src.y + epsilon).atan2(dst.x - src.x + epsilon) * (180.0 / Math.PI)
       val angle_loss = getPreferredAngle(link).map { preferred =>
-        (angle - preferred).pow(2) * distance * angleWeight
+        if (angle.value - preferred > 180) {
+          (angle - (preferred + 360)).pow(2) * distance * angleWeight
+        } else {
+          (angle - preferred).pow(2) * distance * angleWeight
+        }
       }.getOrElse(Value.zero)
       //println(s"${link.id} has angle ${angle} with loss ${angle_loss}")
 
@@ -98,11 +125,14 @@ object AutoLayout {
     }
   }
 
-  def getPreferredDistance(state: ObjectState[LinkState]): Option[Int] = state.body.preferredDistance.collect {
+  def getPreferredDistance(state: ObjectState[LinkState]): Option[Double] = state.body.preferredDistance.collect {
     case 1 => 100
     case 2 => 150
     case 3 => 200
   }
 
-  def getPreferredAngle(state: ObjectState[LinkState]): Option[Int] = state.body.preferredAngle.filter(a => a >= 0 && a < 360)
+  def getPreferredAngle(state: ObjectState[LinkState]): Option[Int] = state.body.preferredAngle.map { a =>
+    val angle = (a % 360)
+    if (angle >= 180) angle - 360 else angle
+  }
 }

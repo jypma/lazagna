@@ -127,10 +127,14 @@ object SelectTool {
         )
 
         val directions = Seq(
-          ("^", "up", 360),
-          (">", "right", 90),
-          ("v", "down", 180),
-          ("<", "left", 270)
+          ("←", "left", 270),
+          ("↖", "up and left", 225),
+          ("↑", "up", 180),
+          ("↗", "up and right", 135),
+          ("→", "right", 90),
+          ("↘", "down and right", 45),
+          ("↓", "down", 360),
+          ("↙", "down and left", 315),
         )
         dialogs.child { _ =>
           div(

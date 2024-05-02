@@ -103,6 +103,7 @@ object Attribute {
   val `for` = Attribute("for")
 
   // SVG attributes, keeping in shared scope for now
+  val stroke = Attribute("stroke")
   val fill = Attribute("fill")
   val cx = Attribute("cx")
   val cy = Attribute("cy")
@@ -111,6 +112,11 @@ object Attribute {
   val pathLength = Attribute("pathLength")
   val x = Attribute("x")
   val y = Attribute("y")
+  val refX = Attribute("refX")
+  val refY = Attribute("refY")
+  val markerWidth = Attribute("markerWidth")
+  val markerHeight = Attribute("markerHeight")
+  val orient = Attribute("orient")
   val textAnchor = Attribute("text-anchor")
   val viewBox = Attribute("viewBox")
   val overflow = Attribute("overflow")

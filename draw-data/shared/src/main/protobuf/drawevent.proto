@@ -21,6 +21,7 @@ message DrawEventBody {
         ObjectLabelled objectLabelled = 7;
         LinkCreated linkCreated = 8;
         LinkEdited linkEdited = 9;
+        ObjectsLayedOut objectsLayedOut = 10;
     }
 }
 
@@ -45,6 +46,10 @@ message ObjectDeleted {
 message ObjectMoved {
     required string id = 1;
     optional Point position = 2;
+}
+
+message ObjectsLayedOut {
+    repeated ObjectMoved moved = 1;
 }
 
 message IconCreated {
