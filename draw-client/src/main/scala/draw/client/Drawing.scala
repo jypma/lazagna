@@ -4,11 +4,10 @@ import zio.UIO
 import zio.lazagna.Consumeable
 import zio.stream.SubscriptionRef
 
-import draw.data.ObjectState
 import draw.data.drawcommand.DrawCommand
+import draw.data.{ObjectState, ObjectStateBody}
 import org.scalajs.dom
 import org.scalajs.dom.SVGRect
-import draw.data.ObjectStateBody
 
 trait Drawing {
   import Drawing._

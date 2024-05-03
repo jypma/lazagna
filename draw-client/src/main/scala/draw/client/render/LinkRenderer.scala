@@ -1,6 +1,5 @@
 package draw.client.render
 
-import zio.ZIO
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable._
 import zio.lazagna.dom.Attribute._
@@ -8,12 +7,12 @@ import zio.lazagna.dom.Element.{_}
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.MultiUpdate
 import zio.lazagna.dom.svg.PathData
+import zio.stream.ZPipeline
+import zio.{Promise, ZIO}
 
+import draw.client.Drawing
 import draw.data.{LinkState, ObjectState}
 import draw.geom.{Point, Rectangle}
-import zio.stream.ZPipeline
-import zio.Promise
-import draw.client.Drawing
 
 object LinkRenderer {
   private val margin = 4

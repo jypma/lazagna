@@ -2,11 +2,10 @@ package zio.lazagna.dom.svg
 
 import zio.lazagna.dom.http.Request._
 import zio.lazagna.dom.{Element, Modifier}
+import zio.{ZIO, ZLayer}
 
 import draw.geom.{Point, Rectangle}
 import org.scalajs.dom
-import zio.ZIO
-import zio.ZLayer
 
 class SVGHelper(val svg: dom.svg.SVG) {
   import SVGHelper._

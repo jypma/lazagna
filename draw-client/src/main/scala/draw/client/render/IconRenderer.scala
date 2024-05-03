@@ -1,11 +1,11 @@
 package draw.client.render
 
+import zio.ZIO
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.svgtags._
 import zio.lazagna.dom.Element.{textContent, _}
 import zio.lazagna.dom.MultiUpdate
 import zio.lazagna.dom.svg.SVGHelper
-import zio.{ZIO}
 
 import draw.data.{IconState, ObjectState}
 

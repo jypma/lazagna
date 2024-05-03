@@ -14,9 +14,9 @@ import zio.stream.SubscriptionRef
 import zio.{URIO, ZIO}
 
 import draw.client.Drawing
-import draw.client.render.{RenderState}
-import draw.data.drawcommand.{DeleteObject, DrawCommand, LabelObject, MoveObject, EditLink}
-import draw.data.{IconState, Moveable, ObjectState, SymbolRef, LinkState}
+import draw.client.render.RenderState
+import draw.data.drawcommand.{DeleteObject, DrawCommand, EditLink, LabelObject, MoveObject}
+import draw.data.{IconState, LinkState, Moveable, ObjectState, SymbolRef}
 import draw.geom.Point
 import org.scalajs.dom
 

@@ -3,10 +3,9 @@ package draw.client
 import zio.ZIO
 import zio.lazagna.eventstore.EventStore
 
-import draw.data.drawevent.{DrawEvent, DrawingCreated, IconCreated, LinkCreated, ObjectDeleted, ObjectLabelled, ObjectMoved, ScribbleContinued, ScribbleStarted, LinkEdited}
-import org.scalajs.dom
-import draw.data.drawevent.ObjectsLayedOut
 import draw.client.tools.DrawingTools.lastPencil
+import draw.data.drawevent.{DrawEvent, DrawingCreated, IconCreated, LinkCreated, LinkEdited, ObjectDeleted, ObjectLabelled, ObjectMoved, ObjectsLayedOut, ScribbleContinued, ScribbleStarted}
+import org.scalajs.dom
 
 object Pruned {
   type E = DrawEvent

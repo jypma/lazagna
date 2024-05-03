@@ -1,6 +1,5 @@
 package draw.client.render
 
-import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable.given
 import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.svgtags._
@@ -8,6 +7,7 @@ import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Element.{textContent, _}
 import zio.lazagna.dom.svg.SVGHelper
 import zio.lazagna.dom.{Alternative, Attribute, Children, Element, Modifier}
+import zio.lazagna.{Consumeable, Setup}
 import zio.stream.SubscriptionRef
 import zio.{ZIO, ZLayer}
 
@@ -18,7 +18,6 @@ import draw.geom.Point
 import org.scalajs.dom
 
 import Drawing._
-import zio.lazagna.Setup
 
 trait DrawingRenderer {
   def render: Modifier[Any]

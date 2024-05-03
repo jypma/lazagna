@@ -2,80 +2,20 @@ package draw.client
 
 import java.util.UUID
 
-import scala.scalajs.js.typedarray.{ArrayBuffer, Int8Array}
 import scala.util.Try
 
 import zio.lazagna.Setup
 import zio.lazagna.dom.Element._
-import zio.lazagna.dom.Element.tags._
-import zio.lazagna.dom.indexeddb.Schema.CreateObjectStore
-import zio.lazagna.dom.indexeddb.{IndexedDB, Schema, ValueCodec}
-import zio.lazagna.dom.weblocks.Lock
-import zio.lazagna.dom.{Children, Modifier}
-import zio.lazagna.eventstore.{CachedEventStore, EventStore, IndexedDBEventStore, PrunedEventStore}
 import zio.lazagna.location.Location
-import zio.stream.{SubscriptionRef, ZStream}
+import zio.stream.ZStream
 import zio.{Chunk, Exit, ExitCode, Fiber, Schedule, Scope, ZIO, ZIOAppDefault, ZLayer, durationInt}
 
-import draw.client.render.{DrawingRenderer, RenderState}
-import draw.client.tools.DrawingTools
-import draw.data.drawevent.DrawEvent
 import org.scalajs.dom
 
-import scalajs.js.typedarray._
-
 object Main extends ZIOAppDefault {
-
-  def debugView(drawing: Drawing): Modifier[_] = div(
-    textContent <-- drawing.latency.sliding(10).map(c => s"Latency: ${(c.sum / 10)}ms")
-  )
-
-  def main = for {
-    renderer <- ZIO.service[DrawingRenderer]
-    drawing <- ZIO.service[Drawing]
-    tools <- ZIO.service[DrawingTools]
-    dialogs <- ZIO.service[Children]
-    _ <- dialogs.render.mount(dom.document.querySelector("#dialogApp"))
-    _ <- renderer.render.mount(dom.document.querySelector("#app"))
-    _ <- tools.renderToolbox.mount(dom.document.querySelector("#toolboxApp"))
-    _ <- tools.renderKeyboard.mount(dom.document.querySelector("#keyboardApp"))
-    _ <- debugView(drawing).mount(dom.document.querySelector("#debugApp"))
-
-  } yield ()
-
-  implicit val drawEventCodec: ValueCodec[DrawEvent, ArrayBuffer] = new ValueCodec[DrawEvent, ArrayBuffer] {
-    override def encode(e: DrawEvent): ArrayBuffer = e.toByteArray.toTypedArray.buffer
-    override def decode(b: ArrayBuffer): DrawEvent = DrawEvent.parseFrom(new Int8Array(b).toArray)
-  }
-
   val drawingId = Try(UUID.fromString(Location.fragment.parameters("id"))).getOrElse(
     UUID.fromString("0314aaab-684c-49c6-bd29-0921a3897ce5") // TODO: Drawing selector
   )
-  println("Drawing is " + drawingId)
-
-  def printContents[Err](store: EventStore[DrawEvent,Err]) = for {
-    last <- store.latestSequenceNr
-    _ <- store.events.takeUntil(e => e.sequenceNr >= last).debug.runDrain.unless(last <= 0)
-  } yield ()
-
-  val eventStore = ZLayer.fromZIO {
-    for {
-      lock <- ZIO.service[SubscriptionRef[Boolean]]
-      _ = println("Creating store")
-      store <- IndexedDBEventStore.make[DrawEvent,ArrayBuffer](s"events", lock, _.sequenceNr)
-      prunedStore <- IndexedDBEventStore.make[DrawEvent,ArrayBuffer](s"events-pruned", lock, _.sequenceNr)
-      pruned <- PrunedEventStore.make(store, prunedStore, lock, Pruned.State())(_.prune(_))(_.recover(_))
-      _ = println("Printing store")
-      _ <- printContents(pruned)
-      cached <- CachedEventStore.make(pruned)
-      _ = println("Done")
-    } yield cached
-  }
-
-  val database = ZLayer.fromZIO(IndexedDB.open(s"drawing-${drawingId}", Schema(
-    CreateObjectStore("events"),
-    CreateObjectStore("events-pruned")
-  )))
 
   var knownDone = Set.empty[Fiber.Runtime[_,_]]
   def logFibers(fibers: Chunk[Fiber.Runtime[_,_]]): ZIO[Any,Nothing,String] = for {
@@ -100,26 +40,13 @@ object Main extends ZIOAppDefault {
   override def run = {
     for {
       _ <- dump.fork
-      writeLock <- ZLayer.fromZIO(Lock.makeAndLockExclusively(s"${drawingId}-writeLock")).memoize
-      setup <- Setup.make
-      _ <- (for {
-        client <- ZIO.service[DrawingClient]
-        dialogs <- Children.make
-        _ = println("Logging in")
-        drawing <- client.login("jan", "jan", drawingId)
-        _ <- main.provideSome[Scope](
-          ZLayer.succeed(drawing),
-          DrawingTools.live,
-          DrawingRenderer.live,
-          RenderState.live,
-          ZLayer.succeed(dialogs),
-          ZLayer.fromZIO(SymbolIndex.make)
+      _ <- Setup.start {
+        ZIO.service[DrawingViewer].flatMap(_.render(drawingId)).provideSome[Scope & Setup](
+          DrawingClient.live,
+          DrawingViewer.live,
+          DrawingClient.configTest
         )
-        store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
-        _ <- setup.start
-      } yield ()).provideSome[Scope](
-        DrawingClient.live, DrawingClient.configTest, database, eventStore, writeLock, ZLayer.succeed(setup)
-      )
+      }
       _ = dom.console.log("Main is ready.")
       _ <- ZIO.never // We don't want to exit main, since our background fibers do the real work.
     } yield ExitCode.success

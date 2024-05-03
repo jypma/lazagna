@@ -22,10 +22,11 @@ import scalajs.js
 import DrawingClient._
 
 trait DrawingClient {
-  def login(user: String, password: String, drawingId: UUID): ZIO[Scope, ClientError | RequestError, Drawing]
+  def login(user: String, password: String, drawingId: UUID): ZIO[Scope & DrawingClient.Store, ClientError | RequestError, Drawing]
 }
 
 object DrawingClient {
+  type Store = EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]
   import Drawing._
 
   case class ClientError(message: String)
@@ -52,25 +53,25 @@ object DrawingClient {
   val live = ZLayer.fromZIO {
     for {
       config <- ZIO.service[Config]
-      store <- ZIO.service[EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]]
-      drawViewport <- SubscriptionRef.make(Viewport())
-      connStatus <- SubscriptionRef.make[ConnectionStatus](Connected)
-      state <- Ref.make(DrawingState())
-      stateSemaphore <- Semaphore.make(1)
-      lastEventNr <- SubscriptionRef.make(0L)
-      stateChanges <- Hub.bounded[ObjectState[_]](16)
-      newObjects <- Hub.bounded[ObjectState[_]](16)
-      latencyHub <- Hub.bounded[Long](1)
-      eventFilter <- EventFilter.make { (e: DrawEvent) =>
-        store.publish(e).catchAll { err => ZIO.succeed {
-          dom.console.log("Error publishing " + e)
-          dom.console.log(err)
-        }}
-      }(merge)
     } yield new DrawingClient {
       var lastCommandTime: Long = 0
 
       override def login(user: String, password: String, drawingId: UUID) = Setup.start(for {
+        store <- ZIO.service[Store]
+        drawViewport <- SubscriptionRef.make(Viewport())
+        connStatus <- SubscriptionRef.make[ConnectionStatus](Connected)
+        state <- Ref.make(DrawingState())
+        stateSemaphore <- Semaphore.make(1)
+        lastEventNr <- SubscriptionRef.make(0L)
+        stateChanges <- Hub.bounded[ObjectState[_]](16)
+        newObjects <- Hub.bounded[ObjectState[_]](16)
+        latencyHub <- Hub.bounded[Long](1)
+        eventFilter <- EventFilter.make { (e: DrawEvent) =>
+          store.publish(e).catchAll { err => ZIO.succeed {
+            dom.console.log("Error publishing " + e)
+            dom.console.log(err)
+          }}
+        }(merge)
         // FIXME: We really need a little path DSL to prevent injection here.
         loginResp <- POST(AsDynamicJSON, s"${config.baseUrl}/users/${user}/login?password=${password}")
         token <- loginResp.token.asInstanceOf[String] match {
@@ -105,8 +106,6 @@ object DrawingClient {
               case (objectStates, isNew) =>
                 ZIO.when(isNew)(ZIO.collectAll(objectStates.map(newObjects.publish))) *>
                 ZIO.collectAll(objectStates.map(stateChanges.publish))
-              case _ =>
-                ZIO.unit
             } *> lastEventNr.set(event.sequenceNr) *> publishLatency
           }
         }.runDrain.forkScoped
