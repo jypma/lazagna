@@ -130,4 +130,7 @@ object Events {
   val onWheel = event[dom.WheelEvent]("wheel")
   val onKeyDown = event[dom.KeyboardEvent]("keydown")
   val onInput = event[dom.InputEvent]("input")
+
+  /** The "popstate" event (always attached to the window object) */
+  val onPopState = event[dom.PopStateEvent]("popstate").forWindow
 }

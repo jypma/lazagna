@@ -69,7 +69,9 @@ case class DrawingInMemory(storage: SubscriptionRef[DrawingStorage]) extends Dra
 }
 
 case class InMemoryDrawings(storage: Ref.Synchronized[Map[UUID,Drawing]]) extends Drawings {
-  override def list = ZStream.unwrap(storage.get.map(s => ZStream.fromIterable(s.keySet)))
+  override def list = ZStream.unwrap(storage.get.map(s => ZStream.fromIterable(s.keySet.map { id =>
+    Drawings.DrawingRef(id, id.toString)
+  })))
 
   // TODO: Remove drawing from memory
   override def getDrawing(id: UUID) = {

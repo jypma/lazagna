@@ -3,7 +3,6 @@ package draw.client
 import zio.ZIO
 import zio.lazagna.eventstore.EventStore
 
-import draw.client.tools.DrawingTools.lastPencil
 import draw.data.drawevent.{DrawEvent, DrawingCreated, IconCreated, LinkCreated, LinkEdited, ObjectDeleted, ObjectLabelled, ObjectMoved, ObjectsLayedOut, ScribbleContinued, ScribbleStarted}
 import org.scalajs.dom
 

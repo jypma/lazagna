@@ -24,7 +24,7 @@ object PrunedEventStore {
   def make[E: Tag, Err: Tag, S](source: EventStore[E,Err], storage: EventStore[E,Err], haveLock: SubscriptionRef[Boolean], initialState: S)
     (prune: (S, E) => ZIO[EventStore[E,Err], Err, S])
     (recover: (S, E) => S)
-      : ZIO[Scope & Setup, Err, EventStore[E,Err]] = {
+      : ZIO[Scope & Setup, Nothing, EventStore[E,Err]] = {
 
     // Materialize incoming events from [source], prune them, and store them into storage.
     val materialize = for {

@@ -2,10 +2,12 @@ package draw.client
 
 import java.util.UUID
 
+import scala.scalajs.js.JSON
 import scala.scalajs.js.typedarray.{ArrayBuffer, Int8Array}
+import scala.util.Try
 
 import zio.lazagna.Consumeable.given
-import zio.lazagna.dom.http.Request.{AsDynamicJSON, HEAD, POST, RequestError}
+import zio.lazagna.dom.http.Request.{AsDynamicJSON, GET, HEAD, JSONAs, RequestError, RequestFailed}
 import zio.lazagna.dom.http.WebSocket
 import zio.lazagna.eventstore.EventStore
 import zio.lazagna.{Consumeable, Setup}
@@ -22,14 +24,34 @@ import scalajs.js
 import DrawingClient._
 
 trait DrawingClient {
-  def login(user: String, password: String, drawingId: UUID): ZIO[Scope & DrawingClient.Store, ClientError | RequestError, Drawing]
+  import DrawingClient._
+  def user: ZIO[Any, ClientError, User]
+
+  def getDrawing(drawingId: UUID): ZIO[Scope & DrawingClient.Store, ClientError, Drawing]
+  def list: ZIO[Any, ClientError, Seq[DrawingClient.DrawingRef]]
 }
 
 object DrawingClient {
+  case class DrawingRef(id: UUID, name: String)
+  case class User(id: UUID, nickname: String)
+
   type Store = EventStore[DrawEvent, dom.DOMException | dom.ErrorEvent]
   import Drawing._
 
-  case class ClientError(message: String)
+  sealed trait ClientError
+  case class ClientFailure(message: String) extends ClientError
+  case class LoginNeeded(links: Seq[(String, String)]) extends ClientError
+
+  private def toError(error: RequestError): ClientError = error match {
+    case RequestFailed(401, msg) =>
+      Try {
+        println("parsing: " + msg)
+        val body = JSON.parse(msg)
+        val links = body.login.asInstanceOf[js.Array[js.Dynamic]]
+        LoginNeeded(links.map { l => (l.name.asInstanceOf[String], l.link.asInstanceOf[String]) }.toSeq)
+      }.getOrElse(ClientFailure(error.toString))
+    case other => ClientFailure(other.toString)
+  }
 
   case class Config(server: String, port: Int, tls: Boolean, path: String) {
     private def http = if (tls) "https" else "http"
@@ -54,9 +76,21 @@ object DrawingClient {
     for {
       config <- ZIO.service[Config]
     } yield new DrawingClient {
+      override def user = for {
+        resp <- GET(AsDynamicJSON, s"${config.baseUrl}/user").mapError(toError)
+      } yield {
+        User(UUID.fromString(resp.id.asInstanceOf[String]), resp.nickname.asInstanceOf[String])
+      }
+
       var lastCommandTime: Long = 0
 
-      override def login(user: String, password: String, drawingId: UUID) = Setup.start(for {
+      override def list = for {
+        res <- GET(JSONAs[js.Array[js.Dynamic]], s"${config.baseUrl}/drawings").mapError(toError)
+      } yield res.toSeq.map { d =>
+        DrawingRef(UUID.fromString(d.id.asInstanceOf[String]), d.name.asInstanceOf[String])
+      }
+
+      override def getDrawing(drawingId: UUID) = Setup.start(for {
         store <- ZIO.service[Store]
         drawViewport <- SubscriptionRef.make(Viewport())
         connStatus <- SubscriptionRef.make[ConnectionStatus](Connected)
@@ -72,19 +106,14 @@ object DrawingClient {
             dom.console.log(err)
           }}
         }(merge)
-        // FIXME: We really need a little path DSL to prevent injection here.
-        loginResp <- POST(AsDynamicJSON, s"${config.baseUrl}/users/${user}/login?password=${password}")
-        token <- loginResp.token.asInstanceOf[String] match {
-          case s if s != null && !js.isUndefined(s) => ZIO.succeed(s)
-          case _ => ZIO.fail(ClientError("Could not get token"))
-        }
-        version <- HEAD(s"${config.baseUrl}/drawings/${drawingId}?token=${token}").map(_.header("ETag").map(_.drop(1).dropRight(1).toLong).getOrElse(0L))
+        // FIXME: We really need a little path DSL to prevent injection here. Perhaps zio-http JS?
+        version <- HEAD(s"${config.baseUrl}/drawings/${drawingId}").map(_.header("ETag").map(_.drop(1).dropRight(1).toLong).getOrElse(0L))
         latestSeen <- store.latestSequenceNr
         latestInStore <- if (latestSeen > version) {
           dom.console.log(s"Resetting client event store, since we've seen event ${latestSeen} but server only has ${version}")
           store.reset.as(0L)
         } else ZIO.succeed(latestSeen)
-        socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingId}/socket?token=${token}&afterSequenceNr=${latestInStore}")({ msg =>
+        socket <- WebSocket.handle(s"${config.baseWs}/drawings/${drawingId}/socket?afterSequenceNr=${latestInStore}")({ msg =>
           msg match {
             case m if m.data.isInstanceOf[ArrayBuffer] =>
               // TODO: Catch parse errors and fail accordingly
@@ -139,7 +168,10 @@ object DrawingClient {
         }
         override def currentVersion: Consumeable[Long] = lastEventNr
         override def latency: Consumeable[Long] = latencyHub
-      }).mapError { err => ClientError(err.toString) }
+      }).mapError {
+        case rq:RequestError => toError(rq)
+        case other => ClientFailure(other.toString)
+      }
     }
   }
 }

@@ -6,6 +6,14 @@ At the moment, this repository contains a simple real-time multi-user drawing ap
 
 You'll need `sbt` and `docker`.
 
+You also need to register for a Github OAuth app, so you can log in to the application. Once you have a client ID and secret, create a file `draw-server/config.yaml` with the following content:
+
+```yaml
+github:
+  clientId: MY-CLIENT-ID
+  secret: MY-SECRET
+```
+
 ## Cassandra
 Storage is provided by Cassandra. During development, start cassandra locally using
 
@@ -98,3 +106,68 @@ Source: https://github.com/leungwensen/svg-icon
 
 # Cassandra
 
+# Oauth: Github
+
+- Detect we need to login
+- Redirect to `https://github.com/login/oauth/authorize?scope=user:email&client_id={client_id}&state={state}` (perhaps without `scope` to start with)
+```
+https://github.com/login/oauth/authorize?client_id=Ov23liIJVMWJIYOoOkCJ&state=hello
+```
+Goes to
+```
+https://localhost:5173/oauth2/authorize?code=...somecode...&state=hello
+```
+
+From there,
+```
+curl -v --user $CLIENTID:$SECRET -X POST -H "Content-Type: application/x-www-form-urlencoded" -H "Accept: application/json" https://github.com/login/oauth/access_token -d "code=$CODE"
+```
+then gives
+```
+{"access_token":"...token...","token_type":"bearer","scope":""}
+```
+
+## Check token validity
+
+Use this call
+```
+curl -v --user $CLIENTID:$SECRET -X POST -H "Content-Type: application/json" -d '{"access_token":"$TOKEN"}' https://api.github.com/applications/$CLIENTID/token
+```
+which returns
+```json
+{
+  "user": {
+    "login": "jypma",
+    "id": 483519,
+    "node_id": "MDQ6VXNlcjQ4MzUxOQ==",
+  }
+}
+```
+Let's use "id" for now.
+
+# OAuth: Reddit
+
+Here: `https://github.com/reddit-archive/reddit/wiki/OAuth2`
+
+# OAuth: model and flow
+Sessions expire in one week (perhaps shorter if Github reauth is nice)
+
+## No session token
+1. User opens any page
+2. No session -> set session cookie (but session isn't in DB), secure, httpOnly, expires one week, sameSite=strict (maybe)
+3. Make API call to `/authenticate`, will fail because no session. Contain a list of suggected providers (just Github), including random state
+4. Render the list, have the user click on Github
+5. Github redirects back (`#/oauth/authorize`), query parameters aren't in the hash
+6. We call into `/user/authorize/github` with `{"code":..., "state":...}`
+7. Server confirms state, sends code to github for an access token, and then
+- Fetches the github ID and login
+- Find user by github id
+- If user doesn't exist: Add user, save github id, and set nickname to github login
+- Save the session (marking it as active)
+We don't need to store the access token, since we only use it for authentication.
+
+## Session cookie exists (but not in DB)
+- See above. We'll find out when we get the `/user`.
+
+## Session cookie exists (in db)
+3. Make API call to `/user`. We read the userid from the `user_sessions`, and return only it

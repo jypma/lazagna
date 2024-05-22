@@ -5,14 +5,13 @@ import java.time.Instant
 import java.util.UUID
 
 import zio.stream.ZStream
-import zio.{Clock, Hub, IO, Ref, Semaphore, ZIO, ZLayer}
+import zio.{Clock, Hub, IO, Ref, Scope, Semaphore, ZIO, ZLayer}
 
 import draw.data.DrawingState
 import draw.data.drawcommand.DrawCommand
 import draw.data.drawevent.DrawEvent
 import palanga.zio.cassandra.ZStatement.StringOps
 import palanga.zio.cassandra.{CassandraException, ZCqlSession}
-import zio.Scope
 
 object CassandraDrawings {
   import Drawings.DrawingError
@@ -49,7 +48,9 @@ object CassandraDrawings {
     knownDrawings <- Ref.make[Set[UUID]](initialDrawings.toSet)
     activeDrawings <- Ref.Synchronized.make[Map[UUID, (Scope, Drawing)]](Map.empty)
   } yield new Drawings {
-    def list = ZStream.unwrap(knownDrawings.get.map(ZStream.fromIterable(_)))
+    def list = ZStream.unwrap(knownDrawings.get.map(ZStream.fromIterable(_).map { id =>
+      Drawings.DrawingRef(id, id.toString)
+    }))
 
     def getDrawing(id: UUID) = activeDrawings.updateSomeAndGetZIO {
       case m if !m.contains(id) => for {

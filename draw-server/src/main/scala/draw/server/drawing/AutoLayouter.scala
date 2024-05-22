@@ -1,14 +1,11 @@
 package draw.server.drawing
 
-import zio.ZIO
-import zio.Scope
-import zio.Semaphore
-import zio.Ref
-import draw.server.drawing.Drawings.DrawingError
-import draw.data.drawevent.LinkEdited
-import draw.data.drawcommand.LayoutObjects
+import zio.{Ref, Scope, Semaphore, ZIO}
+
 import draw.data.AutoLayout
-import draw.data.drawcommand.DrawCommand
+import draw.data.drawcommand.{DrawCommand, LayoutObjects}
+import draw.data.drawevent.LinkEdited
+import draw.server.drawing.Drawings.DrawingError
 
 trait AutoLayouter {
   def start: ZIO[Scope, Nothing, Unit]

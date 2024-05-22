@@ -3,25 +3,26 @@ package draw.server
 import java.net.InetAddress
 import java.util.UUID
 
+import scala.util.Try
+
 import zio._
 import zio.http.ChannelEvent.Read
 import zio.http.Header.{AccessControlAllowMethods, AccessControlAllowOrigin, Origin}
 import zio.http.Middleware.{CorsConfig, cors}
 import zio.http._
-import zio.http.codec.HttpCodec.query
-import zio.http.codec.PathCodec.string
-import zio.http.endpoint.Endpoint
+import zio.schema.codec.JsonCodec.schemaBasedBinaryCodec
 
 import draw.data.drawcommand.DrawCommand
-import draw.server.Users.User
+import draw.server.drawing.Drawings.DrawingError
 import draw.server.drawing.{CassandraDrawings, Drawing, Drawings}
+import draw.server.user.Users.User
+import draw.server.user.{CassandraUsers, Github, Users}
 import palanga.zio.cassandra.CassandraException.SessionOpenException
 import palanga.zio.cassandra.{ZCqlSession, session}
-import draw.server.drawing.Drawings.DrawingError
 
 object DrawServer extends ZIOAppDefault {
   // Create CORS configuration
-  val config: CorsConfig =
+  val corsConfig: CorsConfig =
     CorsConfig(
       allowedOrigin = {
         case origin @ Origin.Value(_, host, _) if host == "localhost" =>
@@ -34,7 +35,7 @@ object DrawServer extends ZIOAppDefault {
       allowedMethods = AccessControlAllowMethods(Method.PUT, Method.DELETE),
     )
 
-  private def drawingSocket(userId: Long, drawing: Drawing, afterSequenceNr: Long): WebSocketApp[Any] =
+  private def drawingSocket(userId: UUID, drawing: Drawing, afterSequenceNr: Long): WebSocketApp[Any] =
     Handler.webSocket { channel =>
       ZIO.scoped {
         for {
@@ -59,56 +60,100 @@ object DrawServer extends ZIOAppDefault {
       }
     }
 
-  val cassandraSession = ZLayer.scoped(
-    session.auto.open(
-      "127.0.0.1",
-      9042,
-      keyspace = "draw",
+  val cassandraSession = ZLayer.fromZIO(for {
+    config <- ZIO.service[ServerConfig]
+    cfg = config.cassandra
+    res <- session.auto.open(
+      cfg.hostname,
+      cfg.port,
+      cfg.keyspace,
     )
-  )
+  } yield res)
+
+  def getSession(request: Request): IO[Users.UserError, UUID] = ZIO.fromOption {
+    request.cookie("sessionId")
+      .flatMap(c => Try(UUID.fromString(c.content)).toOption)
+  }.mapError(_ => Users.UserError("TODO state"))
+
+  def requireUser: HandlerAspect[ServerConfig & Users, User] =
+    HandlerAspect.interceptIncomingHandler(Handler.fromFunctionZIO[Request] { request =>
+      for {
+        config <- ZIO.service[ServerConfig]
+        users <- ZIO.service[Users]
+        loginLinks = Seq(
+          ("Login with Github", s"https://github.com/login/oauth/authorize?client_id=${config.github.clientId}")
+        )
+        // TODO: Case class and schema for these
+        loginJson = loginLinks.map { t => s"""{"name":"${t._1}","link":"${t._2}"}"""}.mkString(",")
+        unauthorized = (msg: String) => Response.json(s"""{"message":"$msg","login":[${loginJson}]}""").copy(status = Status.Unauthorized)
+        sessionId <- ZIO.fromOption(request.cookie("sessionId").flatMap(c => Try(UUID.fromString(c.content)).toOption))
+          .orElseFail(unauthorized("Missing sessionId cookie"))
+        user <- users.authorize(sessionId)
+          .mapError { e =>
+            println(e)
+            unauthorized("Invalid sessionId cookie")
+          }
+      } yield (request, user)
+    })
+
 
   val app = for {
     users <- ZIO.service[Users]
     drawings <- ZIO.service[Drawings]
+    config <- ZIO.service[ServerConfig]
   } yield Routes(
-    Endpoint(Method.POST / "users" / string("username") / "login")
-      .outError[Users.UserError](Status.BadRequest)
-      .query(query("password")) // TODO: Nicer error messages from zio-http on missing query param?
-      .out[User](MediaType.application.json)
-      .implement(Handler.fromFunctionZIO((username: String, password: String) =>
-          users.login(username, password)
-      )),
-    Endpoint(Method.GET / "drawings")
-      .outError[DrawingError](Status.BadRequest)
-      .out[Chunk[UUID]](MediaType.application.json)
-      .implement(Handler.fromFunctionZIO(_ => drawings.list.runCollect)),
-    Method.HEAD / "drawings" / uuid("drawing") -> handler { (drawing: UUID, request: Request) =>
+    Method.GET / "user" / "activate" -> handler { (request: Request) =>
+      val sessionId = UUID.randomUUID() // FIXME time-based UUID
       for {
-        token <- request.url.queryParams.getAsZIO[String]("token")
-        user <- users.authenticate(token)
+        code <- request.url.queryParamToZIO[String]("code")
+        state <- request.url.queryParamToZIO[String]("state")
+        // FIXME: Use and verify state (two states, rotating every 15 minutes)
+        user <- users.activateGithub(sessionId, code)
+      } yield Response(body = Body.from(user)).addCookie(Cookie.Response("sessionId", sessionId.toString,
+        isSecure = true, isHttpOnly = true, maxAge = Some(config.github.ttl), sameSite = Some(Cookie.SameSite.Strict),
+        path = Some(Path("/")), domain = Some("localhost")
+      ))
+    },
+    Method.GET / "user" -> requireUser -> handler { (user: User, request: Request) =>
+       Response(body = Body.from(user))
+    },
+    Method.HEAD / "drawings" / uuid("drawing") -> requireUser -> Handler.fromFunctionZIO[(UUID, User, Request)] { (drawing, user, request) =>
+      for {
         drawing <- drawings.getDrawing(drawing)
         version <- drawing.version
       } yield Response.ok.addHeader(Header.ETag.Strong(version.toString))
     },
-    Method.GET / "drawings" / uuid("drawing") / "socket" -> handler { (drawing: UUID, request: Request) =>
+    Method.GET / "drawings" / uuid("drawing") / "socket" -> requireUser -> handler { (drawing: UUID, user: User, request: Request) =>
+      val after = request.url.queryParam("afterSequenceNr").map(_.toLong).getOrElse(-1L)
       for {
-        token <- request.url.queryParams.getAsZIO[String]("token")
-        after = request.url.queryParams.get("afterSequenceNr").map(_.toLong).getOrElse(-1L)
-        user <- users.authenticate(token)
         drawing <- drawings.getDrawing(drawing)
         res <- drawingSocket(user.id, drawing, after).toResponse
       } yield res
-    }
+    },
+    Method.GET / "drawings" -> requireUser -> handler { (user: User, request: Request) =>
+      for {
+        list <- drawings.list.runCollect
+      } yield Response(body = Body.from(list))
+    },
   ).handleError {
-    case Users.UserError(message) => Response.unauthorized(message)
+    case Users.UserError(message) =>
+      val loginLinks = Seq(
+        ("Login with Github", s"https://github.com/login/oauth/authorize?client_id=${config.github.clientId}")
+      )
+      val loginJson = loginLinks.map { t => s"""{"name":"${t._1}","link":"${t._2}"}"""}.mkString(",")
+
+      Response.json(s"""{"message":"$message","login":[${loginJson}]}""").copy(status = Status.Unauthorized)
     case other => Response.badRequest(other.toString)
-  }.toHttpApp @@ cors(config)
+  }.toHttpApp @@ cors(corsConfig)
 
   override val run = app.flatMap(Server.serve).provideSome[Scope](
     ZLayer.succeed(Server.Config.default.binding(InetAddress.getByName("0.0.0.0"), 8080)),
     Server.live,
-    Users.inMemory,
+    CassandraUsers.live,
     ZLayer.fromZIO(CassandraDrawings.make),
-    cassandraSession
+    cassandraSession,
+    ServerConfig.live,
+    Github.live,
+    zio.http.Client.default
   )
 }

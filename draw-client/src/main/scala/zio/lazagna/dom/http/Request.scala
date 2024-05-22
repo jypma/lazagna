@@ -40,6 +40,13 @@ object Request {
   val AsResponse = ResponseHandler[Response]("", r => ZIO.succeed(Response(r)))
   val AsDocument = ResponseHandler[dom.Document]("document", r => ZIO.succeed(r.response.asInstanceOf[dom.Document]))
 
+  private def toString(res: Any): String = res match {
+    case s: String => s
+    case obj: js.Array[_] => js.JSON.stringify(obj)
+    case obj: js.Object => js.JSON.stringify(obj)
+    case null => ""
+  }
+
   private def request[T](method: String, url: String, handler: ResponseHandler[T]): IO[RequestError, T] = {
     dom.console.log(s"${method} ${url}")
     ZIO.async[Any, RequestError, T] { cb =>
@@ -48,8 +55,8 @@ object Request {
       // TODO: set Accept header using setRequestHeader, and allow ResponseHandler to say what
       request.onload = { event =>
         val res = request.response
-        if (res == null) {
-          cb(ZIO.fail(RequestFailed(request.status)))
+        if (res == null || (request.status >= 400)) {
+          cb(ZIO.fail(RequestFailed(request.status, toString(res))))
         } else {
           cb(handler.handle(request))
         }
@@ -58,7 +65,7 @@ object Request {
         cb(ZIO.fail(RequestTimedOut))
       }
       request.onerror = { event =>
-        cb(ZIO.fail(RequestFailed(request.status)))
+        cb(ZIO.fail(RequestFailed(request.status, toString(request.response))))
       }
       request.open(method, url, true)
       request.send()
@@ -71,6 +78,6 @@ object Request {
   def HEAD(url: String): IO[RequestError, Response] = HEAD(AsResponse, url)
 
   sealed trait RequestError
-  case class RequestFailed(statusCode: Int) extends RequestError
+  case class RequestFailed(statusCode: Int, body: String) extends RequestError
   case object RequestTimedOut extends RequestError
 }
