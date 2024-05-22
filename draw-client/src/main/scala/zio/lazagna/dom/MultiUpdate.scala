@@ -2,6 +2,7 @@ package zio.lazagna.dom
 
 import zio.stream.ZPipeline
 import zio.{Exit, Ref, Scope, ZIO, ZLayer}
+import zio.lazagna.Setup
 
 import org.scalajs.dom
 
@@ -36,9 +37,9 @@ object MultiUpdate {
       _ <- ZIO.collectAll(currentScope.map(_.close(Exit.unit)))
       newScope <- parentScope.fork
       layer = ZLayer.succeed(newScope)
-      _ <- ZIO.collectAll(updates.map { (parent, fn) =>
-        fn(t).provide(layer, ZLayer.succeed(MountPoint(parent)))
-      })
+      _ <- Setup.start(ZIO.collectAll(updates.map { (parent, fn) =>
+        fn(t).provideSome[Setup](layer, ZLayer.succeed(MountPoint(parent)))
+      }))
     } yield copy(
       currentScope = Some(newScope)
     )

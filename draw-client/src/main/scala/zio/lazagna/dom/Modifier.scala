@@ -3,10 +3,11 @@ package zio.lazagna.dom
 import zio.{Scope, ZIO, ZLayer}
 
 import org.scalajs.dom
+import zio.lazagna.Setup
 
 /** A modifier is a ZIO that applies certain changes to its mount point, optionally returning a value T (which
   * may be Unit if the Modifier only executes side effects). */
-type Modifier[+T] = ZIO[Modifier.MountPoint & Scope, Nothing, T]
+type Modifier[+T] = ZIO[Modifier.MountPoint & Scope & Setup, Nothing, T]
 
 object Modifier {
   case class MountPoint(parent: dom.Element, after: Option[dom.Element] = None)
@@ -24,8 +25,9 @@ object Modifier {
   def all[T](modifiers: Modifier[T]*): Modifier[Unit] = combine(modifiers.toSeq).unit
 
   implicit class ModifierOps[T](modifier: Modifier[T]) {
-    def mount(parent: dom.Element): ZIO[Scope, Nothing, T] =
-      modifier.provideSome[Scope](ZLayer.succeed(Modifier.MountPoint(parent)))
+    def mount(parent: dom.Element): ZIO[Scope, Nothing, T] = Setup.start {
+      modifier.provideSome[Scope & Setup](ZLayer.succeed(Modifier.MountPoint(parent)))
+    }
   }
 
   /** A Modifier that does nothing. */

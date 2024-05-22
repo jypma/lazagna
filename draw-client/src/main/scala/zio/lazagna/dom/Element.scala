@@ -1,6 +1,7 @@
 package zio.lazagna.dom
 
 import zio.{Scope, ZIO, ZLayer}
+import zio.lazagna.Setup
 
 import org.scalajs.dom
 
@@ -18,16 +19,17 @@ object Element {
   def focusNow: Modifier[Unit] = Modifier {
     _ match {
       case e:dom.HTMLElement =>
-        ZIO.succeed(e.focus())
+        ZIO.serviceWithZIO[Setup](_.addStartAction(ZIO.succeed(e.focus())))
       case _ =>
         ZIO.unit
     }
   }
 
   private def mkElement[E <: dom.Element](target: E, children: Seq[Modifier[_]]): Modifier[E] = ZIO.service[MountPoint].flatMap { i =>
-    // We mount the children after the parent, so it's guaranteed to be in the DOM tree.
-    val mountChildren = ZIO.collectAll(children).provideSome[Scope](ZLayer.succeed(MountPoint(target)))
-    ZIO.acquireRelease {
+    // We mount the children before the parent, so we minimize the amount of render steps.
+    // If an operation requires the parent to be in the DOM, it should use Setup.
+    val mountChildren = ZIO.collectAll(children).provideSome[Scope & Setup]{ZLayer.succeed(MountPoint(target))}
+    mountChildren *> ZIO.acquireRelease {
       ZIO.succeed {
         i.after.map { a =>
           i.parent.insertBefore(target, a.nextSibling)
@@ -40,7 +42,7 @@ object Element {
       ZIO.succeed {
         i.parent.removeChild(target)
       }
-    } <* mountChildren
+    }
   }
 
   case class CreateFn[E <: dom.Element](name: String) {

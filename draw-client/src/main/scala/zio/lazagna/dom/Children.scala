@@ -3,6 +3,7 @@ package zio.lazagna.dom
 import zio.lazagna.Consumeable
 import zio.lazagna.Consumeable._
 import zio.{Exit, Queue, Ref, Scope, UIO, ZIO, ZLayer}
+import zio.lazagna.Setup
 
 import org.scalajs.dom
 
@@ -68,7 +69,7 @@ object Children {
     ZIO.acquireRelease(Ref.make(State()))(_.get.flatMap(_.closeAll)).flatMap { stateRef =>
       def append[E <: dom.Element](elmt: Element[E], after: Option[dom.Element] = None) = for {
         scope <- Scope.make
-        target <- elmt.provide(ZLayer.succeed(scope), ZLayer.succeed(MountPoint(parent, after)))
+        target <- Setup.start(elmt.provideSome[Setup](ZLayer.succeed(scope), ZLayer.succeed(MountPoint(parent, after))))
         _ <- stateRef.update {_.append(elmt, target, scope) }
       } yield ()
 

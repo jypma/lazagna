@@ -9,6 +9,7 @@ import zio.lazagna.dom.Attribute._
 import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Modifier._
 import zio.{Exit, Ref, Scope, ZIO, ZLayer}
+import zio.lazagna.Setup
 
 import org.scalajs.dom
 
@@ -35,7 +36,7 @@ object Alternative {
               clean = System.currentTimeMillis()
               newScope <- Scope.make
               // FIXME: Start new element in separate fiber, and interrupt if a new value comes in.
-              _ <- rendered.provide(ZLayer.succeed(newScope), ZLayer.succeed(MountPoint(parent)))
+              _ <- Setup.start(rendered.provideSome[Setup](ZLayer.succeed(newScope), ZLayer.succeed(MountPoint(parent))))
               stop = System.currentTimeMillis()
               _ = if ((clean - start) > 1000 || (stop - clean) > 1000) { println(s"Closing took ${clean - start}ms, starting took ${stop - clean}ms") }
               _ <- current.set(Some(State(t, newScope)))

@@ -3,6 +3,7 @@ package zio.lazagna.dom.svg
 import zio.lazagna.dom.http.Request._
 import zio.lazagna.dom.{Element, Modifier}
 import zio.{ZIO, ZLayer}
+import zio.lazagna.Setup
 
 import draw.geom.{Point, Rectangle}
 import org.scalajs.dom
@@ -51,8 +52,8 @@ class SVGHelper(val svg: dom.svg.SVG) {
         val layer = ZLayer.succeed(scope) ++ ZLayer.succeed(Modifier.MountPoint(e))
 
         fn(new SVGMeasurer[E] {
-          def boundingBox(modifiers: Modifier[_]*) = {
-            ZIO.collectAll(modifiers.map(_.provideLayer(layer))) *> ZIO.succeed(svgBoundingBox(e))
+          def boundingBox(modifiers: Modifier[_]*) = Setup.start {
+            ZIO.collectAll(modifiers.map(_.provideSomeLayer[Setup](layer))) *> ZIO.succeed(svgBoundingBox(e))
           }
         })
       }

@@ -77,16 +77,12 @@ object SelectTool {
         )
       ),
       keyboard.child { _ =>
-        DrawingTools.keyboardAction("ArrowLeft", "Select to the left", expandSelect(RenderState.Direction.left))
-      },
-      keyboard.child { _ =>
-        DrawingTools.keyboardAction("ArrowRight", "Select to the right", expandSelect(RenderState.Direction.right))
-      },
-      keyboard.child { _ =>
-        DrawingTools.keyboardAction("ArrowUp", "Select upwards", expandSelect(RenderState.Direction.up))
-      },
-      keyboard.child { _ =>
-        DrawingTools.keyboardAction("ArrowDown", "Select downwards", expandSelect(RenderState.Direction.down))
+        div(
+          DrawingTools.keyboardAction("ArrowLeft", "Select to the left", expandSelect(RenderState.Direction.left)),
+          DrawingTools.keyboardAction("ArrowRight", "Select to the right", expandSelect(RenderState.Direction.right)),
+          DrawingTools.keyboardAction("ArrowUp", "Select upwards", expandSelect(RenderState.Direction.up)),
+          DrawingTools.keyboardAction("ArrowDown", "Select downwards", expandSelect(RenderState.Direction.down))
+        )
       },
       Alternative.option(editingLabel) { target =>
         dialogs.child { _ =>
@@ -252,10 +248,10 @@ object SelectTool {
         .tap(_ => state.set(None))
       ),
       keyboard.child { _ =>
-        DrawingTools.keyboardToggle("a", "Add to sticky selection", addToSelection, b => removeFromSelection.set(false).when(b))
-      },
-      keyboard.child { _ =>
-        DrawingTools.keyboardToggle("r", "Remove from sticky selection", removeFromSelection, b => addToSelection.set(false).when(b))
+        div(
+          DrawingTools.keyboardToggle("a", "Add to sticky selection", addToSelection, b => removeFromSelection.set(false).when(b)),
+          DrawingTools.keyboardToggle("r", "Remove from sticky selection", removeFromSelection, b => addToSelection.set(false).when(b))
+        )
       },
       Alternative.mountOne(renderState.selectionIds) {
         case selection if !(selection.isEmpty) =>
