@@ -4,7 +4,7 @@ val zioVersion = "2.0.21"
 val javaTimeVersion = "2.5.0"
 
 val commonSettings = Seq(
-  scalaVersion := "3.3.1",
+  scalaVersion := "3.3.3",
   scalacOptions ++= Seq(
     "-Wunused:imports",
     "-feature",
