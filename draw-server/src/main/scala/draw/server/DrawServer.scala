@@ -19,6 +19,8 @@ import draw.server.user.Users.User
 import draw.server.user.{CassandraUsers, Github, Users}
 import palanga.zio.cassandra.CassandraException.SessionOpenException
 import palanga.zio.cassandra.{ZCqlSession, session}
+import zio.http.Header.ContentType
+import zio.http.codec.PathCodec
 
 object DrawServer extends ZIOAppDefault {
   // Create CORS configuration
@@ -70,6 +72,10 @@ object DrawServer extends ZIOAppDefault {
     )
   } yield res)
 
+  def getResource(name: String): Option[Array[Byte]] = {
+    Option(DrawServer.getClass.getClassLoader.getResourceAsStream(name)).map(_.readAllBytes())
+  }
+
   def getSession(request: Request): IO[Users.UserError, UUID] = ZIO.fromOption {
     request.cookie("sessionId")
       .flatMap(c => Try(UUID.fromString(c.content)).toOption)
@@ -96,6 +102,33 @@ object DrawServer extends ZIOAppDefault {
       } yield (request, user)
     })
 
+  def serveFixedFile(path: String, resource: String) =
+    serveFile(path).contramap((request: Request) => (resource, request))
+
+
+  def serveFile(path: String) = handler { (resource: String, request: Request) =>
+    println(s"Serving: ${path}${resource}")
+    def ok(t: MediaType) = getResource(s"${path}${resource}").map { bytes =>
+      Response(body = Body.fromArray(bytes)).addHeader(ContentType(t))
+    }.getOrElse{
+      println(s"Not found: ${path}${resource}")
+      Response.notFound
+    }
+
+    resource match {
+      case s if s.endsWith(".html") => ok(MediaType.text.html)
+      case s if s.endsWith(".css") => ok(MediaType.text.css)
+      case s if s.endsWith(".js") => ok(MediaType.application.javascript)
+      case s if s.endsWith(".json") => ok(MediaType.application.json)
+      case s if s.endsWith(".svg") => ok(MediaType.image.`svg+xml`)
+      case s if s.endsWith(".png") => ok(MediaType.image.png)
+      case s if s.endsWith(".woff") => ok(MediaType.font.woff)
+      case s if s.endsWith(".woff2") => ok(MediaType.font.woff2)
+      case _ =>
+        println(s"Invalid: ${path}${resource}")
+        Response.notFound
+    }
+  }
 
   val app = for {
     users <- ZIO.service[Users]
@@ -107,6 +140,7 @@ object DrawServer extends ZIOAppDefault {
       for {
         code <- request.url.queryParamToZIO[String]("code")
         state <- request.url.queryParamToZIO[String]("state")
+        _ = println(s"Activate $code $state")
         // FIXME: Use and verify state (two states, rotating every 15 minutes)
         user <- users.activateGithub(sessionId, code)
       } yield Response(body = Body.from(user)).addCookie(Cookie.Response("sessionId", sessionId.toString,
@@ -135,6 +169,10 @@ object DrawServer extends ZIOAppDefault {
         list <- drawings.list.runCollect
       } yield Response(body = Body.from(list))
     },
+    Method.GET / PathCodec.empty -> serveFixedFile("", "index.html"),
+    Method.GET / string("resource") -> serveFile(""),
+    Method.GET / "assets" / string("resource") -> serveFile("assets/"),
+    Method.GET / "symbols" / string("resource") -> serveFile("symbols/"),
   ).handleError {
     case Users.UserError(message) =>
       val loginLinks = Seq(
@@ -143,11 +181,15 @@ object DrawServer extends ZIOAppDefault {
       val loginJson = loginLinks.map { t => s"""{"name":"${t._1}","link":"${t._2}"}"""}.mkString(",")
 
       Response.json(s"""{"message":"$message","login":[${loginJson}]}""").copy(status = Status.Unauthorized)
-    case other => Response.badRequest(other.toString)
-  }.toHttpApp @@ cors(corsConfig)
+    case other =>
+      println(other)
+      Response.badRequest(other.toString)
+  }.toHttpApp.provideEnvironment(ZEnvironment(users, config)) @@ cors(corsConfig)
 
-  override val run = app.flatMap(Server.serve).provideSome[Scope](
-    ZLayer.succeed(Server.Config.default.binding(InetAddress.getByName("0.0.0.0"), 8080)),
+  //TODO: Somehow, we really can't re-use dependencies between these two. Perhaps we should just either run http or https, much simpler.
+  val runHttp = app.flatMap(Server.serve).provideSome[Scope](
+    ZLayer.succeed(Server.Config.default
+      .binding(InetAddress.getByName("0.0.0.0"), 8080)),
     Server.live,
     CassandraUsers.live,
     ZLayer.fromZIO(CassandraDrawings.make),
@@ -156,4 +198,23 @@ object DrawServer extends ZIOAppDefault {
     Github.live,
     zio.http.Client.default
   )
+
+  val runHttps = app.flatMap(Server.serve).provideSome[Scope](
+    ZLayer.succeed(Server.Config.default
+      .binding(InetAddress.getByName("0.0.0.0"), 8443)
+      .ssl(SSLConfig.fromResource(
+        behaviour = SSLConfig.HttpBehaviour.Accept,
+        certPath = "localhost.crt",
+        keyPath = "localhost.key"
+      ))),
+    Server.live,
+    CassandraUsers.live,
+    ZLayer.fromZIO(CassandraDrawings.make),
+    cassandraSession,
+    ServerConfig.live,
+    Github.live,
+    zio.http.Client.default
+  )
+
+  override val run = runHttp.fork *> runHttps
 }

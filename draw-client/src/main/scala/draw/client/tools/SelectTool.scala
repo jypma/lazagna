@@ -21,6 +21,7 @@ import draw.geom.Point
 import org.scalajs.dom
 
 import IconState.mediumSize
+import draw.client.render.RenderedObject
 
 object SelectTool {
   private case class State(selection: Set[(String, Moveable)], dragStart: Point)
@@ -60,6 +61,8 @@ object SelectTool {
       removing <- removeFromSelection.get
       _ <- if (adding || removing || !newSelection.isEmpty) doSelect(newSelection) else ZIO.unit
     } yield ()
+
+    def headState(set: Iterable[RenderedObject]) = set.headOption.map(_.state)
 
     Modifier.all(
       g(
@@ -199,7 +202,7 @@ object SelectTool {
         }
       },
       Alternative.mountOne(renderState.selection) {
-        _.headOption.map(_.state) match {
+        headState(_) match {
           case Some(ObjectState(id,_,_,icon:IconState)) =>
             keyboard.child { _ =>
               DrawingTools.keyboardAction("t", "Edit label", editingLabel.set(Some(id, icon)))

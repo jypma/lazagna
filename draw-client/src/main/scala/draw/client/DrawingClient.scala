@@ -56,8 +56,8 @@ object DrawingClient {
   case class Config(server: String, port: Int, tls: Boolean, path: String) {
     private def http = if (tls) "https" else "http"
     private def ws = if (tls) "wss" else "ws"
-    def baseUrl = s"${http}://${server}:${port}/${path}"
-    def baseWs = s"${ws}://${server}:${port}/${path}"
+    def baseUrl = s"${http}://${server}:${port}${path}"
+    def baseWs = s"${ws}://${server}:${port}${path}"
   }
 
   def merge(a: DrawEvent, b: DrawEvent) = (a.body, b.body) match {
@@ -69,7 +69,7 @@ object DrawingClient {
   }
 
   val configTest = ZLayer.succeed {
-    Config(dom.window.location.hostname, dom.window.location.port.toInt, dom.window.location.protocol == "https:", "api")
+    Config(dom.window.location.hostname, dom.window.location.port.toInt, dom.window.location.protocol == "https:", "")
   }
 
   val live = ZLayer.fromZIO {

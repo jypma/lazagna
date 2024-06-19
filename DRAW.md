@@ -65,6 +65,12 @@ Source: https://github.com/leungwensen/svg-icon
 -`npm install`
 - Copy packaged SVG icon symbol collections from `dist/sprite/symbol` to `public/symbols`
 
+# Packaging
+
+- In the client directory, run `npm run build`
+- Now, you can load the latest client directly from the server on `https://localhost:8443` after `reStart`.
+- When logging in, change the port after redirect to 8443 instead of 5173, to ensure you're working directly on the backend serving HTML (and not vite).
+
 # Random notes (please ignore this section)
 
 ### Timeline

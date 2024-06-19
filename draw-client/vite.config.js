@@ -30,12 +30,18 @@ export default defineConfig({
     host: "0.0.0.0",
     https: true,
     proxy: {
-      // string shorthand: http://localhost:5173/foo -> http://localhost:4567/foo
-      '/api': {
+      '/drawings': {
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, ""),
+//        rewrite: (path) => path.replace(/^\/api/, ""),
+        ws: true
+      },
+      '/user': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false,
+//        rewrite: (path) => path.replace(/^\/api/, ""),
         ws: true
       }
     }

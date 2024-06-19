@@ -77,6 +77,10 @@ lazy val server = project.in(file("draw-server"))
   .settings(
     resolvers += "Sonatype OSS Snapshots" at "https://s01.oss.sonatype.org/content/repositories/snapshots",
     Runtime / javaOptions += "-Dconfig.yaml=local.yaml",
+    // Run "npm run build" to populate dist/
+    Compile / unmanagedResourceDirectories += client.base.toPath().normalize().toAbsolutePath().resolve("dist").toFile(),
+    // Always copy the above resources when starting the server in dev mode
+    (Compile / reStart) := ((Compile / reStart) dependsOn (Compile / copyResources)).evaluated,
     libraryDependencies ++= Seq(
       "dev.zio" %% "zio-http" % "3.0.0-RC6",
 
