@@ -66,6 +66,7 @@ lazy val client = project.in(file("draw-client"))
       "org.scala-js" %%% "scalajs-dom" % "2.4.0",
       "io.github.cquiroz" %%% "scala-java-time" % javaTimeVersion,
       "io.github.cquiroz" %%% "scala-java-time-tzdb" % javaTimeVersion,
+      "io.github.jypma" %%% "lazagna-core" % "0.9.0"
     ),
   )
 
