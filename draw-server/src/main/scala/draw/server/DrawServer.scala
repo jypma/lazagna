@@ -21,6 +21,7 @@ import palanga.zio.cassandra.CassandraException.SessionOpenException
 import palanga.zio.cassandra.{ZCqlSession, session}
 import zio.http.Header.ContentType
 import zio.http.codec.PathCodec
+import zio.http.Header.Location
 
 object DrawServer extends ZIOAppDefault {
   // Create CORS configuration
@@ -150,6 +151,11 @@ object DrawServer extends ZIOAppDefault {
     },
     Method.GET / "user" -> requireUser -> handler { (user: User, request: Request) =>
        Response(body = Body.from(user))
+    },
+    Method.POST / "drawings" -> requireUser -> Handler.fromFunctionZIO[(User, Request)] { (user, request) =>
+      for {
+        id <- drawings.makeDrawing
+      } yield Response.status(Status.NoContent).addHeader(Location(URL(Path(id.toString))))
     },
     Method.HEAD / "drawings" / uuid("drawing") -> requireUser -> Handler.fromFunctionZIO[(UUID, User, Request)] { (drawing, user, request) =>
       for {

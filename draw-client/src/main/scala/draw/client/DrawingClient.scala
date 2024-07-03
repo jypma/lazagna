@@ -7,7 +7,7 @@ import scala.scalajs.js.typedarray.{ArrayBuffer, Int8Array}
 import scala.util.Try
 
 import zio.lazagna.Consumeable.given
-import zio.lazagna.dom.http.Request.{AsDynamicJSON, GET, HEAD, JSONAs, RequestError, RequestFailed}
+import zio.lazagna.dom.http.Request.{AsDynamicJSON, GET, HEAD, POST, JSONAs, RequestError, RequestFailed, AsResponse}
 import zio.lazagna.dom.http.WebSocket
 import zio.lazagna.eventstore.EventStore
 import zio.lazagna.{Consumeable, Setup}
@@ -28,6 +28,7 @@ trait DrawingClient {
   def user: ZIO[Any, ClientError, User]
 
   def getDrawing(drawingId: UUID): ZIO[Scope & DrawingClient.Store, ClientError, Drawing]
+  def makeDrawing: ZIO[Any, ClientError, UUID]
   def list: ZIO[Any, ClientError, Seq[DrawingClient.DrawingRef]]
 }
 
@@ -89,6 +90,12 @@ object DrawingClient {
       } yield res.toSeq.map { d =>
         DrawingRef(UUID.fromString(d.id.asInstanceOf[String]), d.name.asInstanceOf[String])
       }
+
+      override def makeDrawing = for {
+        res <- POST(AsResponse, s"${config.baseUrl}/drawings").mapError(toError)
+        id <- ZIO.fromOption(res.header("Location").map(UUID.fromString))
+          .mapError(_ => ClientFailure("Couldn't create drawing: " + res.header("Location")))
+      } yield id
 
       override def getDrawing(drawingId: UUID) = Setup.start(for {
         store <- ZIO.service[Store]

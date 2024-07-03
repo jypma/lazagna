@@ -73,17 +73,24 @@ case class InMemoryDrawings(storage: Ref.Synchronized[Map[UUID,Drawing]]) extend
     Drawings.DrawingRef(id, id.toString)
   })))
 
-  // TODO: Remove drawing from memory
-  override def getDrawing(id: UUID) = {
-    storage.updateSomeAndGetZIO {
-      case map if map.size > 100 =>
-        ZIO.fail(DrawingError("Too many drawings"))
-      case map if !map.contains(id) => for {
+  override def makeDrawing = {
+    val id = UUID.randomUUID()
+    storage.updateZIO { map =>
+      for {
         drawStorage <- SubscriptionRef.make(DrawingStorage())
         now <- Clock.instant
         _ <- drawStorage.update(_.handleCreate(now))
         drawing = DrawingInMemory(drawStorage)
       } yield map + (id -> drawing)
+    }.as(id)
+  }
+
+  override def getDrawing(id: UUID) = {
+    storage.updateSomeAndGetZIO {
+      case map if map.size > 100 =>
+        ZIO.fail(DrawingError("Too many drawings"))
+      case map if !map.contains(id) =>
+        ZIO.fail(DrawingError("Drawing not found: " + id))
     }.map(_(id))
   }
 }

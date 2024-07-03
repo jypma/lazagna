@@ -22,6 +22,7 @@ trait Drawing {
 
 trait Drawings {
   def getDrawing(id: UUID): IO[DrawingError, Drawing]
+  def makeDrawing: IO[DrawingError, UUID]
   def list: ZStream[Any, DrawingError, Drawings.DrawingRef]
 }
 

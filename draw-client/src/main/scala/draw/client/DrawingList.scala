@@ -2,6 +2,7 @@ package draw.client
 
 import zio.lazagna.Setup
 import zio.lazagna.dom.Attribute._
+import zio.lazagna.dom.Events._
 import zio.lazagna.dom.Element.tags._
 import zio.lazagna.dom.Element.{textContent, _}
 import zio.{Scope, ZIO, ZLayer}
@@ -22,6 +23,10 @@ object DrawingList {
       div(
         cls := "drawing-list",
         div(
+          cls := "note",
+          textContent := "Note: All drawings are public!"
+        ),
+        div(
           cls := "title",
           textContent := "Please select a drawing"
         ),
@@ -36,7 +41,20 @@ object DrawingList {
               )
             )
           )
-        }
+        },
+        div(
+          cls := "buttons",
+          input(typ := "button", value := "New Drawing", onClick(_.flatMap { _ =>
+            for {
+              id <- client.makeDrawing
+            } yield {
+              dom.window.location.replace(s"/#?id=${id}")
+            }
+          }.catchAll { err =>
+            println(err)
+            ZIO.unit
+          }))
+        )
       )
     )
 

@@ -48,17 +48,25 @@ object CassandraDrawings {
     knownDrawings <- Ref.make[Set[UUID]](initialDrawings.toSet)
     activeDrawings <- Ref.Synchronized.make[Map[UUID, (Scope, Drawing)]](Map.empty)
   } yield new Drawings {
-    def list = ZStream.unwrap(knownDrawings.get.map(ZStream.fromIterable(_).map { id =>
+    override def list = ZStream.unwrap(knownDrawings.get.map(ZStream.fromIterable(_).map { id =>
       Drawings.DrawingRef(id, id.toString)
     }))
 
-    def getDrawing(id: UUID) = activeDrawings.updateSomeAndGetZIO {
-      case m if !m.contains(id) => for {
-        subScope <- mainScope.fork
-        drawing <- makeDrawing(id)
-        _ <- AutoLayouter.make(drawing).provide(ZLayer.succeed(subScope))
-      } yield m + (id -> (subScope, drawing))
+    override def getDrawing(id: UUID) = activeDrawings.updateSomeAndGetZIO {
+      case m if !m.contains(id) =>
+        ZIO.fail(DrawingError("Drawing not found: " + id))
     }.map(_(id)._2)
+
+    override def makeDrawing = {
+      val id = UUID.randomUUID()
+      activeDrawings.updateZIO { m =>
+        for {
+          subScope <- mainScope.fork
+          drawing <- makeDrawing(id)
+          _ <- AutoLayouter.make(drawing).provide(ZLayer.succeed(subScope))
+        } yield m + (id -> (subScope, drawing))
+      }.as(id)
+    }
 
     private def makeDrawing(id: UUID): IO[DrawingError, Drawing] = for {
       startState <- currentDrawingEventsAfter(id, 0).runFold(DrawingState())((s,e) => s.update(e)._2)

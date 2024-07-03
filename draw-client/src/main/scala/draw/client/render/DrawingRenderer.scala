@@ -9,7 +9,7 @@ import zio.lazagna.dom.svg.SVGHelper
 import zio.lazagna.dom.{Alternative, Attribute, Children, Element, Modifier}
 import zio.lazagna.{Consumeable, Setup}
 import zio.stream.SubscriptionRef
-import zio.{ZIO, ZLayer}
+import zio.{ZIO, ZLayer, durationInt}
 
 import draw.client.Drawing
 import draw.client.tools.DrawingTools
@@ -130,6 +130,10 @@ object DrawingRenderer {
         var eventCountDebug = 0
         var switchedReady = false
         Modifier.all(
+          (ZIO.unit.delay(5.seconds) *> awaiting.update { w =>
+            println(s"Warning: Not finished rendering ${w}, giving up.")
+            Set.empty
+          }).fork.unit,
           Alternative.showOne(currentView.merge(drawing.connectionStatus.collect {
             case Drawing.Disconnected => 2
           }), alternatives, Some(initialView)),
