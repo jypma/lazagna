@@ -4,7 +4,9 @@ Lazagna is a UI framework for developing asynchronous, event-driven browser user
 
 The framework is called "Lazagna" because of the Z in ZIO, and of course because Lasagna, being made with layers, is a [laminar](https://laminar.dev/).
 
-## Architecture
+For a nice example of a full application using Lazagna, see [draw](https://github.com/jypma/draw).
+
+## Documentation
 
 Lazagna does not use a virtual DOM. Instead, its HTML element DSL creates DOM elements directly, and relies on streams and events to perform differential updates directly. This is heavily inspired from the awesome [laminar](https://laminar.dev/) framework. However, where Laminar has its own streaming framework, Lazagna uses ZIO for its streams and concurrency.
 
@@ -315,6 +317,10 @@ object Lock {
 
 ```
 
+# Full example application
+
+An interactive whiteboarding application uses Lazagna. Read more about it [here](https://github.com/jypma/draw).
+
 # TODO
 
 - Clean up the use of implicit and given, and align on having a nice one-line import for library users
@@ -327,6 +333,3 @@ object Lock {
 - ZStream could perhaps add a push-based stream variant, which maintains stream operation in a scope, executing a ZIO for every element. We'd have to define more precise semantics though (return type of the ZIO would have to be `Chunk[U]`, and we need a way to early close the stream to yield a value, since `EventEmitter` doesn't need that).
 - Should `Setup` be part of `Scope`? Or is it not necessary here at all?
 
-# "Draw" demo application
-
-Read about the demo application [here](DRAW.md)
