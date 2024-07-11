@@ -19,7 +19,6 @@ object Alternative {
     *
     * Renders of previous elements are discarded. */
 
-  // TEST: Close current scope when unmounted
   def mountOne[T](source: Consumeable[T])(render: PartialFunction[T, Modifier[Any]]): Modifier[Unit] = {
     case class State(t: T, scope: Scope.Closeable)
 

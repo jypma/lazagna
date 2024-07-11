@@ -4,7 +4,6 @@ We use the [sbt-sonatype](https://github.com/xerial/sbt-sonatype) plugin to rele
 
 - Bump the version number, commit and push and/or merge
 - Start an `sbt` shell
-- `project core`
 - `publishSigned` to prepare the artifacts locally and PGP sign them
 - `sonatypeCentralUpload` to upload the bundle to Sonatype
 - Log on to Sonatype and click _"Publish"_ for the new version. This will set its status to _Publishing_.

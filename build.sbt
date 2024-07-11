@@ -57,6 +57,16 @@ lazy val core = crossProject(JSPlatform, JVMPlatform).in(file("core"))
           ModuleSplitStyle.SmallModulesFor(List("draw", "zio.lazagna")))
     },
 
+    Test / jsEnv := new jsenv.playwright.PWEnv(
+      browserName = "chrome",
+      headless = true,
+      showLogs = true
+    ),
+    // Below was added when testing playwright. Seems not needed.
+    //scalaJSUseMainModuleInitializer := true,
+    //Test / fork := false,
+    Test / parallelExecution := false, // We only have one DOM in playwright.
+
     libraryDependencies ++= Seq(
       "org.scala-js" %%% "scalajs-dom" % "2.4.0",
       "io.github.cquiroz" %%% "scala-java-time" % javaTimeVersion,

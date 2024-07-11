@@ -22,7 +22,6 @@ case class EventsEmitter[-E <: dom.Event, +T](
     * stream (and fiber) per element.
     */
   def stream: ZStream[Scope with dom.EventTarget, Nothing, T] = {
-    // TEST: Events are unregistered when the scope closes
     ZStream.unwrap {
       ZIO.service[Scope].map { scope =>
         ZStream.asyncZIO[Scope with dom.EventTarget, Nothing, T] { cb =>

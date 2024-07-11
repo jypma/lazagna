@@ -6,3 +6,4 @@ metals.sbt
 /draw-client/dist/
 /draw-client/node_modules/
 /draw-server/config.yaml
+/sbt-launch.jar

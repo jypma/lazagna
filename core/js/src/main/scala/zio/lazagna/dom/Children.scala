@@ -49,8 +49,6 @@ object Children {
     def delete(elmt: Element[_]): (Scope.Closeable, State) = {
       children.get(elmt) match {
         case None =>
-          println("Warning: couldn't find child element to delete")
-          dom.console.log(elmt)
           (Scope.global, this)
         case Some((_, scope)) => (scope, State(
           children = children - elmt
@@ -64,7 +62,6 @@ object Children {
   }
 
   /** Directly affects the children of this parent by the given stream of child operations */
-  // TEST: Close current scope when unmounted
   def <~~(content: Consumeable[ChildOp]) = Modifier { parent =>
     ZIO.acquireRelease(Ref.make(State()))(_.get.flatMap(_.closeAll)).flatMap { stateRef =>
       def append[E <: dom.Element](elmt: Element[E], after: Option[dom.Element] = None) = for {

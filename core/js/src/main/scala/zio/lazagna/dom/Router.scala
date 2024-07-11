@@ -16,11 +16,14 @@ object Router {
 
   object Hash {
     private def parsePath(s: String): List[String] = {
-      s.split("/").map(p => URLDecoder.decode(p, "UTF-8")).toList
+      s.split("/").map(p => URLDecoder.decode(p, "UTF-8")).toList match {
+        case "" :: tail => tail // Ignore a starting "/"
+        case other => other
+      }
     }
 
     private def parseParams(s: String): Map[String, String] = {
-      s.split("&").map { kv =>
+      s.split("&").filter(!_.isEmpty).map { kv =>
         val pos = kv.indexOf("=")
         if (pos == -1) {
           (kv, "")
