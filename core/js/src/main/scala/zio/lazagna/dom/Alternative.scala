@@ -17,8 +17,9 @@ object Alternative {
   /** Selects from a potentially unlimited lists of alternative renders, based on an element T. Whenever the
     * stream pushes a new T, the current render is fully replaced if T has changed.
     *
+    * Renders are made on the current fiber.
+    *
     * Renders of previous elements are discarded. */
-
   def mountOne[T](source: Consumeable[T])(render: PartialFunction[T, Modifier[Any]]): Modifier[Unit] = {
     case class State(t: T, scope: Scope.Closeable)
 
@@ -46,7 +47,21 @@ object Alternative {
     } yield res
   }
 
-  // TODO: Rethink viability of mountOneMemoized
+  /** Selects from a potentially unlimited lists of alternative renders, based on an element T. Whenever the
+    * stream pushes a new T, the current render is fully replaced if T has changed.
+    *
+    * A new fiber is forked for each render, so that it can be aborted if a new element comes in while
+    * rendering is in progress.
+    *
+    * Renders of previous elements are discarded. */
+  def mountOneForked[T](source: Consumeable[T])(render: PartialFunction[T, Modifier[Any]]): Modifier[Unit] = {
+    Alternative.mountOne(source)(render.andThen { res =>
+      for {
+        scope <- ZIO.scope
+        fiber <- res.forkIn(scope)
+      } yield ()
+    })
+  }
 
   def option[T](source: Consumeable[Option[T]])(render: PartialFunction[T, Modifier[Any]]): Modifier[Unit] = {
     mountOne(source) {
