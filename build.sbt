@@ -15,7 +15,7 @@ val commonSettings = Seq(
   ThisBuild / organizationName := "Jan Ypma",
   ThisBuild / organizationHomepage := Some(url("http://github.com/jypma")),
   ThisBuild / versionScheme := Some("early-semver"),
-  ThisBuild / version := "0.9.1",
+  ThisBuild / version := "0.10.1",
   scalaVersion := "3.3.3",
   scalacOptions ++= Seq(
     "-Wunused:imports",
